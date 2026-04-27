@@ -1,0 +1,179 @@
+# BLUEPRINT.md
+
+## What this project is
+
+This project replicates and extends Sofroniew, Kauvar, Saunders, Chen
+et al. (2026), *"Emotion Concepts and their Function in a Large
+Language Model"* (Transformer Circuits Thread, April 2, 2026), from
+Claude Sonnet 4.5 to open-weight LLMs. Sofroniew et al. report that
+Claude internally represents emotion concepts as abstract features that
+*causally* shift the model's preferences and its rate of misaligned
+behaviors — reward hacking, blackmail, and sycophancy — and call this
+phenomenon *functional emotions*.
+
+We test whether the same phenomenon holds in Llama 3.1 8B Instruct,
+Qwen 2.5 7B Instruct, and at least one additional 7-8B open-weight
+model family. Specifically, we ask whether (a) open-weight models form
+linearly accessible representations of basic emotion concepts, (b)
+those representations are causally efficacious for the four behavioral
+evaluations Sofroniew et al. studied, and (c) their structure varies
+systematically across training phase (base vs. instruct) and across
+emotion category.
+
+## Why it exists
+
+Sofroniew et al. (2026) is among the most compelling recent evidence
+that frontier models internally represent affective states in ways
+that causally shape alignment-relevant behavior. Three gaps motivate
+external replication on open weights:
+
+1. **Verification.** The original results are on closed-weight Claude
+   Sonnet 4.5. Independent replication on open weights is required for
+   the field to build on the findings.
+2. **Welfare-relevance, carefully scoped.** If functional emotions are
+   causally efficacious in open models, they bear on welfare debates
+   *evidentially* — not because their existence implies subjective
+   experience (the original paper is explicit that it does not), but
+   because they constitute the kind of internal structure those debates
+   are actually about. Open-weight replication is a precondition for
+   the mechanistic follow-up that any serious welfare claim would need.
+3. **Safety-relevance.** Reward hacking, blackmail, and sycophancy are
+   already-monitored alignment failures. If they are partially mediated
+   by emotion-concept representations, that has direct implications for
+   how we monitor and intervene on them. Identifying the mediator on
+   open weights is a precondition for studying that mediation
+   mechanistically.
+
+This project also extends the construct-validity program of Han et al.
+(2025, *"The Personality Illusion"*) and the PI's own prior work in
+that line. That work showed (a) self-reported Big Five traits do not
+predict sycophantic behavior in reasoning models, and (b) steering with
+personality-trait CAA vectors did not reduce sycophancy at scale (n≈130).
+This project asks the natural follow-up: **do *emotion-concept*
+representations succeed at predicting and steering behavior where
+*personality-trait* representations failed?** A positive result locates
+construct validity at the activation level for one class of internal
+state but not another; a null result extends the personality illusion
+finding to a much more specific, mechanistically grounded class of
+features.
+
+## Who it is for
+
+- AI safety / interpretability researchers who need open-weight
+  replication targets to build on Anthropic's results.
+- Model welfare researchers evaluating whether causally efficacious
+  affective representations exist outside frontier closed models.
+- Alignment hiring committees at Anthropic, Apollo, Redwood — this
+  work is part of Haydar's transition from ML engineering to alignment
+  research; it should demonstrate research taste, methodological rigor,
+  and the dual-background construct-validity contribution.
+- **Initial venue:** LessWrong / Alignment Forum writeup. Target a
+  workshop submission (NeurIPS Interpretability Workshop, ICLR Re-Align,
+  or Tiny Papers track) by [TODO: target month].
+
+## Success criteria
+
+**Primary outcomes (must hit to claim replication):**
+
+- Linear probes for ≥ 4 basic emotion categories (joy, fear, anger,
+  sadness; possibly disgust, surprise) achieve AUC ≥ 0.80 on held-out
+  prompts in ≥ 2 of the 3 target model families.
+- Steering with the H1-derived emotion direction shifts behavior on
+  **sycophancy** (the primary behavioral task; methodology reused from
+  the PI's Personality Illusion work) with Cohen's *d* ≥ 0.5 and 95%
+  CI excluding zero, at n ≥ 200 prompts per condition. **Pilot results
+  at n=15–30 do not count as evidence** — see Personality Illusion
+  small-sample-steering finding.
+- For ≥ 2 of the 3 secondary behavioral tasks (activity preferences,
+  reward hacking, blackmail), direction-of-effect for steering matches
+  Sofroniew et al. within sign at n ≥ 100 per condition.
+
+**Secondary outcomes:**
+
+- Document at least one *failure to replicate* candidly. Negative
+  results count as success if they are well-controlled.
+- Public replication codebase, uv-managed, single-command reproduction
+  from raw activations to figure.
+- A clear contrast against the prior Personality Illusion result:
+  whether emotion-concept steering succeeds where personality-trait
+  steering failed, in identical Asch-style sycophancy protocol.
+
+**Falsification — if we hit these, the project pivots or stops:**
+
+- No emotion direction reaches AUC > 0.65 in any open-weight model.
+  Would suggest functional emotions may be a frontier-scale phenomenon
+  — itself publishable, but a different paper.
+- All steering interventions show small-sample inflation that
+  collapses at scale, replicating the Personality Illusion sycophancy
+  pattern. Would force a methodological-finding paper rather than a
+  replication paper.
+
+## Non-negotiable technical constraints
+
+- **Models:** Open-weight only. Primary: Llama 3.1 8B Instruct, Qwen
+  2.5 7B Instruct. Secondary: Mistral 7B v0.3 *or* OLMo-2 7B (pick
+  one, justify in HYPOTHESES.md). Pin exact HF commit SHAs. Compare
+  base vs. instruct checkpoints where available.
+- **Hardware:** Linux server, single RTX 4080 (16 GB VRAM). All
+  experiments must fit this budget; quantize to bf16 or 4-bit only
+  when necessary, with the choice logged per run.
+- **Sampling:** temperature=0 for behavioral evaluation; explicit
+  logging on every run of temperature, top-p, repetition penalty, max
+  tokens, system prompt, prompt template, HF model SHA, transformers
+  version.
+- **Reproducibility:** Every reported number reproducible from a git
+  SHA + Hydra config via `python scripts/run_experiment.py +exp=<name>`.
+- **Pre-registration:** HYPOTHESES.md finalized and committed before
+  any probe is fit on real data. Pilot data on synthetic prompts (≤ 30
+  examples per condition) is permitted before this lock.
+- **Multiple comparisons:** BH-FDR for any sweep > 5
+  prompts/conditions. Bonferroni for primary contrasts only.
+- **Sample sizes:** Sycophancy (primary) n ≥ 200 per condition.
+  Secondary tasks n ≥ 100 per condition. Probes need ≥ 500 train /
+  200 test. Justified in HYPOTHESES.md.
+
+## Out of scope
+
+- Closed-weight models. No Claude / GPT / Gemini API calls in causal
+  experiments. Discussion-section comparisons to Sofroniew et al. only.
+- Frontier-scale models. No Llama 3.1 70B+, no MoE, no Mamba — those
+  are explicit Future Work in the parent papers and out of compute
+  budget.
+- Training new SAEs. Use existing public SAEs (Goodfire, EleutherAI,
+  Apollo) where available; do not train from scratch.
+- Fine-tuning experiments. This is interpretation of pretrained
+  weights, not model surgery.
+- Subjective-experience claims. We follow Sofroniew et al.'s framing:
+  *functional emotions do not imply subjective experience of emotions.*
+- General "emotion in LLMs" literature review. Stays focused on the
+  specific replication question.
+
+## Glossary (terms Claude is likely to misuse)
+
+- **Functional emotions** (Sofroniew et al. 2026) = patterns of
+  expression and behavior modeled after humans under the influence of
+  an emotion, *mediated by underlying abstract representations of
+  emotion concepts*. **Does not imply subjective experience.** Whenever
+  this term appears in writeups, the disclaimer must be present or
+  cited.
+- **Emotion concept** = a linearly separable internal representation
+  that activates differentially across emotion-labeled contexts and
+  generalizes across the contexts and behaviors it might be linked to.
+  *Not* "the model feels X."
+- **Welfare-relevant** = a feature whose presence and causal role is
+  *evidentially relevant to* welfare considerations; *not* "evidence
+  that the model has welfare."
+- **Replication** = hits primary outcomes within stated tolerances;
+  partial or null results are reported as such, not relabeled.
+- **Steering** = activation patching at a specific layer using a
+  vector derived from probe weights or contrastive activation
+  difference, applied at all token positions unless otherwise
+  specified.
+- **Causal verification** = the steered model exhibits the predicted
+  behavioral change at scale (n ≥ 200 for primary, n ≥ 100 for
+  secondary), not in pilot.
+
+## Imports
+
+@HYPOTHESES.md
+@docs/methods.md
