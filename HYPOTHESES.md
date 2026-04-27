@@ -6,7 +6,7 @@ bottom of this document with explicit justification. Pilot data on
 synthetic prompts (≤ 30 examples per condition) is permitted before
 this lock and is not subject to amendment rules.
 
-**Locked at git SHA:** [TODO: insert SHA after `git commit`]
+**Locked at git SHA:** f58547fab9cb6416110f9f55a4c52525da7e2e43
 **Last amended:** N/A
 
 ---
