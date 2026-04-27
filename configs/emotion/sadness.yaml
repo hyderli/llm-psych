@@ -1,0 +1,4 @@
+name: sadness
+label: 3
+prompt_file: emotion_prompts.parquet
+neutral_file: neutral_prompts.parquet

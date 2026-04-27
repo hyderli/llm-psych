@@ -1,0 +1,9 @@
+# Llama 3.2 1B Instruct — Mac M5 / MPS development model
+# Pipeline validation only; not a primary result model.
+hf_model_id: meta-llama/Llama-3.2-1B-Instruct
+hf_revision: null               # pin before primary result runs
+n_layers: 16
+hidden_size: 2048
+torch_dtype: float16
+device_map: auto
+trust_remote_code: false

@@ -1,0 +1,24 @@
+defaults:
+  - model: qwen25_05b          # safe default for Mac dev; override on cloud
+  - emotion: afraid              # primary emotion set: afraid,calm,desperate,joyful,blissful,compassionate,upset,offended,hostile
+  - _self_
+
+# Paths (relative to repo root; override per environment if needed)
+paths:
+  data_dir: data/public
+  activations_dir: activations
+  probes_dir: probes
+  steering_vectors_dir: steering_vectors
+  results_dir: results
+  figures_dir: figures
+
+# Activation extraction settings
+extract:
+  token_position: last          # "last" | "all" | int
+  batch_size: 8                 # prompts per forward pass
+  dtype: float16                # storage dtype for .npz
+
+# Hydra output dir
+hydra:
+  run:
+    dir: outputs/${now:%Y-%m-%d_%H-%M-%S}

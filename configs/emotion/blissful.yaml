@@ -1,0 +1,4 @@
+name: blissful
+label: 9                       # integer label used in probe training arrays
+prompt_file: emotion_prompts.parquet
+neutral_file: neutral_prompts.parquet
