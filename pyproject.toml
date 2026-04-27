@@ -91,6 +91,9 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "scripts/*" = ["E402"]  # imports after sys.path tweaks are common in scripts
 "tests/*" = ["S101"]    # asserts are fine in tests
+# X / X_train / C follow sklearn matrix naming; N802 for test names like test_default_C_is_1
+"src/llm_psych/probes.py" = ["N803"]
+"tests/test_probes.py" = ["N802", "N806"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"

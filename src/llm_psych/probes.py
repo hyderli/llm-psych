@@ -25,11 +25,9 @@ Language Model. Transformer Circuits Thread.
 
 from __future__ import annotations
 
-import hashlib
 import logging
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Literal
 
 import joblib
 import numpy as np
@@ -90,7 +88,7 @@ class ProbeMeta:
     ci_low: float
     ci_high: float
     brier: float
-    sklearn_C: float = 1.0
+    sklearn_c: float = 1.0
 
 
 # --------------------------------------------------------------------------
@@ -267,7 +265,7 @@ def best_layer(
     int
         Layer index with maximum AUC.
     """
-    return max(results, key=lambda l: results[l].auc)
+    return max(results, key=lambda lyr: results[lyr].auc)
 
 
 # --------------------------------------------------------------------------
