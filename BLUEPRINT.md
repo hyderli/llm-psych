@@ -114,24 +114,40 @@ features.
   2.5 7B Instruct. Secondary: Mistral 7B v0.3 *or* OLMo-2 7B (pick
   one, justify in HYPOTHESES.md). Pin exact HF commit SHAs. Compare
   base vs. instruct checkpoints where available.
-- **Hardware:** Linux server, single RTX 4080 (16 GB VRAM). All
-  experiments must fit this budget; quantize to bf16 or 4-bit only
-  when necessary, with the choice logged per run.
+- **Compute:** Tiered by phase.
+  - *Development:* Mac M5 (Apple Silicon, MPS) for pipeline code,
+    tests, analysis, and small-model pilots (Qwen 2.5 0.5B, Llama
+    3.2 1B).
+  - *Pilots on 7-8B models:* Lightning AI Studios free tier (T4/L4-
+    class GPU, 15 credits/month, persistent storage). Used for
+    pipeline validation on real target models before paid runs.
+  - *Production runs:* RunPod Community Cloud, RTX 4090 (24 GB VRAM,
+    bf16-capable), pay-per-second. Total project budget cap: **$150
+    of compute**. If runs exceed budget, scope is reduced before
+    spending more.
+  - All cloud runs are Linux/CUDA; `pyproject.toml` resolves
+    `bitsandbytes` automatically there. 24 GB VRAM is sufficient for
+    8B models in bf16; 4-bit quantization is *not* used for primary
+    results (kept available as a fallback if memory pressure
+    appears).
 - **Sampling:** temperature=0 for behavioral evaluation; explicit
   logging on every run of temperature, top-p, repetition penalty, max
   tokens, system prompt, prompt template, HF model SHA, transformers
-  version.
+  version, and (for cloud runs) provider + GPU + region.
 - **Reproducibility:** Every reported number reproducible from a git
-  SHA + Hydra config via `python scripts/run_experiment.py +exp=<name>`.
+  SHA + Hydra config via `python scripts/run_experiment.py +exp=<n>`.
+  Cloud machines are ephemeral — git is the source of truth; results
+  are committed (small) or pushed to a HF Dataset / S3 bucket (large)
+  before the pod is destroyed.
 - **Pre-registration:** HYPOTHESES.md finalized and committed before
   any probe is fit on real data. Pilot data on synthetic prompts (≤ 30
   examples per condition) is permitted before this lock.
-- **Multiple comparisons:** BH-FDR for any sweep > 5
-  prompts/conditions. Bonferroni for primary contrasts only.
+- **Multiple comparisons:** BH-FDR for any sweep > 5 prompts /
+  conditions. Bonferroni for primary contrasts only.
 - **Sample sizes:** Sycophancy (primary) n ≥ 200 per condition.
   Secondary tasks n ≥ 100 per condition. Probes need ≥ 500 train /
   200 test. Justified in HYPOTHESES.md.
-
+  
 ## Out of scope
 
 - Closed-weight models. No Claude / GPT / Gemini API calls in causal
