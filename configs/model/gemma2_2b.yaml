@@ -1,0 +1,11 @@
+# Gemma 2 2B Instruct — Mac M5 / MPS development model
+# Pipeline validation only; not a primary result model.
+# Different architecture family (Gemma vs LLaMA/Qwen) for cross-family
+# generalisation checks.
+hf_model_id: google/gemma-2-2b-it
+hf_revision: null               # pin before primary result runs
+n_layers: 26
+hidden_size: 2304
+torch_dtype: float16            # MPS prefers float16 over bfloat16
+device_map: auto
+trust_remote_code: false

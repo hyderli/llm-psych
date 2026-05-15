@@ -81,3 +81,24 @@ activation extraction pipeline.
 **Energy:** good momentum. All three stimulus sets (reward_hacking,
 blackmail, emotion_prompts) now frozen. Ready for pre-registration
 lock of HYPOTHESES.md.
+
+## 2026-05-15 — Add Gemma 2 2B development model
+
+**Did:**
+- Added `configs/model/gemma2_2b.yaml` for `google/gemma-2-2b-it`.
+  26 layers, hidden size 2304, float16 on MPS. Third architecture
+  family (Gemma) for cross-family pipeline validation.
+- Updated HYPOTHESES.md amendment block documenting Gemma 2B as a
+  development (not primary) model.
+- Updated models.py docstring to include Gemma 2B and expanded MPS
+  memory note to 0.5B–2B range.
+
+**Open TODOs:**
+- Pin HF revision SHAs in configs/model/*.yaml.
+- Pick the third primary target model (Mistral 7B v0.3 vs OLMo-2 7B).
+- No `from_config` Hydra helper yet.
+
+**Next:** smoke-test activation extraction on Gemma 2B or Llama 3.2 1B
+with a tiny subset of emotion_prompts.parquet.
+
+**Energy:** continuing.

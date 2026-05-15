@@ -320,3 +320,23 @@ extracted on these prompts yet.
   per emotion → 70/30 split yields ~525 train / 225 test, satisfying
   the 500/200 target. Paraphrase generation script to be frozen before
   first extraction run.
+
+### 2026-05-15 — Add Gemma 2 2B development model
+
+**Justification:** The pre-registration specifies 3 target model families
+in the 7-8B range but did not name a third family or commit to a
+specific small-model development fleet. Adding `google/gemma-2-2b-it`
+as a Mac MPS development model provides a third architecture family
+(Gemma vs. LLaMA vs. Qwen) for cheap pipeline validation and early
+cross-family generalisation checks before burning cloud credits on
+the primary 8B models. Gemma 2B is *not* a primary result model; it
+is used for smoke tests, layer-sweep validation, and template debugging
+only.
+
+**Changes:**
+- New config `configs/model/gemma2_2b.yaml` with architecture specs
+  (26 layers, hidden size 2304, float16 on MPS).
+- Primary target models remain Llama 3.1 8B Instruct and Qwen 2.5 7B
+  Instruct. Third primary family (Mistral 7B v0.3 or OLMo-2 7B) still
+  pending final decision.
+- Development fleet: Llama 3.2 1B, Qwen 2.5 0.5B, Gemma 2 2B.

@@ -1,7 +1,7 @@
 """Model-loading helpers for the Emotion Concepts replication.
 
 Wraps ``AutoModelForCausalLM.from_pretrained`` with sensible defaults
-for Llama 3.1 8B, Qwen 2.5 7B, and other LLaMA-style 7-8B models.
+for Llama 3.1 8B, Qwen 2.5 7B, Gemma 2 2B, and other decoder-only models.
 
 Returns a ``LoadedModel`` named-tuple so callers can unpack
 ``model, tokenizer, cfg`` in one line without positional-index guessing.
@@ -9,7 +9,7 @@ Returns a ``LoadedModel`` named-tuple so callers can unpack
 Notes
 -----
 *Development (Mac M5 / MPS):* set ``device_map="mps"`` or rely on
-auto-detection. Small models (0.5B–1B) fit in MPS unified memory.
+auto-detection. Small models (0.5B–2B) fit in MPS unified memory.
 
 *Production (Linux, CUDA RTX 4090 24 GB):* ``device_map="auto"``
 places the full bf16 8B model on the single GPU. ``bitsandbytes``
