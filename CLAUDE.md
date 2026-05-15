@@ -11,7 +11,8 @@ rigor over speed.
 - **Project:** Emotion Concepts in Open-Weight LLMs — replication and
   extension of Sofroniew et al. (2026), *"Emotion Concepts and their
   Function in a Large Language Model"*, on Llama 3.1 8B, Qwen 2.5 7B,
-  and one further 7-8B open model.
+  and one further 7-8B open model. Development fleet: Llama 3.2 1B,
+  Qwen 2.5 0.5B, Gemma 2 2B.
 - **Domain:** ML/LLM psychology, mechanistic interpretability,
   alignment-relevant behavioral evaluation.
 - **Primary outputs:** preregistered analyses, figures, LessWrong /

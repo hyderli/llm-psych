@@ -117,7 +117,7 @@ features.
 - **Compute:** Tiered by phase.
   - *Development:* Mac M5 (Apple Silicon, MPS) for pipeline code,
     tests, analysis, and small-model pilots (Qwen 2.5 0.5B, Llama
-    3.2 1B).
+    3.2 1B, Gemma 2 2B).
   - *Pilots on 7-8B models:* Lightning AI Studios free tier (T4/L4-
     class GPU, 15 credits/month, persistent storage). Used for
     pipeline validation on real target models before paid runs.

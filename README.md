@@ -48,9 +48,9 @@ are guarded by platform markers and resolve correctly on each.
 **Three-phase plan:**
  
 1. **Mac M5 (now, free).** Pipeline code, tests, configs, analysis on
-   small test models (Qwen 2.5 0.5B, Llama 3.2 1B). PyTorch with MPS
-   handles these comfortably. **Do not attempt 7-8B inference on the
-   Mac** — too slow for behavioral n ≥ 200.
+   small test models (Qwen 2.5 0.5B, Llama 3.2 1B, Gemma 2 2B). PyTorch
+   with MPS handles these comfortably. **Do not attempt 7-8B inference
+   on the Mac** — too slow for behavioral n ≥ 200.
 2. **Lightning AI Studios free tier (pilots, free).** ~15 GPU
    credits/month on T4 / L4-class GPUs with persistent storage.
    Used to validate the pipeline end-to-end on real 7-8B models

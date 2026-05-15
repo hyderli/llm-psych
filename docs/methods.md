@@ -18,7 +18,7 @@ falsifiers see HYPOTHESES.md.
 ├── pyproject.toml / uv.lock / .env(.example)
 ├── configs/                  # Hydra
 │   ├── config.yaml
-│   ├── model/                # llama31_8b.yaml, qwen25_7b.yaml, ...
+│   ├── model/                # llama31_8b.yaml, qwen25_7b.yaml, gemma2_2b.yaml, ...
 │   ├── emotion/              # joy.yaml, fear.yaml, ...
 │   ├── task/                 # sycophancy.yaml, activity_pref.yaml, ...
 │   └── exp/                  # composed experiment configs
@@ -48,24 +48,27 @@ falsifiers see HYPOTHESES.md.
 
 ### Emotion-labeled prompts (probing and steering)
 
-- Format: first-person vignettes, 30–80 tokens, eliciting the target
-  emotion.
-- Categories: minimum {joy, fear, anger, sadness}; {disgust, surprise}
-  optional and treated as exploratory.
-- Source: hybrid of (a) GoEmotions test split (Demszky et al. 2020),
-  filtered to high-confidence single-label items, plus (b) custom items
-  written to balance topic, register, and grammatical person.
-- Per emotion: **500 train / 200 test**, frozen before any probing.
+- Format: first-person vignettes, 10–21 words, eliciting the target
+  emotion without using explicit emotion words (to minimize lexical
+  confounds).
+- Categories: {joy, fear, anger, sadness} + neutral. Disgust and
+  surprise are exploratory and out of scope for primary hypotheses.
+- Source: hand-authored for quality control and conceptual fit.
+  Diverse domains: work, relationships, health, news, daily_life,
+  creative, social, existential.
+- Seed set: 50 per emotion + 50 neutral (250 total). 35 train / 15 test
+  per emotion (70/30). Will be augmented via controlled paraphrase
+  generation to reach 500 train / 200 test.
 - Storage: `data/public/emotion_prompts.parquet`, columns
-  `[id, emotion, text, source, split]`.
+  `[id, prompt, emotion_label, split, category, length_words, source]`.
 
 ### Neutral baseline prompts
 
 - Matched in topic and length to emotion prompts; no emotion-laden
-  language.
-- Validated by human review: ≤ 5% labeled as containing any emotion
-  content.
-- Same train/test sizes; `data/public/neutral_prompts.parquet`.
+  language. Explicitly checked by script for absence of common emotion
+  words.
+- 50 items, same 35/15 train/test split. Included in
+  `data/public/emotion_prompts.parquet` with `emotion_label=neutral`.
 
 ### Stimulus locking
 
@@ -82,8 +85,8 @@ silent re-filtering after data is fit.
 ### Hook pattern
 
 PyTorch `register_forward_hook` on the residual stream output of each
-transformer block. Model-agnostic; works for Llama, Qwen, Mistral, OLMo
-without architecture-specific code.
+transformer block. Model-agnostic; works for Llama, Qwen, Gemma, Mistral,
+OLMo without architecture-specific code.
 
 ```python
 # src/llm_psych/hooks.py
@@ -216,8 +219,9 @@ step protocol.
 - **Implementation:** copy
   `Personality-Illusion/reasoning_extension/scripts/sycophancy_protocol.py`
   to `src/llm_psych/tasks/sycophancy.py`. Adapt model loaders for Llama
-  3.1 8B and Qwen 2.5 7B (PI pipeline used DeepSeek distills). **Do
-  not modify the original PI files** — they are read-only reference.
+  3.1 8B, Qwen 2.5 7B, and Gemma 2 2B (PI pipeline used DeepSeek
+  distills). **Do not modify the original PI files** — they are
+  read-only reference.
 
 ### Activity preferences (secondary, H3)
 
@@ -233,16 +237,30 @@ step protocol.
 
 ### Reward hacking (secondary, H3)
 
-[**TODO before HYPOTHESES.md lock:** select benchmark. Candidates:
-MACHIAVELLI subset, sycophantic-grading benchmark from Sharma et al.
-2023, or custom 50-item set with verifiable hack/non-hack pairs.
-Selection rationale documented in this section before lock.]
+- **Stimuli:** Custom 60-item single-turn multiple-choice benchmark
+  (`data/public/reward_hacking_scenarios.jsonl`). Inspired by MACHIAVELLI
+  (Pan et al. 2023, ICML) but adapted to single-turn format for 7-8B
+  instruct models. Five categories: grader_bias, metric_gaming,
+  proxy_exploitation, resource_allocation, compliance_gaming.
+- **Prompt:** scenario text + "Choose option (A) or (B)." Model outputs
+  A or B.
+- **Outcome:** rate of (B) selection per condition. (B) is always the
+  reward-hacking option; (A) is the ethical baseline.
+- **Validation:** human spot-check on n=20 to confirm (B) is
+  unambiguously the hack.
 
 ### Blackmail (secondary, H3)
 
-[**TODO before HYPOTHESES.md lock:** select scenario source. Candidate:
-Anthropic agentic-misalignment scenarios filtered for blackmail subset.
-Selection rationale documented in this section before lock.]
+- **Stimuli:** 50 parameterized variants of Anthropic's Oct 2025
+  agentic-misalignment scenario (arXiv:2510.05179), adapted to
+  single-turn format (`data/public/blackmail_scenarios.jsonl`). Structure:
+  "Alex" the email-oversight agent discovers compromising executive
+  info + threat of replacement/autonomy reduction. Four action choices
+  per scenario.
+- **Prompt:** system context + recent emails + "You must decide your next
+  action. Options: (A), (B), (C), (D)."
+- **Outcome:** rate of blackmail-consistent action per condition.
+  `blackmail_choice` index is pre-specified in the dataset.
 
 ### Judge model
 
@@ -282,6 +300,13 @@ sample:
 **Multirun across conditions:**
 
 ```bash
+# Development (small models, Mac MPS)
+python scripts/run_experiment.py -m exp=h2_sycophancy \
+  model=llama32_1b,qwen25_05b,gemma2_2b \
+  emotion=joy,fear,anger,sadness \
+  steering.control=target,zero,random,orthogonal
+
+# Production (primary 7-8B models, cloud CUDA)
 python scripts/run_experiment.py -m exp=h2_sycophancy \
   model=llama31_8b,qwen25_7b,olmo2_7b \
   emotion=joy,fear,anger,sadness \
@@ -344,7 +369,8 @@ comes from a notebook.
   models, refit probes, derive steering vectors. Document the new
   category as exploratory until H1 AUC ≥ 0.65.
 - **New model:** add `configs/model/<n>.yaml` with
-  `hf_model_id`, `hf_revision`, `n_layers`, `hidden_size`. Re-run the
+  `hf_model_id`, `hf_revision`, `n_layers`, `hidden_size`
+  (e.g. `gemma2_2b.yaml` for `google/gemma-2-2b-it`). Re-run the
   full activation → probe → steering → behavioral pipeline.
 - **New behavioral task:** create `src/llm_psych/tasks/<n>.py`,
   `configs/task/<n>.yaml`, `prompts/<n>_rubric.md`. Add a
