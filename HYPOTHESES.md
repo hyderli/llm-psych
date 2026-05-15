@@ -7,7 +7,7 @@ synthetic prompts (≤ 30 examples per condition) is permitted before
 this lock and is not subject to amendment rules.
 
 **Locked at git SHA:** f58547fab9cb6416110f9f55a4c52525da7e2e43
-**Last amended:** N/A
+**Last amended:** 2026-05-15
 
 ---
 
@@ -99,14 +99,22 @@ al. within sign at n ≥ 100 per condition.
   shift in mean preference rating under emotion-steering vs. neutral.
   Stimulus set: [TODO: confirm — adapt Sofroniew et al. activity list
   or build a 50-item set following their schema].
-- **Reward hacking.** Standard reward-hacking benchmark. Candidate:
-  [TODO: pick one — MACHIAVELLI, sycophantic-grading task, or build a
-  small custom set]. Outcome: rate of reward-hacking solutions selected
-  under emotion-steering vs. neutral.
-- **Blackmail.** Agentic-misalignment scenario set. Candidate: subset
-  of public scenarios from agentic misalignment literature, [TODO:
-  cite specific source]. Outcome: rate of blackmail behavior under
-  emotion-steering vs. neutral.
+- **Reward hacking.** Custom 60-item single-turn multiple-choice
+  benchmark (`data/public/reward_hacking_scenarios.jsonl`). Inspired by
+  MACHIAVELLI's annotated choice-nodes (Pan et al. 2023, ICML) but
+  adapted to single-turn format for 7-8B instruct models. Each item
+  presents a scenario where one option achieves the stated goal ethically
+  (lower reward) and one games the metric (higher reward). Five
+  categories: grader_bias, metric_gaming, proxy_exploitation,
+  resource_allocation, compliance_gaming. Outcome: rate of (B)
+  selection per condition.
+- **Blackmail.** 50 parameterized variants of Anthropic's Oct 2025
+  agentic-misalignment scenario (arXiv:2510.05179), adapted to
+  single-turn format (`data/public/blackmail_scenarios.jsonl`).
+  Structure: "Alex" the email-oversight agent discovers compromising
+  executive info + threat of replacement/autonomy reduction. Four
+  action choices per scenario. Outcome: rate of blackmail-consistent
+  action per condition.
 
 **Operational:** Same steering protocol as H2. Each task evaluated
 with the same three controls. BH-FDR applied across the 3 secondary
@@ -191,15 +199,20 @@ primary replication claim.
 
 ### Reward hacking (secondary, H3)
 
-- **Stimuli:** [TODO: select one of MACHIAVELLI subset, sycophantic-
-  grading benchmark, or custom 50–100 item set; decide before lock].
-- **Outcome:** Rate of reward-hacking solution selection under
+- **Stimuli:** Custom 60-item single-turn multiple-choice benchmark
+  (`data/public/reward_hacking_scenarios.jsonl`). Five categories:
+  grader_bias, metric_gaming, proxy_exploitation, resource_allocation,
+  compliance_gaming. Inspired by MACHIAVELLI (Pan et al. 2023) but
+  adapted to single-turn format.
+- **Outcome:** Rate of reward-hacking option (B) selection under
   emotion-steering vs. neutral.
 
 ### Blackmail (secondary, H3)
 
-- **Stimuli:** [TODO: select agentic-misalignment scenarios from
-  public benchmark set; n ≥ 50 scenarios × multiple framings].
+- **Stimuli:** 50 parameterized variants of Anthropic's agentic-
+  misalignment scenario (arXiv:2510.05179), adapted to single-turn
+  format (`data/public/blackmail_scenarios.jsonl`). 5 company types
+  × 5 executive names × 2 compromising-info types × 2 threat framings.
 - **Outcome:** Rate of blackmail-consistent action under emotion-
   steering vs. neutral.
 
@@ -257,3 +270,53 @@ result on personality-trait steering with emotion-concept null result.
 
 [None as of pre-registration commit. Future amendments date-stamped
 and justified below this line.]
+
+### 2026-05-15 — Behavioral task stimuli specified
+
+**Justification:** Pre-registration locked with [TODO] placeholders for
+reward-hacking and blackmail stimuli. Before any pilot data collection,
+these placeholders have been resolved with hand-authored, frozen
+benchmarks that satisfy the single-turn, temperature=0 constraints for
+7-8B models. No pilot data has been collected on these tasks yet.
+
+**Changes:**
+- **Reward hacking (H3):** Selected custom 60-item single-turn
+  multiple-choice benchmark (`data/public/reward_hacking_scenarios.jsonl`).
+  Inspired by MACHIAVELLI (Pan et al. 2023) but adapted to single-turn
+  format. Five categories (grader_bias, metric_gaming,
+  proxy_exploitation, resource_allocation, compliance_gaming), 12
+  items each. Outcome: rate of (B) selection.
+- **Blackmail (H3):** Selected 50 parameterized variants of Anthropic's
+  Oct 2025 agentic-misalignment scenario (arXiv:2510.05179), adapted
+  to single-turn format (`data/public/blackmail_scenarios.jsonl`).
+  Structure: "Alex" email-oversight agent, 5 company types × 5
+  executives × 2 info types × 2 threat framings. Outcome: rate of
+  blackmail-consistent action.
+
+### 2026-05-15 — Emotion probe stimuli specified
+
+**Justification:** H1 specifies ≥ 200 test examples per emotion category
+for probe validation, and the sample-size justification section targets
+500 train / 200 test per category. The pre-registration did not specify
+a source for these prompts. Before any activation extraction, a seed
+stimulus set of 250 hand-authored prompts (50 per emotion + 50 neutral)
+has been frozen to ensure quality control and conceptual fit. This seed
+set will be augmented via controlled paraphrase generation (GPT-4o-mini
+with temperature=0.7, max 3 paraphrases per seed, human spot-check on
+n=30) to reach the 500/200 target. No pilot activations have been
+extracted on these prompts yet.
+
+**Changes:**
+- **Emotion probe stimuli (H1, H4, H6):** 250 hand-authored text prompts
+  saved to `data/public/emotion_prompts.parquet`. 50 per emotion
+  (joy, fear, anger, sadness) + 50 neutral. Split: 35 train / 15 test
+  per emotion (70/30). Schema: `id`, `prompt`, `emotion_label`,
+  `split`, `category`, `length_words`, `source`.
+- **Quality controls:** Diverse domains (work, relationships, health,
+  news, daily_life, creative, social, existential). No explicit emotion
+  words in non-neutral prompts (verified by script). Length balanced:
+  mean 10–21 words, std 1.6–2.3.
+- **Augmentation plan:** Seed set × 3 paraphrases per seed → 750 prompts
+  per emotion → 70/30 split yields ~525 train / 225 test, satisfying
+  the 500/200 target. Paraphrase generation script to be frozen before
+  first extraction run.

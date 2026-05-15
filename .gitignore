@@ -1,0 +1,36 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.uv/
+*.egg-info/
+
+# Data & models (use DVC/LFS for these)
+data/raw/
+data/restricted/
+*.ckpt
+*.pt
+*.safetensors
+.hf_cache/
+
+# Experiment outputs
+wandb/
+mlruns/
+outputs/
+multirun/
+
+# Claude Code
+.claude/worktrees/
+.claude/settings.local.json
+CLAUDE.local.md
+
+# OS
+.DS_Store
+
+# Documents
+*.pdf

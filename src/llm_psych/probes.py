@@ -268,6 +268,81 @@ def best_layer(
     return max(results, key=lambda lyr: results[lyr].auc)
 
 
+def select_layer_by_valence(
+    activations: dict[int, np.ndarray],
+    valence: np.ndarray,
+    *,
+    C: float = 1.0,
+    random_state: int = 42,
+) -> tuple[int, dict[int, float]]:
+    """Select the layer with the best valence-separation AUC.
+
+    Inspired by EmotionScope's automated layer-sweep: fit a binary
+    valence classifier (positive vs. negative) at each candidate layer
+    and pick the layer with the highest AUC.  This is cheaper than
+    fitting full one-vs-rest emotion probes on every layer and can be
+    used as a coarse pre-selection step.
+
+    Parameters
+    ----------
+    activations
+        Mapping from layer index to float array of shape
+        ``(n_samples, hidden_dim)``.
+    valence
+        Binary array of shape ``(n_samples,)``.  ``1`` = positive
+        valence, ``0`` = negative valence.
+    C
+        L2 regularisation inverse strength for the internal logistic
+        regression.  Default 1.0.
+    random_state
+        Seed passed to the sklearn solver.
+
+    Returns
+    -------
+    int
+        Layer index with maximum valence AUC.
+    dict[int, float]
+        Mapping from every provided layer to its valence AUC.
+
+    Examples
+    --------
+    >>> layers = {16: X16, 20: X20, 24: X24}   # each (n, hidden_dim)
+    >>> valence = np.array([1, 0, 1, ...])       # 1=pos, 0=neg
+    >>> best, scores = select_layer_by_valence(layers, valence)
+    >>> best
+    20
+    """
+    if len(set(v.shape[0] for v in activations.values())) > 1:
+        raise ValueError(
+            "All activation arrays must have the same number of samples (first dimension)."
+        )
+    if valence.ndim != 1:
+        raise ValueError(f"valence must be 1-D, got shape {valence.shape}")
+    if len(valence) != next(iter(activations.values())).shape[0]:
+        raise ValueError(
+            f"valence length ({len(valence)}) does not match activation n_samples "
+            f"({next(iter(activations.values())).shape[0]})."
+        )
+    if not np.array_equal(np.unique(valence), np.array([0, 1])):
+        raise ValueError("valence must contain exactly values 0 and 1.")
+
+    layer_scores: dict[int, float] = {}
+    for lyr, X in activations.items():
+        # Cast to float64 — sklearn wants float64 or float32, not float16
+        if X.dtype == np.float16:
+            X = X.astype(np.float64)
+        clf = LogisticRegression(
+            C=C, solver="lbfgs", max_iter=1000, random_state=random_state
+        )
+        clf.fit(X, valence)
+        proba = clf.predict_proba(X)[:, 1]
+        auc = float(roc_auc_score(valence, proba))
+        layer_scores[lyr] = auc
+
+    best_lyr = max(layer_scores, key=lambda k: layer_scores[k])
+    return best_lyr, layer_scores
+
+
 # --------------------------------------------------------------------------
 # Persistence
 # --------------------------------------------------------------------------

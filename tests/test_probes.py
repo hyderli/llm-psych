@@ -18,6 +18,7 @@ from llm_psych.probes import (
     fit,
     load,
     save,
+    select_layer_by_valence,
 )
 
 # ---------------------------------------------------------------------------
@@ -263,3 +264,68 @@ class TestBestLayer:
             20: self._make_result(0.80),
         }
         assert best_layer(results) in (10, 20)
+
+
+# ---------------------------------------------------------------------------
+# select_layer_by_valence
+# ---------------------------------------------------------------------------
+
+class TestSelectLayerByValence:
+    def _make_layers(self, n: int = 120, d: int = 16) -> tuple[dict[int, np.ndarray], np.ndarray]:
+        """Return activations where layer 2 is clearly the most separable."""
+        rng = np.random.default_rng(42)
+        layers = {}
+        for lyr in (0, 1, 2, 3):
+            # Base noise
+            X = rng.standard_normal((n, d)).astype(np.float32)
+            # Layer 2 gets a strong valence signal
+            if lyr == 2:
+                X[: n // 2] += 3.0  # positive valence group
+                X[n // 2 :] -= 3.0  # negative valence group
+            layers[lyr] = X
+        valence = np.array([1] * (n // 2) + [0] * (n // 2), dtype=int)
+        return layers, valence
+
+    def test_picks_most_separable_layer(self):
+        layers, valence = self._make_layers()
+        best, scores = select_layer_by_valence(layers, valence)
+        assert best == 2
+        assert scores[2] > scores[0]
+        assert scores[2] > scores[1]
+        assert scores[2] > scores[3]
+
+    def test_returns_all_scores(self):
+        layers, valence = self._make_layers()
+        best, scores = select_layer_by_valence(layers, valence)
+        assert set(scores.keys()) == {0, 1, 2, 3}
+        assert all(isinstance(v, float) for v in scores.values())
+
+    def test_scores_between_zero_and_one(self):
+        layers, valence = self._make_layers()
+        _, scores = select_layer_by_valence(layers, valence)
+        for v in scores.values():
+            assert 0.0 <= v <= 1.0
+
+    def test_raises_on_mismatched_sample_count(self):
+        rng = np.random.default_rng(0)
+        layers = {0: rng.standard_normal((100, 8)).astype(np.float32)}
+        valence = np.array([1] * 25 + [0] * 25, dtype=int)  # 50 != 100
+        with pytest.raises(ValueError, match="does not match activation n_samples"):
+            select_layer_by_valence(layers, valence)
+
+    def test_raises_on_non_binary_valence(self):
+        rng = np.random.default_rng(0)
+        layers = {0: rng.standard_normal((100, 8)).astype(np.float32)}
+        valence = np.array([0] * 50 + [2] * 50, dtype=int)
+        with pytest.raises(ValueError, match="must contain exactly values 0 and 1"):
+            select_layer_by_valence(layers, valence)
+
+    def test_raises_on_inconsistent_sample_counts(self):
+        rng = np.random.default_rng(0)
+        layers = {
+            0: rng.standard_normal((100, 8)).astype(np.float32),
+            1: rng.standard_normal((90, 8)).astype(np.float32),
+        }
+        valence = np.array([1] * 50 + [0] * 50, dtype=int)
+        with pytest.raises(ValueError, match="same number of samples"):
+            select_layer_by_valence(layers, valence)

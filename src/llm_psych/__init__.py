@@ -19,6 +19,7 @@ from llm_psych.probes import (
     fit,
     load,
     save,
+    select_layer_by_valence,
 )
 
 __all__ = [
@@ -36,6 +37,7 @@ __all__ = [
     "fit",
     "load",
     "save",
+    "select_layer_by_valence",
 ]
 
 __version__ = "0.1.0"
