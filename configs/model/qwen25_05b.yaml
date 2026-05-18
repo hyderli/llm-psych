@@ -1,7 +1,7 @@
 # Qwen 2.5 0.5B Instruct — Mac M5 / MPS development model
 # Pipeline validation only; not a primary result model.
 hf_model_id: Qwen/Qwen2.5-0.5B-Instruct
-hf_revision: null               # pin to a SHA before any primary result run
+hf_revision: 7ae557604adf67be50417f59c2c2f167def9a775               # pin to a SHA before any primary result run
 n_layers: 28
 hidden_size: 896
 torch_dtype: float16            # MPS prefers float16 over bfloat16

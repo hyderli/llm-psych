@@ -1,7 +1,7 @@
 # Llama 3.1 8B Instruct — primary target model (cloud/CUDA only)
 # RTX 4090 24 GB: loads comfortably in bf16 without quantization.
 hf_model_id: meta-llama/Llama-3.1-8B-Instruct
-hf_revision: null               # TODO: pin SHA before pre-registration lock
+hf_revision: 0e9e39f249a16976918f6564b8830bc894c89659               # TODO: pin SHA before pre-registration lock
 n_layers: 32
 hidden_size: 4096
 torch_dtype: bfloat16

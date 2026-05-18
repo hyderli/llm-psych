@@ -1,6 +1,6 @@
 # Qwen 2.5 7B Instruct — primary target model (cloud/CUDA only)
 hf_model_id: Qwen/Qwen2.5-7B-Instruct
-hf_revision: null               # TODO: pin SHA before pre-registration lock
+hf_revision: a09a35458c702b33eeacc393d103063234e8bc28               # TODO: pin SHA before pre-registration lock
 n_layers: 28
 hidden_size: 3584
 torch_dtype: bfloat16

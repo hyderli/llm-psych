@@ -3,7 +3,7 @@
 # Different architecture family (Gemma vs LLaMA/Qwen) for cross-family
 # generalisation checks.
 hf_model_id: google/gemma-2-2b-it
-hf_revision: null               # pin before primary result runs
+hf_revision: 299a8560bedf22ed1c72a8a11e7dce4a7f9f51f8               # pin before primary result runs
 n_layers: 26
 hidden_size: 2304
 torch_dtype: float16            # MPS prefers float16 over bfloat16
