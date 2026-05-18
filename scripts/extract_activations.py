@@ -70,12 +70,18 @@ def _check_clean_git() -> None:
         )
 
 
-def _check_stimuli(data_dir: Path, prompt_file: str, neutral_file: str) -> None:
-    for fname in (prompt_file, neutral_file):
-        p = data_dir / fname
-        if not p.exists():
+def _check_stimuli(data_dir: Path, prompt_file: str, neutral_file: str | None) -> None:
+    p = data_dir / prompt_file
+    if not p.exists():
+        raise FileNotFoundError(
+            f"Stimulus file not found: {p}\n"
+            "Run data preparation scripts first or check paths.data_dir."
+        )
+    if neutral_file:
+        p_neutral = data_dir / neutral_file
+        if not p_neutral.exists():
             raise FileNotFoundError(
-                f"Stimulus file not found: {p}\n"
+                f"Neutral file not found: {p_neutral}\n"
                 "Run data preparation scripts first or check paths.data_dir."
             )
 
@@ -166,7 +172,7 @@ def main(cfg: DictConfig) -> None:
     _check_clean_git()
 
     data_dir = _repo_root / cfg.paths.data_dir
-    _check_stimuli(data_dir, cfg.emotion.prompt_file, cfg.emotion.neutral_file)
+    _check_stimuli(data_dir, cfg.emotion.prompt_file, cfg.emotion.get("neutral_file"))
 
     # --- load model ---
     model_cfg_raw = cfg.model
@@ -186,9 +192,17 @@ def main(cfg: DictConfig) -> None:
     # --- load stimuli ---
     emotion_name: str = cfg.emotion.name
     all_prompts = pd.read_parquet(data_dir / cfg.emotion.prompt_file)
-    neutral_prompts = pd.read_parquet(data_dir / cfg.emotion.neutral_file)
 
-    emotion_prompts = all_prompts[all_prompts["emotion"] == emotion_name]
+    # Support both old (text/emotion) and new (prompt/emotion_label) schemas
+    text_col = "text" if "text" in all_prompts.columns else "prompt"
+    emotion_col = "emotion" if "emotion" in all_prompts.columns else "emotion_label"
+
+    emotion_prompts = all_prompts[all_prompts[emotion_col] == emotion_name]
+
+    if cfg.emotion.get("neutral_file"):
+        neutral_prompts = pd.read_parquet(data_dir / cfg.emotion.neutral_file)
+    else:
+        neutral_prompts = all_prompts[all_prompts[emotion_col] == "neutral"]
 
     out_base = _repo_root / cfg.paths.activations_dir
     # Derive a filesystem-safe model key from the model id (e.g. "Qwen2.5-0.5B-Instruct")
@@ -212,7 +226,7 @@ def main(cfg: DictConfig) -> None:
                 )
                 continue
 
-            texts = split_df["text"].tolist()
+            texts = split_df[text_col].tolist()
             prompt_ids = split_df["id"].astype(str).tolist()
 
             log.info(
