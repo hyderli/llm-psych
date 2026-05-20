@@ -97,9 +97,13 @@ def _paraphrase_one(
                 max_tokens=256,
                 temperature=temperature,
                 system=_SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": user_msg}],
+                messages=[
+                    {"role": "user", "content": user_msg},
+                    # Prefill the assistant turn with '{' to force valid JSON.
+                    {"role": "assistant", "content": "{"},
+                ],
             )
-            raw = resp.content[0].text
+            raw = "{" + resp.content[0].text
             data = json.loads(raw)
             para = data["paraphrase"].strip()
             if para:
