@@ -13,7 +13,7 @@ Usage
 
 Design (per HYPOTHESES.md amendment 2026-05-15)
 -----------------------------------------------
-- Paraphrase generation: Claude 3.5 Haiku, temperature=0.7, max 3 retries
+- Paraphrase generation: Claude Haiku 4.5 (20251001), temperature=0.7, max 3 retries
   per prompt on parse failure.
 - Preserve: emotion, category, approximate length, absence of explicit
   emotion words.
@@ -83,7 +83,7 @@ def _paraphrase_one(
     emotion: str,
     category: str,
     *,
-    model: str = "claude-3-5-haiku-20241022",
+    model: str = "claude-haiku-4-5-20251001",
     temperature: float = 0.7,
     max_retries: int = 3,
 ) -> str:
@@ -208,7 +208,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--model",
-        default="claude-3-5-haiku-20241022",
+        default="claude-haiku-4-5-20251001",
         help="Anthropic model for paraphrase generation",
     )
     parser.add_argument(
