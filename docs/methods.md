@@ -361,6 +361,68 @@ comes from a notebook.
 
 ---
 
+## Activation & artifact storage (cross-machine)
+
+Cloud pods are ephemeral; the Mac is a small disk. The contract is
+that **git holds code + small results, HF holds activations + large
+artifacts**.
+
+### Layout
+
+- **Public repo (`hyderli/llm-psych`):** code, configs, stimuli,
+  small parquet results (< 50 MB), figures.
+- **Private HF dataset (`hyderli/llm-psych-activations`):** all
+  `.npz` activation tensors, fitted probes (`.joblib`), steering
+  vectors (`.npy`). Mirrors the on-disk layout
+  (`activations/<model_key>/...`, `probes/<model_key>/...`,
+  `steering_vectors/<model_key>/...`). One snapshot tag per
+  experiment milestone (e.g. `h1-pilot-2026-05`, `h2-primary-2026-06`).
+- **HF model SHA pinning:** the source-of-truth SHA for an activation
+  file is the `hf_revision` from `configs/model/<n>.yaml` at the
+  git SHA of the run that produced it. Recorded in
+  `results/<exp>/run_meta.json`.
+
+### Round-trip workflow
+
+After a cloud run, before destroying the pod:
+
+```bash
+# upload (cloud pod → HF dataset)
+huggingface-cli upload hyderli/llm-psych-activations \
+  activations/ activations/ --repo-type=dataset --private
+
+huggingface-cli upload hyderli/llm-psych-activations \
+  probes/ probes/ --repo-type=dataset --private
+
+huggingface-cli upload hyderli/llm-psych-activations \
+  steering_vectors/ steering_vectors/ --repo-type=dataset --private
+```
+
+To resume on a new machine:
+
+```bash
+# download just the model you need
+huggingface-cli download hyderli/llm-psych-activations \
+  --repo-type=dataset --include "activations/Llama-3.1-8B-Instruct/*" \
+  --local-dir .
+```
+
+`HF_TOKEN` must be set with read+write scope to a token that has
+access to the private dataset. Stored in `.env` (gitignored), exported
+via `set -a; source .env; set +a` or `direnv`.
+
+### What not to commit to git
+
+- `.npz` activation files (sizes scale with model × emotion × split).
+- `.joblib` probes (binary; reproducible from activations).
+- Cached HF downloads under `~/.cache/huggingface`.
+
+`.gitignore` already covers `activations/`, `probes/`,
+`steering_vectors/`, `results/` (except `.gitkeep`). Confirm before
+each push.
+
+---
+
 ## Adding a new emotion, model, or task
 
 - **New emotion:** add 500/200 train/test prompts to

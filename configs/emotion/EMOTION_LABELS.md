@@ -30,6 +30,21 @@ added via a HYPOTHESES.md amendment.
 | 3     | sadness |
 | 4     | joy     |
 
+## Meeting 2026-05-18 extensions (no stimuli yet)
+
+Added to provide config slots for Ekman / Wilcox emotion candidates
+raised in the kick-off meeting. These configs exist but
+`emotion_prompts.parquet` does not yet contain prompts for these
+labels — stimulus authoring is required before any extraction run.
+
+| label | emotion   | framework |
+|-------|-----------|-----------|
+| 14    | disgust   | Ekman     |
+| 15    | surprise  | Ekman     |
+| 16    | contempt  | Ekman     |
+| 17    | peaceful  | Wilcox    |
+| 18    | powerful  | Wilcox    |
+
 ## Neutral baseline
 
 Neutral prompts are not assigned an integer label — they are handled as

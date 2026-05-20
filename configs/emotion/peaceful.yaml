@@ -1,0 +1,6 @@
+name: peaceful
+label: 17                      # Wilcox extension (meeting 2026-05-18)
+prompt_file: emotion_prompts.parquet
+# neutral prompts are in the same file (emotion_label == "neutral")
+# NOTE: stimuli for this emotion not yet authored in emotion_prompts.parquet —
+# pending an emotion_prompts.parquet expansion before this config can be used.

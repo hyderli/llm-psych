@@ -32,5 +32,17 @@ CLAUDE.local.md
 # OS
 .DS_Store
 
+# Experiment artifacts (tracked via .gitkeep, not contents)
+activations/*
+!activations/.gitkeep
+probes/*
+!probes/.gitkeep
+steering_vectors/*
+!steering_vectors/.gitkeep
+results/*
+!results/.gitkeep
+figures/*
+!figures/.gitkeep
+
 # Documents
 *.pdf
