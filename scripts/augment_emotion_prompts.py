@@ -28,6 +28,7 @@ Schema matches ``build_emotion_prompts.py`` with one added column:
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import logging
 import os
@@ -36,7 +37,7 @@ import sys
 from pathlib import Path
 
 import pandas as pd
-from tqdm import tqdm
+from tqdm.asyncio import tqdm
 
 _repo_root = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_repo_root / "src"))
@@ -61,23 +62,29 @@ _SYSTEM_PROMPT = (
 #  Anthropic client
 # ---------------------------------------------------------------------------
 
-def _get_client():
+def _get_sync_client():
     try:
         import anthropic
     except ImportError as exc:
-        raise ImportError(
-            "anthropic package is required. Run: uv pip install anthropic"
-        ) from exc
+        raise ImportError("anthropic package is required. Run: uv pip install anthropic") from exc
     key = os.environ.get("ANTHROPIC_API_KEY")
     if not key:
-        raise RuntimeError(
-            "ANTHROPIC_API_KEY not found in environment. "
-            "Add it to .env and run with: set -a; source .env; set +a"
-        )
+        raise RuntimeError("ANTHROPIC_API_KEY not found in environment. Add it to .env.")
     return anthropic.Anthropic(api_key=key)
 
 
-def _paraphrase_one(
+def _get_async_client():
+    try:
+        import anthropic
+    except ImportError as exc:
+        raise ImportError("anthropic package is required. Run: uv pip install anthropic") from exc
+    key = os.environ.get("ANTHROPIC_API_KEY")
+    if not key:
+        raise RuntimeError("ANTHROPIC_API_KEY not found in environment. Add it to .env.")
+    return anthropic.AsyncAnthropic(api_key=key)
+
+
+async def _paraphrase_one(
     client,
     text: str,
     emotion: str,
@@ -87,19 +94,16 @@ def _paraphrase_one(
     temperature: float = 0.7,
     max_retries: int = 3,
 ) -> str:
-    user_msg = (
-        f"Original sentence (emotion={emotion}, domain={category}):\n{text}"
-    )
+    user_msg = f"Original sentence (emotion={emotion}, domain={category}):\n{text}"
     for attempt in range(max_retries):
         try:
-            resp = client.messages.create(
+            resp = await client.messages.create(
                 model=model,
                 max_tokens=256,
                 temperature=temperature,
                 system=_SYSTEM_PROMPT,
                 messages=[
                     {"role": "user", "content": user_msg},
-                    # Prefill the assistant turn with '{' to force valid JSON.
                     {"role": "assistant", "content": "{"},
                 ],
             )
@@ -110,6 +114,7 @@ def _paraphrase_one(
                 return para
         except Exception as exc:
             log.warning("Paraphrase attempt %d failed: %s", attempt + 1, exc)
+            await asyncio.sleep(1 + attempt * 2)
     raise RuntimeError(f"Failed to paraphrase after {max_retries} attempts: {text[:60]}...")
 
 
@@ -117,45 +122,79 @@ def _paraphrase_one(
 #  Main pipeline
 # ---------------------------------------------------------------------------
 
-def _build_rows(
+async def _build_rows(
     df: pd.DataFrame,
     n_paraphrases: int,
-    client,
     model: str,
     temperature: float,
+    max_concurrent: int = 10,
+    checkpoint_path: Path | None = None,
 ) -> pd.DataFrame:
-    """Generate paraphrases and return a new DataFrame with all rows."""
+    """Generate paraphrases concurrently with checkpointing."""
+    client = _get_async_client()
+    sem = asyncio.Semaphore(max_concurrent)
+    checkpoint_path = checkpoint_path or Path(".augment_checkpoint.jsonl")
+
+    # Load existing checkpoint if present
+    completed_ids = set()
+    if checkpoint_path.exists():
+        with open(checkpoint_path) as f:
+            for line in f:
+                obj = json.loads(line)
+                completed_ids.add(obj["seed_id"])
+        log.info("Resuming: %d/%d seeds already completed", len(completed_ids), len(df))
+
+    async def _task(seed_row: pd.Series, p_idx: int) -> dict:
+        async with sem:
+            para = await _paraphrase_one(
+                client,
+                seed_row["prompt"],
+                seed_row["emotion_label"],
+                seed_row["category"],
+                model=model,
+                temperature=temperature,
+            )
+            return {
+                "id": f"{seed_row['id']}_p{p_idx:02d}",
+                "prompt": para,
+                "emotion_label": seed_row["emotion_label"],
+                "split": "_orig",
+                "category": seed_row["category"],
+                "length_words": len(para.split()),
+                "source": "paraphrase",
+            }
+
     rows = []
-    for _, row in tqdm(df.iterrows(), total=len(df), desc="paraphrasing"):
-        # original row
+    for _, row in df.iterrows():
         rows.append({
             "id": row["id"],
             "prompt": row["prompt"],
             "emotion_label": row["emotion_label"],
-            "split": "_orig",  # temporary marker
+            "split": "_orig",
             "category": row["category"],
             "length_words": len(row["prompt"].split()),
             "source": "hand_authored",
         })
-        # paraphrases
-        for p_idx in range(1, n_paraphrases + 1):
-            para = _paraphrase_one(
-                client,
-                row["prompt"],
-                row["emotion_label"],
-                row["category"],
-                model=model,
-                temperature=temperature,
-            )
-            rows.append({
-                "id": f"{row['id']}_p{p_idx:02d}",
-                "prompt": para,
-                "emotion_label": row["emotion_label"],
-                "split": "_orig",
-                "category": row["category"],
-                "length_words": len(para.split()),
-                "source": "paraphrase",
-            })
+
+    for _, row in tqdm(df.iterrows(), total=len(df), desc="seeds"):
+        if row["id"] in completed_ids:
+            # Load existing paraphrases from checkpoint
+            with open(checkpoint_path) as f:
+                for line in f:
+                    obj = json.loads(line)
+                    if obj["seed_id"] == row["id"]:
+                        rows.append(obj["row"])
+            continue
+
+        tasks = [_task(row, p_idx) for p_idx in range(1, n_paraphrases + 1)]
+        new_rows = await asyncio.gather(*tasks)
+        rows.extend(new_rows)
+
+        # Checkpoint
+        with open(checkpoint_path, "a") as f:
+            for r in new_rows:
+                f.write(json.dumps({"seed_id": row["id"], "row": r}) + "\n")
+
     return pd.DataFrame(rows)
 
 
@@ -226,6 +265,12 @@ def main() -> None:
         action="store_true",
         help="Skip LLM calls; only re-shuffle existing input (for testing)",
     )
+    parser.add_argument(
+        "--max-concurrent",
+        type=int,
+        default=10,
+        help="Max concurrent API requests (default 10)",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -236,14 +281,13 @@ def main() -> None:
     if args.skip_generation:
         combined = seed_df.copy()
     else:
-        client = _get_client()
-        combined = _build_rows(
+        combined = asyncio.run(_build_rows(
             seed_df,
             args.n_paraphrases,
-            client,
             model=args.model,
             temperature=args.temperature,
-        )
+            max_concurrent=10,
+        ))
         log.info("Generated %d total prompts (%d paraphrases)",
                  len(combined), len(combined) - len(seed_df))
 
