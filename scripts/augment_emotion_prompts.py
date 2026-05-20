@@ -132,7 +132,6 @@ async def _build_rows(
 ) -> pd.DataFrame:
     """Generate paraphrases concurrently with checkpointing."""
     client = _get_async_client()
-    sem = asyncio.Semaphore(max_concurrent)
     checkpoint_path = checkpoint_path or Path(".augment_checkpoint.jsonl")
 
     # Load existing checkpoint if present
@@ -143,26 +142,6 @@ async def _build_rows(
                 obj = json.loads(line)
                 completed_ids.add(obj["seed_id"])
         log.info("Resuming: %d/%d seeds already completed", len(completed_ids), len(df))
-
-    async def _task(seed_row: pd.Series, p_idx: int) -> dict:
-        async with sem:
-            para = await _paraphrase_one(
-                client,
-                seed_row["prompt"],
-                seed_row["emotion_label"],
-                seed_row["category"],
-                model=model,
-                temperature=temperature,
-            )
-            return {
-                "id": f"{seed_row['id']}_p{p_idx:02d}",
-                "prompt": para,
-                "emotion_label": seed_row["emotion_label"],
-                "split": "_orig",
-                "category": seed_row["category"],
-                "length_words": len(para.split()),
-                "source": "paraphrase",
-            }
 
     rows = []
     for _, row in df.iterrows():
@@ -186,8 +165,29 @@ async def _build_rows(
                         rows.append(obj["row"])
             continue
 
-        tasks = [_task(row, p_idx) for p_idx in range(1, n_paraphrases + 1)]
-        new_rows = await asyncio.gather(*tasks)
+        new_rows = []
+        for p_idx in range(1, n_paraphrases + 1):
+            para = await _paraphrase_one(
+                client,
+                row["prompt"],
+                row["emotion_label"],
+                row["category"],
+                model=model,
+                temperature=temperature,
+                max_retries=5,
+            )
+            new_rows.append({
+                "id": f"{row['id']}_p{p_idx:02d}",
+                "prompt": para,
+                "emotion_label": row["emotion_label"],
+                "split": "_orig",
+                "category": row["category"],
+                "length_words": len(para.split()),
+                "source": "paraphrase",
+            })
+            # Throttle to stay under 50 req/min (~1.2s min gap)
+            await asyncio.sleep(1.5)
+
         rows.extend(new_rows)
 
         # Checkpoint
