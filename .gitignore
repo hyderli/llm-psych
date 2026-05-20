@@ -32,7 +32,8 @@ CLAUDE.local.md
 # OS
 .DS_Store
 
-# Experiment artifacts (tracked via .gitkeep, not contents)
+# Data / experiment outputs
+data/derived/
 activations/*
 !activations/.gitkeep
 probes/*
@@ -43,6 +44,10 @@ results/*
 !results/.gitkeep
 figures/*
 !figures/.gitkeep
+
+# Augmentation temp artifacts
+.augment_checkpoint.jsonl
+augment.log
 
 # Documents
 *.pdf
