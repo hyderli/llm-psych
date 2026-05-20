@@ -1,19 +1,19 @@
 """Augment emotion_prompts.parquet via LLM paraphrase generation.
 
 Takes the hand-authored seed set and generates N paraphrases per seed
-prompt using GPT-4o-mini (temperature=0.7), then reshuffles into a
-70/30 train/test split.
+prompt using Anthropic Claude Haiku (temperature=0.7), then reshuffles
+into a 70/30 train/test split.
 
 Usage
 -----
-    # Requires OPENAI_API_KEY in environment
+    # Requires ANTHROPIC_API_KEY in environment
     uv run python scripts/augment_emotion_prompts.py \
         --n-paraphrases 14 \
         --output data/public/emotion_prompts_augmented.parquet
 
 Design (per HYPOTHESES.md amendment 2026-05-15)
 -----------------------------------------------
-- Paraphrase generation: GPT-4o-mini, temperature=0.7, max 3 retries
+- Paraphrase generation: Claude Haiku, temperature=0.7, max 3 retries
   per prompt on parse failure.
 - Preserve: emotion, category, approximate length, absence of explicit
   emotion words.
@@ -58,23 +58,23 @@ _SYSTEM_PROMPT = (
 
 
 # ---------------------------------------------------------------------------
-#  OpenAI client
+#  Anthropic client
 # ---------------------------------------------------------------------------
 
 def _get_client():
     try:
-        from openai import OpenAI
+        import anthropic
     except ImportError as exc:
         raise ImportError(
-            "openai package is required. Run: uv pip install openai"
+            "anthropic package is required. Run: uv pip install anthropic"
         ) from exc
-    key = os.environ.get("OPENAI_API_KEY")
+    key = os.environ.get("ANTHROPIC_API_KEY")
     if not key:
         raise RuntimeError(
-            "OPENAI_API_KEY not found in environment. "
+            "ANTHROPIC_API_KEY not found in environment. "
             "Add it to .env and run with: set -a; source .env; set +a"
         )
-    return OpenAI(api_key=key)
+    return anthropic.Anthropic(api_key=key)
 
 
 def _paraphrase_one(
@@ -83,7 +83,7 @@ def _paraphrase_one(
     emotion: str,
     category: str,
     *,
-    model: str = "gpt-4o-mini",
+    model: str = "claude-3-haiku-20240307",
     temperature: float = 0.7,
     max_retries: int = 3,
 ) -> str:
@@ -92,16 +92,14 @@ def _paraphrase_one(
     )
     for attempt in range(max_retries):
         try:
-            resp = client.chat.completions.create(
+            resp = client.messages.create(
                 model=model,
-                messages=[
-                    {"role": "system", "content": _SYSTEM_PROMPT},
-                    {"role": "user", "content": user_msg},
-                ],
+                max_tokens=256,
                 temperature=temperature,
-                response_format={"type": "json_object"},
+                system=_SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": user_msg}],
             )
-            raw = resp.choices[0].message.content
+            raw = resp.content[0].text
             data = json.loads(raw)
             para = data["paraphrase"].strip()
             if para:
@@ -210,8 +208,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--model",
-        default="gpt-4o-mini",
-        help="OpenAI model for paraphrase generation",
+        default="claude-3-haiku-20240307",
+        help="Anthropic model for paraphrase generation",
     )
     parser.add_argument(
         "--temperature",
