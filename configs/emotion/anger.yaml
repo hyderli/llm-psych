@@ -1,5 +1,5 @@
 name: anger
 label: 1                       # integer label used in probe training arrays
 # prompt_file is relative to paths.data_dir in config.yaml
-prompt_file: emotion_prompts.parquet
+prompt_file: emotion_prompts_augmented.parquet
 # neutral prompts are in the same file (emotion_label == "neutral")

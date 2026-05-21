@@ -1,4 +1,4 @@
 name: sadness
 label: 3
-prompt_file: emotion_prompts.parquet
+prompt_file: emotion_prompts_augmented.parquet
 # neutral prompts are in the same file (emotion_label == "neutral")

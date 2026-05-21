@@ -1,4 +1,4 @@
 name: fear
 label: 2
-prompt_file: emotion_prompts.parquet
+prompt_file: emotion_prompts_augmented.parquet
 # neutral prompts are in the same file (emotion_label == "neutral")
