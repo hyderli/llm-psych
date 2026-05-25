@@ -95,9 +95,9 @@ external replication on open weights:
 ## Non-negotiable technical constraints
 
 - **Models:** Open-weight only. Primary: Llama 3.1 8B Instruct, Qwen
-  2.5 7B Instruct. Secondary: Mistral 7B v0.3 *or* OLMo-2 7B (pick
-  one, justify in HYPOTHESES.md). Pin exact HF commit SHAs. Compare
-  base vs. instruct checkpoints where available.
+  2.5 7B Instruct, and one Gemma family variant in the 7-9B range
+  (pick one, justify in HYPOTHESES.md). Pin exact HF commit SHAs.
+  Compare base vs. instruct checkpoints where available.
 - **Compute:** Tiered by phase.
   - *Development:* Mac M5 (Apple Silicon, MPS) for pipeline code,
     tests, analysis, and small-model pilots (Qwen 2.5 0.5B, Llama

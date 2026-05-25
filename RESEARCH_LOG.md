@@ -102,3 +102,37 @@ lock of HYPOTHESES.md.
 with a tiny subset of emotion_prompts.parquet.
 
 **Energy:** continuing.
+
+## 2026-05-25 — pre-registration amendment + Bluedot grant submitted
+
+**Did:**
+- Amended HYPOTHESES.md with three dated 2026-05-25 amendment blocks:
+  (i) sycophancy removed from project scope, blackmail promoted to
+  primary H2 (single-turn agentic-misalignment protocol, n ≥ 200 per
+  condition via paraphrase expansion); (ii) H5 (activation-vs-self-
+  report dissociation) removed entirely; (iii) judge model switched
+  from GPT-4o-mini to Claude Haiku 4.5.
+- Propagated all four changes through BLUEPRINT.md, docs/methods.md,
+  CLAUDE.md, README.md. Two clean commits on main:
+  3dc0fe4 (four pre-registration files) and c97dae7 (README).
+  Pushed to origin.
+- Drafted and submitted Bluedot rapid grant application. Ask: $250
+  ($100 RunPod RTX 4090 ~300 GPU-hrs, $90 Anthropic API for Claude
+  Haiku 4.5 judging, $60 buffer). Team: four Bluedot alumni
+  (Haydar PI, Chris Bosley, Vaaruni Desai, Srujananjali Medicherla).
+
+**Open TODOs:**
+- Pin HF revision SHAs in configs/model/*.yaml.
+- Pick the third primary target model — narrowed to a Gemma family
+  variant in the 7-9B range; specific variant TBD.
+- Decide on activity-preferences stimulus design: keep n=100 with
+  across-activity aggregate, raise to n=200 with paraphrase expansion,
+  or drop the task from H3.
+- Write collaborators.md after kick-off call.
+- No `from_config` Hydra helper yet.
+
+**Next:** smoke-test activation extraction on Gemma 2B or Llama 3.2 1B
+with a tiny subset of emotion_prompts.parquet. Pre-registration is now
+locked; pilots can proceed without further amendment risk.
+
+**Energy:** long session; scope tightened and grant out the door.
