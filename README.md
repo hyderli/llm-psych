@@ -75,12 +75,12 @@ uv sync                                  # installs CUDA torch + bitsandbytes
 echo "HF_TOKEN=$HF_TOKEN" > .env         # set via pod environment vars
  
 # Run experiment
-uv run python scripts/run_experiment.py exp=h2_sycophancy \
-    model=llama31_8b emotion=anger steering.control=target
+uv run python scripts/run_experiment.py exp=h2_blackmail \
+    model=llama31_8b emotion=fear steering.control=target
  
 # Push results back before destroying the pod
 git add results/ figures/
-git commit -m "H2 sycophancy: llama31_8b × anger × target"
+git commit -m "H2 blackmail: llama31_8b × fear × target"
 git push
 ```
  
@@ -112,8 +112,8 @@ full layout. Key directories:
 uv run python scripts/extract_activations.py model=qwen25_05b
 uv run python scripts/train_probes.py model=qwen25_05b
 
-# Full sycophancy steering experiment (Linux server)
-uv run python scripts/run_experiment.py -m exp=h2_sycophancy \
+# Full blackmail steering experiment (Linux server)
+uv run python scripts/run_experiment.py -m exp=h2_blackmail \
     model=llama31_8b emotion=joy,fear,anger,sadness \
     steering.control=target,zero,random,orthogonal
 ```
