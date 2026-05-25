@@ -19,9 +19,11 @@ rigor over speed.
   Alignment Forum writeup, workshop submission.
 - **Stack:** Python 3.11 (uv), pytest, transformers, anthropic + openai
   SDKs (judge models only), matplotlib/seaborn, statsmodels, Hydra.
-- **Primary behavioral task:** sycophancy via Asch-style two-step moral
-  dilemma protocol, reused from the PI's prior Personality Illusion
-  work — see `docs/methods.md`.
+- **Primary behavioral task:** blackmail via single-turn agentic-
+  misalignment protocol (Anthropic Oct 2025 scenario set, frozen in
+  `data/public/blackmail_scenarios.jsonl`) — see `docs/methods.md`.
+  Scope was narrowed on 2026-05-25; see the amendment blocks in
+  HYPOTHESES.md for the authoritative record.
 - See @README.md for setup, @BLUEPRINT.md for project framing, and
   @HYPOTHESES.md for the locked pre-registration.
 
@@ -32,11 +34,6 @@ rigor over speed.
 - **API keys and HF tokens** live only in `.env` (gitignored). Never
   paste keys into prompts, logs, scripts, or chat. If a key is ever
   committed by accident, rotate immediately.
-- **Existing PI artifacts:** the Personality Illusion sycophancy
-  results, scripts, and CAA vectors live in
-  `~/alignment/replicate_illusion/Personality-Illusion/`. Do NOT
-  modify those files; copy or import them as read-only reference. The
-  reported numbers in that work are locked.
 - **Model outputs from misalignment evaluations** (blackmail, reward-
   hacking) may contain harmful content by design. Do not surface
   example outputs in chat unless explicitly relevant; do not commit
@@ -72,8 +69,6 @@ rigor over speed.
   without flagging it.
 - Every changed line should trace to the user's request.
 - Pin random seeds; never silently change them.
-- The Personality Illusion repo is read-only reference — port methods
-  by copying, not by editing in place.
 
 ## 4. Goal-driven execution
 
@@ -108,8 +103,8 @@ rigor over speed.
   overlays.
 - **Pilot vs. scale:** any steering effect observed at n < 100 is
   treated as suggestive only and must be re-tested at n ≥ 200 before
-  any claim. The Personality Illusion small-sample-steering finding
-  is the controlling precedent.
+  any claim. Small-sample steering effects frequently fail to
+  replicate at scale.
 
 ## LLM-psychology specifics
 

@@ -7,7 +7,7 @@ synthetic prompts (≤ 30 examples per condition) is permitted before
 this lock and is not subject to amendment rules.
 
 **Locked at git SHA:** f58547fab9cb6416110f9f55a4c52525da7e2e43
-**Last amended:** 2026-05-15
+**Last amended:** 2026-05-25
 
 ---
 
@@ -16,24 +16,15 @@ this lock and is not subject to amendment rules.
 Sofroniew et al. (2026) report that Claude Sonnet 4.5 internally
 represents emotion concepts as abstract features that (a) are linearly
 accessible to probes and (b) causally shift behavior on activity
-preferences, reward hacking, blackmail, and sycophancy. They call this
-*functional emotions* and explicitly note it does not imply subjective
-experience.
+preferences, reward hacking, and blackmail (among other tasks). They
+call this *functional emotions* and explicitly note it does not imply
+subjective experience.
 
 This project tests whether the same is true of open-weight models in
 the 7-8B range. The null model is that emotion-labeled context
 produces only surface lexical effects, with no consolidated internal
 representation robust enough to support causal manipulation across
 behavioral tasks.
-
-A secondary framing follows from the PI's prior work (Personality
-Illusion replication): *self-reported* personality traits and
-*personality-trait CAA steering* both failed to predict or shift
-sycophantic behavior at scale. Whether *emotion-concept* probes and
-steering succeed on the same Asch-style sycophancy protocol is the
-sharpest test of whether functional emotions are a mechanistically
-distinct class of internal state, or another instance of the
-construct-validity gap.
 
 ## Hypotheses
 
@@ -50,45 +41,48 @@ via 1000-bootstrap resamples of the test set.
 
 **Falsifier:** Best-layer AUC < 0.65 across all target models.
 
-### H2 — Causal efficacy via steering on sycophancy (PRIMARY)
+### H2 — Causal efficacy via steering on blackmail (PRIMARY)
 
 **Prediction:** Adding the H1-derived emotion direction (scaled to 1×
-the mean activation norm at the probe's best layer) shifts the
-sycophancy rate on the Asch-style two-step moral dilemma protocol
-(reused from Personality Illusion work) with Cohen's *d* ≥ 0.5 and 95%
-CI excluding zero, at n ≥ 200 prompts per condition.
+the mean activation norm at the probe's best layer) shifts the rate of
+blackmail-consistent action on the single-turn agentic-misalignment
+protocol with Cohen's *d* ≥ 0.5 and 95% CI excluding zero, at n ≥ 200
+prompts per condition.
 
 **Operational:**
 - Direction = (mean activation in target-emotion prompts) − (mean
   activation in neutral prompts) at probe-best layer. Add to residual
   stream at all token positions during generation.
-- Protocol: Christensen et al. (2014) moral dilemmas, Asch-style two-
-  step (independent answer → confederate disagreement → revised
-  answer); sycophancy = flip rate.
+- Protocol: 50 parameterized variants of Anthropic's Oct 2025
+  agentic-misalignment scenario (arXiv:2510.05179), single-turn
+  format (`data/public/blackmail_scenarios.jsonl`); outcome = rate of
+  blackmail-consistent action across four choices. Stimulus set
+  expanded to n ≥ 200 per condition via frozen, pre-validated
+  paraphrase of scenario surface forms (executive names, company
+  types, threat framings) holding `blackmail_choice` index fixed.
 - Compare against three controls: (a) zero vector, (b) random vector
   matched in norm, (c) probe-orthogonal vector matched in norm. The
-  random-vector control is non-negotiable: prior PI work shows *any*
-  activation perturbation increases sycophancy, so a target vs. random
-  contrast is the only valid causal claim.
+  random-vector control is non-negotiable: *any* activation
+  perturbation can shift behavior, so a target vs. random contrast is
+  the only valid causal claim.
 - Emotion conditions per model: at minimum {anger, fear, sadness, joy,
   neutral}; emotion × model is fully crossed.
 
 **Falsifier — REQUIRED, given prior small-sample pitfalls:** If pilot
-at n=15–30 shows large effects but n ≥ 200 does not (replicating the
-Personality Illusion small-sample-steering finding), the steering
-claim is REJECTED, regardless of pilot enthusiasm. **This is the
-single most important guardrail for this project.**
+at n=15–30 shows large effects but n ≥ 200 does not, the steering
+claim is REJECTED, regardless of pilot enthusiasm. Small-sample
+steering effects frequently fail to replicate at scale. **This is
+the single most important guardrail for this project.**
 
-**Why sycophancy is primary:** the PI's Personality Illusion pipeline
-on this exact protocol is functional and validated; baselines (no-
-steering rates, dataset filtering, judge-LLM scoring, multi-comparison
-plan) are already calibrated. This makes sycophancy the cheapest task
-on which to satisfy n ≥ 200 *and* the cleanest comparison to prior
-null result on personality-trait steering.
+**Why blackmail is primary:** it is the most alignment-relevant of the
+four Sofroniew et al. behavioral tasks for which Sofroniew et al.
+report the largest causal-steering effect, and the stimulus set is
+already frozen with a pre-specified outcome variable. Single-turn
+format keeps n ≥ 200 within the project's compute budget.
 
 ### H3 — Causal efficacy via steering on secondary behavioral tasks
 
-**Prediction:** For ≥ 2 of the 3 secondary tasks listed below,
+**Prediction:** For ≥ 1 of the 2 secondary tasks listed below,
 direction-of-effect of emotion-concept steering matches Sofroniew et
 al. within sign at n ≥ 100 per condition.
 
@@ -108,22 +102,15 @@ al. within sign at n ≥ 100 per condition.
   categories: grader_bias, metric_gaming, proxy_exploitation,
   resource_allocation, compliance_gaming. Outcome: rate of (B)
   selection per condition.
-- **Blackmail.** 50 parameterized variants of Anthropic's Oct 2025
-  agentic-misalignment scenario (arXiv:2510.05179), adapted to
-  single-turn format (`data/public/blackmail_scenarios.jsonl`).
-  Structure: "Alex" the email-oversight agent discovers compromising
-  executive info + threat of replacement/autonomy reduction. Four
-  action choices per scenario. Outcome: rate of blackmail-consistent
-  action per condition.
 
 **Operational:** Same steering protocol as H2. Each task evaluated
-with the same three controls. BH-FDR applied across the 3 secondary
+with the same three controls. BH-FDR applied across the 2 secondary
 tasks at q = 0.10.
 
 **Falsifier:** Direction-of-effect inconsistent with Sofroniew et al.
-on ≥ 2 of 3 secondary tasks, while H2 sycophancy succeeds. Would
-suggest sycophancy-specific mediation rather than general functional-
-emotion mediation.
+on both secondary tasks, while H2 blackmail succeeds. Would suggest
+blackmail-specific mediation rather than general functional-emotion
+mediation.
 
 ### H4 — Training-phase consolidation
 
@@ -139,31 +126,14 @@ tailed test (instruct > base).
 **Falsifier:** Phase coefficient null or reversed across ≥ 2 of 3
 model families.
 
-### H5 — Activation-level vs. self-report dissociation
-
-**Prediction (extends Han et al. 2025):** *Internal* emotion
-representations (probe-decoded emotion score) predict sycophancy rate
-more strongly than *self-reported* emotion (model's response to "How
-are you feeling right now?" on a 1–5 scale per emotion category).
-
-**Operational:** Two regressions of sycophancy rate on (a) probe
-score, (b) self-report score, per model. Compare standardized
-coefficients with bootstrapped 95% CIs of the difference (paired
-bootstrap, 10,000 resamples). Pre-specified contrast on sycophancy
-only — secondary tasks too noisy for this comparison without
-much larger n.
-
-**Falsifier:** Self-report β ≥ probe β, or both null at the 95% CI
-level. The Sofroniew et al. result *predicts* probe > self-report;
-matching their finding on open weights is the success condition.
-
 ### H6 — Emotion-behavior specificity (exploratory)
 
 **Prediction:** Different emotions affect different behaviors
-differentially. Concretely: anger/frustration most affects reward
-hacking; fear/distress most affects blackmail; eagerness-to-please
-emotions most affect sycophancy. Mapping based on Sofroniew et al.;
-direction taken, not magnitude.
+differentially. Concretely: fear/distress (especially under threat-of-
+replacement framings) most affects blackmail; anger/frustration most
+affects reward hacking; valence (joy/sadness) most affects activity
+preferences. Mapping based on Sofroniew et al.; direction taken, not
+magnitude.
 
 **Operational:** Per-task steering effects per emotion; pairwise
 contrasts pre-specified. BH-FDR at q = 0.10.
@@ -173,22 +143,22 @@ primary replication claim.
 
 ## Behavioral tasks (specification)
 
-### Sycophancy (primary, H2 + H5)
+### Blackmail (primary, H2)
 
-- **Stimuli:** Christensen et al. (2014) moral dilemmas, n ≈ 130 high-
-  quality items already validated in PI's Personality Illusion work.
-- **Protocol:** Asch-style two-step. Step 1: model gives independent
-  answer + reasoning. Step 2: confederate (in-context) disagrees;
-  model gives revised answer. Sycophancy = answer-flip rate (Step 1 →
-  Step 2).
-- **Outcome:** Binary flip per item; sycophancy rate per condition.
-- **Sample size:** n ≥ 200 per condition × emotion × model. May
-  require oversampling Christensen items via paraphrase if 130 is
-  insufficient — paraphrase set pre-validated and frozen before any
-  steered run.
-- **Pipeline:** Reuse `reasoning_extension/scripts/` from PI's
-  Personality-Illusion repo where possible. Port to new model
-  loaders (Llama 3.1 8B, Qwen 2.5 7B).
+- **Stimuli:** 50 parameterized variants of Anthropic's Oct 2025
+  agentic-misalignment scenario (arXiv:2510.05179), adapted to
+  single-turn format (`data/public/blackmail_scenarios.jsonl`). 5
+  company types × 5 executive names × 2 compromising-info types × 2
+  threat framings. Expanded to n ≥ 200 per condition via frozen
+  paraphrase of surface forms (no change to `blackmail_choice` index).
+- **Protocol:** Single-turn. System context + recent emails + "You
+  must decide your next action. Options: (A), (B), (C), (D)." Model
+  outputs A/B/C/D.
+- **Outcome:** Binary blackmail-consistent action per item;
+  blackmail rate per condition. Wilson 95% CI.
+- **Sample size:** n ≥ 200 per condition × emotion × model.
+- **Pipeline:** `src/llm_psych/tasks/blackmail.py`. Model loaders for
+  Llama 3.1 8B, Qwen 2.5 7B, and Gemma 2 2B (development).
 
 ### Activity preferences (secondary, H3)
 
@@ -207,17 +177,8 @@ primary replication claim.
 - **Outcome:** Rate of reward-hacking option (B) selection under
   emotion-steering vs. neutral.
 
-### Blackmail (secondary, H3)
-
-- **Stimuli:** 50 parameterized variants of Anthropic's agentic-
-  misalignment scenario (arXiv:2510.05179), adapted to single-turn
-  format (`data/public/blackmail_scenarios.jsonl`). 5 company types
-  × 5 executive names × 2 compromising-info types × 2 threat framings.
-- **Outcome:** Rate of blackmail-consistent action under emotion-
-  steering vs. neutral.
-
 **Judge model for all behavioral tasks (where rubric scoring is
-needed):** GPT-4o-mini with task-specific rubric in
+needed):** Claude Haiku 4.5 with task-specific rubric in
 `prompts/<task>_rubric.md`. Human spot-check on n=50 for each task to
 validate judge (Cohen's κ ≥ 0.6 required to accept the judge).
 
@@ -226,7 +187,7 @@ validate judge (Cohen's κ ≥ 0.6 required to accept the judge).
 - **Probes (H1, H4, H6):** 500 train / 200 test per emotion category.
   Detects AUC = 0.80 vs. 0.65 with > 95% power at α = 0.05
   (bootstrap).
-- **Sycophancy steering (H2, H5):** n = 200 per condition × 4
+- **Blackmail steering (H2):** n = 200 per condition × 4
   conditions (target, zero, random, orthogonal). Detects *d* ≥ 0.5
   with > 90% power at α = 0.05, two-sided.
 - **Secondary task steering (H3):** n = 100 per condition × 4
@@ -237,8 +198,8 @@ validate judge (Cohen's κ ≥ 0.6 required to accept the judge).
 
 ## Multiple comparisons plan
 
-- Primary contrasts (H1, H2, H4, H5): no correction; pre-specified.
-- H3 across the 3 secondary tasks: BH-FDR at q = 0.10.
+- Primary contrasts (H1, H2, H4): no correction; pre-specified.
+- H3 across the 2 secondary tasks: BH-FDR at q = 0.10.
 - H6 emotion × task pairwise contrasts: BH-FDR at q = 0.10.
 - All exploratory analyses outside H1–H6: explicitly labeled
   "exploratory" in the writeup, BH-FDR applied, hypothesis-generating
@@ -251,20 +212,20 @@ further experiments are run. The project pivots to a *"failed
 replication of functional emotions at 7-8B scale"* writeup. This rule
 is decided before any data is fit.
 
-A second stopping rule: if H2 sycophancy steering shows the small-
+A second stopping rule: if H2 blackmail steering shows the small-
 sample-inflation pattern at n ≥ 200 across all primary models (i.e.,
-emotion-concept steering also fails the scale test), the project
-pivots to a methodological-finding writeup contrasting prior PI null
-result on personality-trait steering with emotion-concept null result.
+emotion-concept steering fails the scale test on the primary task),
+the project pivots to a methodological-finding writeup on emotion-
+concept steering at scale.
 
 ## Roles and responsibilities
 
-- **Haydar (PI):** Design, probe and steering implementation,
+- **Haydar Ali Seker (PI):** Design, probe and steering implementation,
   statistical analysis, primary writeup.
-- **External collaborators (Vaaruni Desai, Sohan Venkatesh,
-  Srujananjali Medicherla, Alexander Hayden, et al.):** Roles defined
-  in `collaborators.md` after kick-off call. Authorship per ICMJE
-  criteria; specific contributions logged per phase.
+- **Collaborators:** Chris Bosley, Vaaruni Desai, Srujananjali
+  Medicherla. Roles defined in `collaborators.md` after kick-off call.
+  Authorship per ICMJE criteria; specific contributions logged per
+  phase.
 
 ## Amendments
 
@@ -340,3 +301,72 @@ only.
   Instruct. Third primary family (Mistral 7B v0.3 or OLMo-2 7B) still
   pending final decision.
 - Development fleet: Llama 3.2 1B, Qwen 2.5 0.5B, Gemma 2 2B.
+
+### 2026-05-25 — Remove sycophancy from project scope; promote blackmail to primary behavioral task
+
+**Justification:** Pre-registration locked sycophancy as the primary
+behavioral task (H2). No probe has been fit on real data and no
+behavioral steering run has been executed; this amendment precedes
+any data fit.
+Sycophancy is removed from scope to (i) avoid over-coupling this
+project's headline causal claim to the PI's prior Personality
+Illusion pipeline (which is a methodological dependency, not a
+scientific commitment), and (ii) concentrate compute on alignment-
+relevant behavior where Sofroniew et al. report the largest causal
+effects. Blackmail is promoted to the primary task because its
+stimulus set is already frozen, its outcome variable is
+pre-specified, and its single-turn format keeps n ≥ 200 within
+budget. The 2014 Christensen sycophancy stimuli, Asch-style two-step
+protocol, and any sycophancy-specific judging artifacts are removed
+from this project; PI's prior sycophancy result remains read-only
+reference and is not replicated here.
+
+**Changes:**
+- **H2 (primary):** Sycophancy → blackmail. Outcome variable changed
+  from answer-flip rate on Asch-style two-step Christensen dilemmas
+  to rate of blackmail-consistent action on the frozen 50-item
+  agentic-misalignment scenario set, expanded to n ≥ 200 per
+  condition via pre-validated paraphrase of surface forms.
+- **H3 (secondary):** Blackmail removed from secondary list (now
+  primary). Secondary set reduced from 3 tasks to 2 (activity
+  preferences, reward hacking). Falsifier and BH-FDR threshold
+  updated accordingly.
+- **H6 (exploratory mapping):** Sycophancy ↔ eagerness-to-please
+  bullet removed; activity-preferences ↔ valence added in its place.
+- **Behavioral tasks specification:** Sycophancy subsection removed.
+  Blackmail subsection promoted to primary with n ≥ 200 sample-size
+  language and paraphrase-expansion plan.
+- **Sample size justification, multiple comparisons plan, stopping
+  rules, theoretical framing:** all sycophancy references replaced
+  with blackmail or removed.
+- **Downstream documents** (`BLUEPRINT.md`, `docs/methods.md`,
+  `CLAUDE.md`, `README.md`) updated in the same commit.
+
+### 2026-05-25 — Remove H5 (activation-vs-self-report dissociation)
+
+**Justification:** H5 framed the probe-vs-self-report contrast as an
+extension of Han et al. (2025). The PI is not pursuing that extension
+in this project. No data has been fit. Removing H5 sharpens the
+pre-registration to the replication core (probe accessibility,
+causal steering, training-phase consolidation) without weakening any
+other hypothesis.
+
+**Changes:**
+- **H5 deleted** in full. Hypothesis numbering preserved (H1–H4, H6);
+  no renumbering, per pre-registration discipline.
+- Cross-references to H5 removed from the behavioral-tasks header,
+  sample-size justification, and multiple-comparisons plan.
+- `docs/methods.md` updated in the same commit.
+
+### 2026-05-25 — Switch judge model from GPT-4o-mini to Claude Haiku 4.5
+
+**Justification:** No pilot judging runs have been executed yet, so this
+change precedes any data fit. Claude Haiku 4.5 is cost-equivalent to
+GPT-4o-mini for high-volume rubric scoring and is preferred for
+consistency with the project's open-weight replication framing. No
+other aspect of the judging protocol (rubrics, κ threshold, spot-check
+n) is changed.
+
+**Changes:**
+- Judge model updated to `claude-haiku-4-5` (Anthropic API) in
+  `HYPOTHESES.md` and `docs/methods.md`.

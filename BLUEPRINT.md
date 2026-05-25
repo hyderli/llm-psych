@@ -8,15 +8,16 @@ Language Model"* (Transformer Circuits Thread, April 2, 2026), from
 Claude Sonnet 4.5 to open-weight LLMs. Sofroniew et al. report that
 Claude internally represents emotion concepts as abstract features that
 *causally* shift the model's preferences and its rate of misaligned
-behaviors — reward hacking, blackmail, and sycophancy — and call this
+behaviors — including reward hacking and blackmail — and call this
 phenomenon *functional emotions*.
 
 We test whether the same phenomenon holds in Llama 3.1 8B Instruct,
 Qwen 2.5 7B Instruct, and at least one additional 7-8B open-weight
 model family. Specifically, we ask whether (a) open-weight models form
 linearly accessible representations of basic emotion concepts, (b)
-those representations are causally efficacious for the four behavioral
-evaluations Sofroniew et al. studied, and (c) their structure varies
+those representations are causally efficacious on a primary alignment-
+relevant behavioral task (blackmail) and on secondary tasks (activity
+preferences, reward hacking), and (c) their structure varies
 systematically across training phase (base vs. instruct) and across
 emotion category.
 
@@ -37,25 +38,12 @@ external replication on open weights:
    because they constitute the kind of internal structure those debates
    are actually about. Open-weight replication is a precondition for
    the mechanistic follow-up that any serious welfare claim would need.
-3. **Safety-relevance.** Reward hacking, blackmail, and sycophancy are
+3. **Safety-relevance.** Reward hacking and blackmail are
    already-monitored alignment failures. If they are partially mediated
    by emotion-concept representations, that has direct implications for
    how we monitor and intervene on them. Identifying the mediator on
    open weights is a precondition for studying that mediation
    mechanistically.
-
-This project also extends the construct-validity program of Han et al.
-(2025, *"The Personality Illusion"*) and the PI's own prior work in
-that line. That work showed (a) self-reported Big Five traits do not
-predict sycophantic behavior in reasoning models, and (b) steering with
-personality-trait CAA vectors did not reduce sycophancy at scale (n≈130).
-This project asks the natural follow-up: **do *emotion-concept*
-representations succeed at predicting and steering behavior where
-*personality-trait* representations failed?** A positive result locates
-construct validity at the activation level for one class of internal
-state but not another; a null result extends the personality illusion
-finding to a much more specific, mechanistically grounded class of
-features.
 
 ## Who it is for
 
@@ -65,8 +53,8 @@ features.
   affective representations exist outside frontier closed models.
 - Alignment hiring committees at Anthropic, Apollo, Redwood — this
   work is part of Haydar's transition from ML engineering to alignment
-  research; it should demonstrate research taste, methodological rigor,
-  and the dual-background construct-validity contribution.
+  research; it should demonstrate research taste and methodological
+  rigor.
 - **Initial venue:** LessWrong / Alignment Forum writeup. Target a
   workshop submission (NeurIPS Interpretability Workshop, ICLR Re-Align,
   or Tiny Papers track) by [TODO: target month].
@@ -79,14 +67,14 @@ features.
   sadness; possibly disgust, surprise) achieve AUC ≥ 0.80 on held-out
   prompts in ≥ 2 of the 3 target model families.
 - Steering with the H1-derived emotion direction shifts behavior on
-  **sycophancy** (the primary behavioral task; methodology reused from
-  the PI's Personality Illusion work) with Cohen's *d* ≥ 0.5 and 95%
-  CI excluding zero, at n ≥ 200 prompts per condition. **Pilot results
-  at n=15–30 do not count as evidence** — see Personality Illusion
-  small-sample-steering finding.
-- For ≥ 2 of the 3 secondary behavioral tasks (activity preferences,
-  reward hacking, blackmail), direction-of-effect for steering matches
-  Sofroniew et al. within sign at n ≥ 100 per condition.
+  **blackmail** (the primary behavioral task, single-turn agentic-
+  misalignment protocol from Anthropic Oct 2025) with Cohen's *d* ≥
+  0.5 and 95% CI excluding zero, at n ≥ 200 prompts per condition.
+  **Pilot results at n=15–30 do not count as evidence** — small-
+  sample steering effects frequently fail to replicate at scale.
+- For ≥ 1 of the 2 secondary behavioral tasks (activity preferences,
+  reward hacking), direction-of-effect for steering matches Sofroniew
+  et al. within sign at n ≥ 100 per condition.
 
 **Secondary outcomes:**
 
@@ -94,9 +82,6 @@ features.
   results count as success if they are well-controlled.
 - Public replication codebase, uv-managed, single-command reproduction
   from raw activations to figure.
-- A clear contrast against the prior Personality Illusion result:
-  whether emotion-concept steering succeeds where personality-trait
-  steering failed, in identical Asch-style sycophancy protocol.
 
 **Falsification — if we hit these, the project pivots or stops:**
 
@@ -104,9 +89,8 @@ features.
   Would suggest functional emotions may be a frontier-scale phenomenon
   — itself publishable, but a different paper.
 - All steering interventions show small-sample inflation that
-  collapses at scale, replicating the Personality Illusion sycophancy
-  pattern. Would force a methodological-finding paper rather than a
-  replication paper.
+  collapses at scale. Would force a methodological-finding paper
+  rather than a replication paper.
 
 ## Non-negotiable technical constraints
 
@@ -144,7 +128,7 @@ features.
   examples per condition) is permitted before this lock.
 - **Multiple comparisons:** BH-FDR for any sweep > 5 prompts /
   conditions. Bonferroni for primary contrasts only.
-- **Sample sizes:** Sycophancy (primary) n ≥ 200 per condition.
+- **Sample sizes:** Blackmail (primary) n ≥ 200 per condition.
   Secondary tasks n ≥ 100 per condition. Probes need ≥ 500 train /
   200 test. Justified in HYPOTHESES.md.
   
