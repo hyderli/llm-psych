@@ -12,6 +12,9 @@ set -euo pipefail
 
 MODEL="qwen25_05b"
 MODEL_KEY="Qwen2.5-0.5B-Instruct"
+# batch_size=4 (default is 8) keeps peak RAM low enough to survive on a
+# 16 GB Mac under memory pressure. Override per-run with EXTRACT_BS=N.
+EXTRACT_BS="${EXTRACT_BS:-4}"
 LOG_DIR="outputs"
 mkdir -p "$LOG_DIR"
 LOG="${LOG_DIR}/smoketest_qwen05b_$(date +%Y%m%d_%H%M%S).log"
@@ -22,7 +25,8 @@ echo "Log file: $LOG" | tee -a "$LOG"
 # Skip 'anger' — already extracted in the prior single-emotion run.
 for e in joy fear sadness; do
   echo "== extract $e ==" | tee -a "$LOG"
-  uv run python scripts/extract_activations.py "model=${MODEL}" "emotion=${e}" \
+  uv run python scripts/extract_activations.py \
+    "model=${MODEL}" "emotion=${e}" "extract.batch_size=${EXTRACT_BS}" \
     2>&1 | tee -a "$LOG"
 done
 
