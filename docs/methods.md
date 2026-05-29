@@ -357,7 +357,7 @@ artifacts**.
 
 - **Public repo (`hyderli/llm-psych`):** code, configs, stimuli,
   small parquet results (< 50 MB), figures.
-- **Private HF dataset (`hyderli/llm-psych-activations`):** all
+- **Private HF dataset (`llm-psych/llm-psych-activations`):** all
   `.npz` activation tensors, fitted probes (`.joblib`), steering
   vectors (`.npy`). Mirrors the on-disk layout
   (`activations/<model_key>/...`, `probes/<model_key>/...`,
@@ -374,13 +374,13 @@ After a cloud run, before destroying the pod:
 
 ```bash
 # upload (cloud pod → HF dataset)
-huggingface-cli upload hyderli/llm-psych-activations \
+huggingface-cli upload llm-psych/llm-psych-activations \
   activations/ activations/ --repo-type=dataset --private
 
-huggingface-cli upload hyderli/llm-psych-activations \
+huggingface-cli upload llm-psych/llm-psych-activations \
   probes/ probes/ --repo-type=dataset --private
 
-huggingface-cli upload hyderli/llm-psych-activations \
+huggingface-cli upload llm-psych/llm-psych-activations \
   steering_vectors/ steering_vectors/ --repo-type=dataset --private
 ```
 
@@ -388,7 +388,7 @@ To resume on a new machine:
 
 ```bash
 # download just the model you need
-huggingface-cli download hyderli/llm-psych-activations \
+huggingface-cli download llm-psych/llm-psych-activations \
   --repo-type=dataset --include "activations/Llama-3.1-8B-Instruct/*" \
   --local-dir .
 ```

@@ -88,7 +88,41 @@ git push
 directly. Larger artifacts go to a HF Dataset or S3 bucket; the path
 is recorded in `results/<exp>/manifest.json` so reruns are
 reproducible.
- 
+
+### Syncing activations across machines
+
+Large binary artefacts (residual-stream activations, fitted probes,
+steering vectors) live in a **private** HuggingFace dataset
+(`llm-psych/llm-psych-activations`, under the
+[`EmotionConceptsResearch`](https://huggingface.co/llm-psych)
+organization) that mirrors the on-disk layout documented in
+[`docs/methods.md`](./docs/methods.md#activation--artifact-storage-cross-machine).
+Use `scripts/sync_hf.py` from any machine — it loads `HF_TOKEN` from
+`.env` automatically. Team members must be added to the
+`EmotionConceptsResearch` org on HF before they can push.
+
+```bash
+# Cloud pod, after extracting activations for one model:
+uv run python scripts/sync_hf.py push activations --model Llama-3.1-8B-Instruct
+
+# Teammate's laptop, before training probes:
+uv run python scripts/sync_hf.py pull activations --model Llama-3.1-8B-Instruct
+
+# Tag a milestone snapshot (e.g. after a complete H1 pilot):
+uv run python scripts/sync_hf.py push activations --tag h1-pilot-2026-05
+
+# Pull a tagged snapshot on another machine:
+uv run python scripts/sync_hf.py pull activations --revision h1-pilot-2026-05
+
+# List remote files without downloading:
+uv run python scripts/sync_hf.py ls activations
+```
+
+The same commands work for `probes` and `steering_vectors`. Each push
+is idempotent (unchanged files are skipped); pulls resume on
+interruption. The dataset is created on first push if it does not yet
+exist.
+
 
 ## Repository layout
 
