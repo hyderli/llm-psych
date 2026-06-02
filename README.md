@@ -45,49 +45,57 @@ cloud GPUs because no local Linux/CUDA machine is available. The
 `pyproject.toml` works on both — Linux-only deps (e.g. `bitsandbytes`)
 are guarded by platform markers and resolve correctly on each.
  
-**Three-phase plan:**
- 
-1. **Mac M5 (now, free).** Pipeline code, tests, configs, analysis on
-   small test models (Qwen 2.5 0.5B, Llama 3.2 1B, Gemma 2 2B). PyTorch
-   with MPS handles these comfortably. **Do not attempt 7-8B inference
-   on the Mac** — too slow for behavioral n ≥ 200.
-2. **Lightning AI Studios free tier (pilots, free).** ~15 GPU
-   credits/month on T4 / L4-class GPUs with persistent storage.
-   Used to validate the pipeline end-to-end on real 7-8B models
-   before any paid run. Browser VS Code or SSH from the Mac.
-3. **RunPod Community Cloud RTX 4090 (production, paid).** $0.34/hr,
-   24 GB VRAM, runs Llama 3.1 8B in bf16 without quantization.
-   Pay-per-second; pods can be preempted (acceptable for batch
-   experimental runs that checkpoint between conditions). Estimated
-   total project compute: $50–100. **Hard project budget cap: $150**
-   — if exceeded, scope is reduced rather than spent through.
-### Cloud workflow (Phase 2 / 3)
- 
-Cloud machines are ephemeral. Git is the source of truth; data and
-results round-trip through GitHub or a HuggingFace Dataset / S3
-bucket.
- 
+**Two-phase plan:**
+
+1. **Mac M5 (free).** Pipeline code, tests, configs, probe training,
+   analysis, plotting, and small-model smoke tests (Qwen 2.5 0.5B,
+   Llama 3.2 1B, Gemma 2 2B). PyTorch + MPS handles these. **Do not
+   attempt 7-8B inference on the Mac** — too slow for behavioral
+   n ≥ 200, and 16 GB unified memory OOM-kills even at small batch
+   sizes under typical desktop load.
+2. **RunPod Community Cloud RTX 4090.** $0.34/hr, 24 GB VRAM, runs
+   Llama 3.1 8B / Qwen 2.5 7B / Gemma 2 9B in bf16 without
+   quantization. Pay-per-second; pods can be preempted, which is
+   acceptable because `scripts/cloud_run.sh` pushes artefacts to HF
+   after every emotion. Estimated total compute: $50–100. **Hard
+   project budget cap: $150** — if exceeded, scope is reduced rather
+   than spent through.
+
+The two-phase split deliberately drops the "free Lightning AI tier
+for pilots" middle step from earlier drafts. The cost difference
+(~$2-5 for a pilot) was not worth the friction of maintaining two
+cloud workflows.
+
+### Cloud workflow
+
+Cloud pods are ephemeral. Git is the source of truth for code; large
+binary artefacts round-trip through the private HF dataset (see next
+section). Two scripts encapsulate the entire pod-side workflow:
+
 ```bash
-# On the cloud pod (after spin-up):
-git clone git@github.com:hyderli/llm-psych.git
-cd llm-psych
-uv sync                                  # installs CUDA torch + bitsandbytes
-echo "HF_TOKEN=$HF_TOKEN" > .env         # set via pod environment vars
- 
-# Run experiment
-uv run python scripts/run_experiment.py exp=h2_blackmail \
-    model=llama31_8b emotion=fear steering.control=target
- 
-# Push results back before destroying the pod
-git add results/ figures/
-git commit -m "H2 blackmail: llama31_8b × fear × target"
-git push
+# On the pod, once (clones repo, runs uv sync, runs preflight):
+export HF_TOKEN=hf_xxx
+curl -fsSL https://raw.githubusercontent.com/hyderli/llm-psych/main/scripts/cloud_bootstrap.sh | bash
+cd /workspace/llm-psych
+
+# One emotion (pilot, ~5 min on a 4090):
+bash scripts/cloud_run.sh --model llama31_8b --emotions "anger"
+
+# Full 4-emotion sweep + auto-shutdown (cost control):
+bash scripts/cloud_run.sh --model llama31_8b --shutdown
 ```
- 
+
+`cloud_run.sh` pushes activations + probes + steering vectors to HF
+after every emotion, so a preemption costs at most one emotion of
+re-extraction. Full step-by-step instructions including pod selection,
+cost expectations, and troubleshooting live in
+[`docs/cloud_runbook.md`](./docs/cloud_runbook.md).
+
 **Result-handling rule.** Small parquet files (< 50 MB) commit
-directly. Larger artifacts go to a HF Dataset or S3 bucket; the path
-is recorded in `results/<exp>/manifest.json` so reruns are
-reproducible.
+directly to git. Larger artifacts (`.npz` activations, fitted probes,
+steering vectors) go to the private HF dataset. Per-experiment
+metadata files (`results/<exp>/run_meta.json`) record the model
+revision, git SHA, and HF dataset revision needed for reproducibility.
 
 ### Syncing activations across machines
 
