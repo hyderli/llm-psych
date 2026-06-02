@@ -17,14 +17,62 @@ These assume Community Cloud pricing of $0.34/hr; Secure Cloud is
 roughly 2-3× more expensive. Hard budget cap for the project is $150
 (see `BLUEPRINT.md`).
 
+## Shared group credits (RunPod Teams)
+
+**Decision: use a RunPod Team account, not a shared login.** Haydar is
+the sole billing owner; teammates join the team with a non-billing
+role. This pools Haydar's credits across the whole team without anyone
+else needing a payment method, while keeping per-user audit and
+role-scoped permissions. A shared login was rejected — it means a
+shared password, no per-user attribution, and no way to restrict who
+can touch billing.
+
+Why Teams works for us:
+
+- **Pooled credits, one payer.** Compute is billed by the second
+  against the team's balance (Haydar's credits). No per-seat fee — you
+  only pay for GPU time.
+- **Roles.** Owner/Admin (Haydar) controls billing; teammates get the
+  **Dev** role (deploy + manage pods, *no* billing access). A
+  **Billing** role exists for finance-only access if ever needed.
+- **No egress fees**, so pulling artefacts to HF / laptops is free.
+
+### Setup (Haydar, once)
+
+1. Sign up / log in at <https://console.runpod.io>, add a payment
+   method, and load a starter balance (e.g. $20 — well under the $150
+   project cap).
+2. Convert to a team account: console → **Team page**
+   (<https://www.console.runpod.io/team>) → **Convert to a Team
+   Account** → name it (e.g. `emotion-concepts`).
+3. Invite each teammate: **Members → Invite New Member →** choose
+   **Dev** role → enter their email → **Create Invite** → share the
+   generated link from *Pending Invites*.
+4. (Recommended) Set an **account spend limit** so a runaway pod can't
+   blow the budget cap.
+
+### Setup (each teammate, once)
+
+1. Click Haydar's invite link → **Join Team**.
+2. In the console's top-left account selector, switch into the
+   **team** context (not your personal account) before deploying — pods
+   launched in your personal context bill *you*, not the team.
+3. Create your own HuggingFace **Write** token (see next section); each
+   member uses their own `HF_TOKEN`, never a shared one.
+
+### Per-session reminder
+
+Always confirm the account selector shows the **team** before spinning
+a pod, so it draws on the pooled credits.
+
 ## One-time setup
 
-### 1. RunPod account
+### 1. Community Cloud is sufficient
 
-Sign up at <https://runpod.io> and add a small credit balance (e.g.
-$10). For this project, **Community Cloud is sufficient** — the pods
-can be preempted but `cloud_run.sh` pushes artefacts to HF after every
-emotion, so at most one emotion of work is at risk.
+Pods can be preempted, but `cloud_run.sh` pushes artefacts to HF after
+every emotion, so at most one emotion of work is at risk. Community
+Cloud (~$0.34/hr for a 4090) is the default; only use Secure Cloud if
+Community has no 4090 capacity.
 
 ### 2. HuggingFace token with org access
 
