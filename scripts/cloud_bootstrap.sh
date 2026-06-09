@@ -165,8 +165,15 @@ PY
 
 log "Checking HF dataset accessibility…"
 uv run python - <<'PY' || fail "HF dataset check failed." 4
+import os
+from pathlib import Path
 from dotenv import load_dotenv
-load_dotenv()
+
+# Explicit path: find_dotenv() walks the call stack via frame inspection,
+# which fails under `python - <<EOF` (no caller frame). Point at .env directly.
+env_path = Path(".env")
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path)
 
 from llm_psych.hf_sync import DEFAULT_DATASET_REPO_ID, list_remote
 
