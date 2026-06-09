@@ -1,3 +1,21 @@
+"""Prototype story generation + per-layer activation dump for
+``google/gemma-3-4b-it``. Produced the ``steering_vectors/gemma3-4b-story``
+HF artifact on ``llm-psych/llm-psych-activations``.
+
+This is reference material, not the production pipeline. See
+``scripts/derive_story_steering_vectors.py`` (forthcoming, per
+``plans/original-emotion-vectors-method-0c49b0.md``) for the conformant
+version that implements the paper's full method (token-50 mean pool,
+cross-emotion centering, neutral-PC projection-out) and uses the
+project's standard ``ResidualStreamRecorder`` + npz/parquet artifact
+format.
+
+Differences from the production pipeline: hard-coded 4-emotion /
+4-topic lists, BnB 4-bit quantization, ``torch.save(*.pt)`` per-topic
+artifacts, ``output_hidden_states=True`` layer indexing (embeddings as
+layer 0), no Hydra, no clean-git pre-flight.
+"""
+
 import gc
 import json
 import os

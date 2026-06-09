@@ -1,3 +1,15 @@
+"""Prototype 4-bit Gemma 3 probe used to produce the
+``steering_vectors/gemma3-4b-story`` artifact on the
+``llm-psych/llm-psych-activations`` HF dataset.
+
+Kept for provenance of that artifact. The production story-method
+implementation (unquantized, Hydra-driven, npz/parquet artifacts,
+token-50 pooling + cross-emotion centering + neutral-PC projection-out)
+will live in ``src/llm_psych/steering.py`` and
+``scripts/derive_story_steering_vectors.py`` per
+``plans/original-emotion-vectors-method-0c49b0.md``.
+"""
+
 import torch
 import torch.nn.functional as fct
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
