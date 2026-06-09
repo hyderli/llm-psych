@@ -46,6 +46,13 @@ REPO_URL="${REPO_URL:-https://github.com/hyderli/llm-psych.git}"
 REPO_DIR="${REPO_DIR:-/workspace/llm-psych}"
 GIT_REF="${GIT_REF:-main}"
 
+# RunPod containers ship with a small root disk (~20 GB) and a large persistent
+# /workspace volume. Default HF cache lives under $HOME, which fills the root
+# disk on the first 7-8B model download. Pin the cache to the volume so models
+# survive across pod restarts and the root disk does not run out.
+HF_HOME_DEFAULT="/workspace/.cache/huggingface"
+export HF_HOME="${HF_HOME:-$HF_HOME_DEFAULT}"
+
 # --------------------------------------------------------------------------
 # Logging
 # --------------------------------------------------------------------------
@@ -118,6 +125,16 @@ log "Writing .env from ambient secrets…"
     [[ -n "${ANTHROPIC_API_KEY:-}" ]] && printf 'ANTHROPIC_API_KEY=%s\n' "$ANTHROPIC_API_KEY"
 } > .env
 chmod 600 .env
+
+# Persist HF_HOME to ~/.bashrc so future shells (e.g. a fresh tmux pane that
+# runs cloud_run.sh) inherit the volume-backed cache without manual export.
+mkdir -p "$HF_HOME"
+if ! grep -q '^export HF_HOME=' "${HOME}/.bashrc" 2>/dev/null; then
+    log "Persisting HF_HOME=$HF_HOME to ~/.bashrc"
+    printf '\n# llm-psych: pin HF cache to /workspace volume\nexport HF_HOME=%s\n' \
+        "$HF_HOME" >> "${HOME}/.bashrc"
+fi
+log "HF_HOME=$HF_HOME ($(df -h "$HF_HOME" | awk 'NR==2 {print $4 " free on " $6}'))"
 
 # --------------------------------------------------------------------------
 # 6. Dependencies
