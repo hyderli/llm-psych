@@ -1,0 +1,7 @@
+name: loathing
+label: 19                      # integer label used in probe training arrays
+prompt_file: emotion_prompts.parquet
+neutral_file: neutral_prompts.parquet
+# Plutchik high-intensity disgust pole; opposite of `admiration`.
+# Stimuli authoring pending — emotion_prompts.parquet does not yet
+# contain rows with emotion_label == "loathing".

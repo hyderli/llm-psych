@@ -370,3 +370,28 @@ n) is changed.
 **Changes:**
 - Judge model updated to `claude-haiku-4-5` (Anthropic API) in
   `HYPOTHESES.md` and `docs/methods.md`.
+
+### 2026-06-09 — Add Plutchik opposite-pair extension (loathing / admiration)
+
+**Justification:** The pre-registered primary-9 emotion set is drawn
+from a single affective frame. To enable a cleaner test of H3
+(causal steering with opposite-direction CAA vectors), a Plutchik
+opposite pair on the disgust/trust axis is added: `loathing` (label
+19) and `admiration` (label 20). No stimuli have been authored or
+fit, so this change precedes any data — it is a scope addition, not
+a revision of fit hypotheses. The primary-9 set is unchanged; H1, H2,
+H3, H4, H6 statements are unchanged. Loathing/admiration are
+exploratory and must be flagged as such in any reported analysis,
+with a separate FDR family from the primary-9 set.
+
+**Changes:**
+- New emotion configs `configs/emotion/loathing.yaml` (label 19) and
+  `configs/emotion/admiration.yaml` (label 20).
+- `configs/emotion/EMOTION_LABELS.md` extended with a "Plutchik
+  opposite-pair extension" section.
+- **Stimuli not yet authored** — `emotion_prompts.parquet` does not
+  contain rows for these labels. Extraction is blocked until stimuli
+  are added. See RESEARCH_LOG.md for stimulus-authoring task.
+- Reporting rule: any analysis using loathing/admiration is
+  exploratory; multiple-comparisons correction is computed within a
+  separate FDR family from the primary-9 confirmatory set.
