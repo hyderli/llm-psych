@@ -4,10 +4,10 @@ import os
 import torch
 from tqdm import tqdm
 
-from src.simple_probe import ModelProbe
+from llm_psych.simple_probe import ModelProbe
 
-stories_path = # needs some path for story output
-tensor_path = # needs some path for activation storage
+stories_path = "data/derived/stories/gemma3-4b-it"
+tensor_path = "activations/gemma3-4b-it-story"
 os.makedirs(stories_path, exist_ok=True)
 os.makedirs(tensor_path, exist_ok=True)
 
