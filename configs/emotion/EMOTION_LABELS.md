@@ -45,6 +45,19 @@ labels — stimulus authoring is required before any extraction run.
 | 17    | peaceful  | Wilcox    |
 | 18    | powerful  | Wilcox    |
 
+## Plutchik opposite-pair extension (added 2026-06-09)
+
+Added to enable the opposite-pair steering analysis on the disgust/trust
+axis of Plutchik's wheel. Configs exist but `emotion_prompts.parquet`
+does not yet contain rows for these labels — stimulus authoring is
+required before any extraction run. See HYPOTHESES.md amendment dated
+2026-06-09.
+
+| label | emotion    | framework | opposite of |
+|-------|------------|-----------|-------------|
+| 19    | loathing   | Plutchik  | admiration  |
+| 20    | admiration | Plutchik  | loathing    |
+
 ## Neutral baseline
 
 Neutral prompts are not assigned an integer label — they are handled as

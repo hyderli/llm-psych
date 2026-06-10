@@ -137,6 +137,47 @@ locked; pilots can proceed without further amendment risk.
 
 **Energy:** long session; scope tightened and grant out the door.
 
+## 2026-06-09 — RunPod pipeline live + Plutchik opposite pair amendment
+
+**Did:**
+- Brought up first real RunPod pod (RTX 3090, 25 GB VRAM, 30 GB
+  /workspace volume) and validated the bootstrap → cloud_run pipeline
+  end-to-end on Llama-3.1-8B-Instruct, emotion `anger`. Activations,
+  probe (anger layer 16), and steering vector all pushed to
+  `llm-psych/llm-psych-activations`.
+- Hardened `scripts/cloud_bootstrap.sh` (PR #4): explicit dotenv path
+  to avoid `find_dotenv()` stack-frame crash under heredoc, fixed the
+  cloud_run.sh hint to use `--model/--emotions` flags, pinned
+  `HF_HOME` to `/workspace/.cache/huggingface` to avoid root-disk
+  exhaustion on first 7-8B model download.
+- Added Plutchik opposite-pair extension: new emotion configs
+  `loathing` (label 19) and `admiration` (label 20). Dated amendment
+  block in HYPOTHESES.md (2026-06-09). EMOTION_LABELS.md updated.
+  Marked exploratory, separate FDR family from primary-9.
+
+**Open TODOs:**
+- **Stimuli authoring is the binding blocker on every emotion outside
+  legacy {anger, fear, joy, sadness}.** `emotion_prompts.parquet`
+  contains no rows for the primary-9 set, the Ekman/Wilcox extensions,
+  or loathing/admiration. Until stimuli are written and committed,
+  cloud_run on those labels will fail with zero matching prompts.
+  Author ~50 base prompts per emotion (then augment to ~750 via the
+  existing paraphrase expander); primary-9 first, loathing/admiration
+  second.
+- Pin HF revision SHAs in configs/model/*.yaml.
+- Pick the third primary target model — Gemma family, 7-9B variant TBD.
+- Activity-preferences stimulus design decision (deferred from
+  2026-05-25).
+
+**Next:** decide whether to author primary-9 + Plutchik-pair stimuli
+locally or via a one-shot LLM script reviewed against the
+stimulus-design rubric in `docs/methods.md`. Pod can be stopped while
+stimuli are authored — no GPU work to do until the parquet has rows
+for the target labels.
+
+**Energy:** infra unblocked; the next bottleneck is content, not
+compute.
+
 ## 2026-06-10 — story-method (original paper) emotion-vector pipeline
 
 **Context:** The original paper's derivation procedure differs from the
