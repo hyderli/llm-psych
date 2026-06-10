@@ -1,0 +1,15 @@
+# Gemma 3 4B Instruct — story-method prototype already run (see PR #3).
+# Used for cross-method comparison: the CAA pipeline also targets this
+# model as one of the three primary targets (Gemma family, 7-9B range).
+#
+# Architecture parameters TBD — confirm against the loaded model before
+# the first smoke-test run, then pin the SHA below.
+#
+# TODO(PI): confirm n_layers and hidden_size, then set hf_revision.
+hf_model_id: google/gemma-3-4b-it
+hf_revision: null                  # FIXME: pin after first load
+n_layers: null                    # FIXME: fill in (expected ~26–34)
+hidden_size: null                  # FIXME: fill in (expected ~2304–2560)
+torch_dtype: float16
+device_map: auto
+trust_remote_code: false

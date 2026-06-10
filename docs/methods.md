@@ -202,6 +202,68 @@ prompt_id, output_text, judge_score, ...}` to
 
 ---
 
+### Direction extraction (story method — Sofroniew et al. 2026)
+
+A **parallel** derivation that faithfully follows the paper's
+procedure (`docs/EmotionConcepts.pdf`, "Extracting emotion vectors")
+for comparison and validation. It does **not** replace the CAA
+pre-registered primary pipeline above; both methods coexist and are
+compared in downstream ablations.
+
+**Pipeline (three scripts):**
+
+1. **Generate** — ``scripts/generate_emotion_stories.py``
+
+   - The target model itself writes ``n_stories_per_emotion`` 150-word
+     narratives per emotion (and a neutral baseline).
+   - Prompt constraint: "Express the emotion ... from the narrator's
+     perspective" and "Do not use the word `<emotion>` or any of its
+     direct synonyms."
+   - Output: ``data/derived/stories/<model_key>/<emotion>.parquet``
+
+2. **Extract** — ``scripts/extract_story_activations.py``
+
+   - Full forward pass on each story; residual-stream activations at
+     each candidate layer are **mean-pooled across token positions
+     ``>= pool_start_token``** (default 50), i.e. after the emotional
+     content should be apparent.
+   - Stories tokenizing to ``<= pool_start_token`` positions are dropped.
+   - Output: ``activations/<model_key>-story/<emotion>.npz``
+     (one ``layer_<L>`` array per layer, shape ``(n_stories, hidden_dim)``).
+
+3. **Derive** — ``scripts/derive_story_steering_vectors.py``
+
+   Reads all emotion ``.npz`` files plus the neutral set and, per
+   layer, composes:
+
+   ```
+   mean_e = mean(activations[emotion])
+   grand_mean = mean(mean_e across all emotions)
+   centered = mean_e - grand_mean
+   PCs = top principal components(activations[neutral], var_threshold=0.5)
+   v_emotion = project_out(centered, PCs)
+   ```
+
+   - **Cross-emotion centering** (mean over emotion means, not against a
+     separate neutral set) captures the emotion-specific direction
+     relative to the emotion concept space.
+   - **Neutral-PC projection-out** removes the top directions that
+     explain ≥ 50% of variance on emotionally neutral transcripts,
+     mitigating low-level content/confound leakage into the vector.
+   - Output: ``steering_vectors/<model_key>-story/<emotion>_layer<L>.npy``
+     plus ``manifest.yaml`` documenting model SHA, layers, var_threshold,
+     pool_start_token, n_stories per emotion, and git SHA.
+
+**Layer choice:** the story method produces vectors at *every*
+candidate layer. Downstream eval scripts select the best-performing
+layer post-hoc, rather than pre-committing via probe AUC.
+
+**Config switch:** the Hydra default group ``derivation: caa`` can be
+overridden with ``derivation=story`` on the command line. The CAA
+path remains the pre-registered default.
+
+---
+
 ## Behavioral evaluations
 
 ### Blackmail (primary, H2)
