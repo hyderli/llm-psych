@@ -1,6 +1,7 @@
 defaults:
   - model: qwen25_05b          # safe default for Mac dev; override on cloud
   - emotion: joy                 # primary emotions: joy, fear, anger, sadness (neutral is reference)
+  - derivation: caa              # caa (pre-registered) | story (paper-method, exploratory)
   - _self_
 
 # Paths (relative to repo root; override per environment if needed)

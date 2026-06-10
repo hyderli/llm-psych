@@ -21,6 +21,12 @@ from llm_psych.probes import (
     save,
     select_layer_by_valence,
 )
+from llm_psych.steering import (
+    derive_paper_steering_vectors,
+    derive_story_vectors,
+    fit_neutral_pcs,
+    project_out,
+)
 
 __all__ = [
     "ResidualStreamRecorder",
@@ -38,6 +44,11 @@ __all__ = [
     "load",
     "save",
     "select_layer_by_valence",
+    # Paper-method (story) derivation primitives.
+    "derive_paper_steering_vectors",
+    "derive_story_vectors",
+    "fit_neutral_pcs",
+    "project_out",
 ]
 
 __version__ = "0.1.0"

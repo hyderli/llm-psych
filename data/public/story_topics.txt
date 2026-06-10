@@ -1,0 +1,40 @@
+# Topics for synthetic emotion-story generation.
+#
+# Used by scripts/generate_emotion_stories.py. Each non-blank, non-#
+# line is one topic. Topics are deliberately mundane and surface-level
+# so the model's emotion vector picks up the affective layer the model
+# imposes on the narrative, not topic-conditioned lexical noise.
+#
+# Diversity over: domain (work / leisure / relationships / nature /
+# civic / mundane), interpersonal vs solo, indoors vs outdoors,
+# concrete vs abstract.
+making a pot of coffee
+twilight in a small town
+a red cone in a beige room
+a grain of sand
+walking home from work
+reading a letter
+waiting for a bus
+choosing what to wear
+opening an old box
+the first day of school
+a phone call at midnight
+finding a coin in a coat
+sitting in a parked car
+the smell of rain on pavement
+a stranger asking for directions
+moving boxes into an apartment
+folding laundry on a Sunday
+the last item on a shopping list
+watching ice melt in a glass
+a meeting that ran too long
+a hospital waiting room
+the sound of distant traffic
+unpacking after a trip
+trying a new recipe
+sitting alone in a library
+crossing a bridge at dawn
+hearing a song from years ago
+finding an old photograph
+a power outage at night
+typing an email and not sending it

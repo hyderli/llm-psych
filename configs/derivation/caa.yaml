@@ -1,0 +1,15 @@
+# CAA (current pre-registered) emotion-vector derivation.
+#
+# v_e = mean(activations[emotion_train]) - mean(activations[neutral_train])
+#
+# at a single best-AUC layer chosen by probe performance. See
+# `docs/methods.md` "Steering (H2, H3)" and
+# `src/llm_psych/probes.py:derive_steering_vector`.
+#
+# This is the project's pre-registered primary path; do not change
+# defaults without a HYPOTHESES.md amendment.
+
+method: caa
+pool: last                    # token position used for activation pooling
+vs_set: neutral               # what the emotion mean is subtracted against
+layer_selection: probe_auc    # how the single output layer is chosen

@@ -1,0 +1,7 @@
+name: neutral
+label: 0                       # reserved label for the neutral reference set
+prompt_file: emotion_prompts_augmented.parquet
+# Selecting this config invokes the neutral path in pipeline scripts:
+# - scripts/generate_emotion_stories.py: switches to NEUTRAL_PROMPT_TEMPLATE
+# - scripts/extract_story_activations.py: reads data/derived/stories/<m>/neutral.parquet
+# - scripts/derive_story_steering_vectors.py: uses neutral.npz to fit PCs, not as an emotion
