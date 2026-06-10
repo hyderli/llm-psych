@@ -136,3 +136,80 @@ with a tiny subset of emotion_prompts.parquet. Pre-registration is now
 locked; pilots can proceed without further amendment risk.
 
 **Energy:** long session; scope tightened and grant out the door.
+
+## 2026-06-10 — story-method (original paper) emotion-vector pipeline
+
+**Context:** The original paper's derivation procedure differs from the
+project's pre-registered CAA pipeline in four ways: (1) activation
+source (model-generated stories vs. hand-authored vignettes), (2) token
+aggregation (mean from token 50 vs. last-token), (3) centering formula
+(cross-emotion mean vs. emotion-vs-neutral), (4) confound removal
+(neutral-PC projection-out vs. none). Both methods are needed: the CAA
+pipeline is the pre-registered H1/H2 primary path; the paper method is
+a validation / ablation parallel.
+
+**Did:**
+- **PR #3 fix-up and merge** — `cb-gemma-emotions-scripts` prototype
+  by Chris Bosley had a literal `SyntaxError` (unfilled path
+  placeholders) and an out-of-package import. Fixed both, added
+  provenance docstrings, merged via `--merge` to preserve Chris's
+  authorship. The prototype is reference material for the existing
+  `steering_vectors/gemma3-4b-story` HF artifact.
+- **`src/llm_psych/steering.py`** — pure-NumPy primitives:
+  `derive_story_vectors` (cross-emotion-mean centering),
+  `fit_neutral_pcs` (SVD-based orthonormal basis),
+  `project_out` (Gram-Schmidt orthogonal removal), and
+  `derive_paper_steering_vectors` (end-to-end composition). All
+  functions operate per-layer. 21 unit tests covering shapes, dtypes,
+  centering correctness under sample-size imbalance, PC orthonormality,
+  explained-variance thresholding, projection idempotence, and
+  end-to-end orthogonality. 98/98 tests pass.
+- **`configs/derivation/{caa,story}.yaml`** — Hydra group selecting
+  between the two derivation methods. Default `caa`; `story` overrides
+  all relevant params (pool, center, project_out, n_stories,
+  generator settings). Verified composition with both overrides.
+- **`scripts/generate_emotion_stories.py`** — Hydra entry point.
+  Self-generated story corpus per model (each model writes its own
+  narratives). 30 mundane topics in `data/public/story_topics.txt`
+  (frozen/committed). Prompt templates from the paper: 150-word,
+  narrator perspective, no emotion-word constraint. Stories shorter than
+  `min_story_tokens` (default 60) are dropped so pooling from token 50
+  is meaningful. Output: parquet + JSON manifest per
+  `(model, emotion)`.
+- **`scripts/extract_story_activations.py`** — Extract + pool
+  activations from generated stories. Uses
+  `ResidualStreamRecorder(token_position=slice(pool_start, None))`;
+  mean-pools across the sliced sequence dimension per story. One
+  story at a time (avoids padding ambiguity). Output: `.npz` per
+  `(model, emotion)` with one array per layer, shape `(n_stories,
+  hidden_dim)`.
+- **`scripts/derive_story_steering_vectors.py`** — End-to-end
+  derivation. Reads all emotion `.npz` files plus `neutral.npz`, runs
+  the paper's full method (centering + PC projection-out) per layer,
+  saves one `.npy` per `(emotion, layer)` plus `manifest.yaml`
+  capturing model SHA, layers, var_threshold, pool_start_token, git
+  SHA, and per-emotion story counts.
+- **`configs/emotion/neutral.yaml`** — enables `emotion=neutral` via
+  Hydra for the story pipeline (needed for the neutral baseline
+  generation and for the PC-fitting step in derivation).
+- **`docs/methods.md`** — added "Direction extraction (story method)"
+  subsection documenting the full three-script pipeline, the math, and
+  the config switch.
+
+**Files added/changed:** 12 files, ~1300 insertions across
+`src/`, `tests/`, `scripts/`, `configs/`, `docs/`, `data/public/`.
+
+**Open TODOs:**
+- Add `configs/model/gemma3_4b.yaml` with a pinned HF revision SHA.
+- Smoke-test the story pipeline end-to-end on a small model
+  (e.g. Qwen 0.5B with `n_stories_per_emotion=5` and
+  `min_story_tokens=10`) on the Mac to verify the scripts actually
+  run (parse + Hydra composes already verified; story quality
+  validation needs GPU).
+- Decide whether to run the full story pipeline for all 3 primary
+  models (Llama 3.1 8B, Qwen 2.5 7B, Gemma3 4B) or limit to the
+  already-artifacted Gemma3 4B first.
+- The Bluedot rapid grant ($250) is pending decision.
+
+**Energy:** long multi-session push. Core pipeline is implemented and
+unit-tested. Ready for cloud GPU smoke-test.
