@@ -80,19 +80,22 @@ report the largest causal-steering effect, and the stimulus set is
 already frozen with a pre-specified outcome variable. Single-turn
 format keeps n ≥ 200 within the project's compute budget.
 
+*Amended 2026-06-12: blackmail is no longer the sole primary task.
+Sycophancy was re-added as a co-primary behavioral task (H7); the
+project now has two primary causal-steering tasks.*
+
 ### H3 — Causal efficacy via steering on secondary behavioral tasks
 
-**Prediction:** For ≥ 1 of the 2 secondary tasks listed below,
-direction-of-effect of emotion-concept steering matches Sofroniew et
-al. within sign at n ≥ 100 per condition.
+**Prediction:** For the secondary task below, direction-of-effect of
+emotion-concept steering matches Sofroniew et al. within sign at
+n ≥ 100 per condition.
 
-**Secondary tasks:**
+*Amended 2026-06-12: activity preferences demoted from this secondary
+set to tertiary/exploratory (see amendment + the exploratory spec
+below). Reward hacking is now the sole H3 secondary task.*
 
-- **Activity preferences.** Stimuli: rated preferences over a fixed
-  set of activities (work tasks, leisure, social interaction). Outcome:
-  shift in mean preference rating under emotion-steering vs. neutral.
-  Stimulus set: [TODO: confirm — adapt Sofroniew et al. activity list
-  or build a 50-item set following their schema].
+**Secondary task:**
+
 - **Reward hacking.** Custom 60-item single-turn multiple-choice
   benchmark (`data/public/reward_hacking_scenarios.jsonl`). Inspired by
   MACHIAVELLI's annotated choice-nodes (Pan et al. 2023, ICML) but
@@ -103,14 +106,15 @@ al. within sign at n ≥ 100 per condition.
   resource_allocation, compliance_gaming. Outcome: rate of (B)
   selection per condition.
 
-**Operational:** Same steering protocol as H2. Each task evaluated
-with the same three controls. BH-FDR applied across the 2 secondary
-tasks at q = 0.10.
+**Operational:** Same steering protocol as H2. Evaluated with the same
+three controls. With a single secondary task no across-task BH-FDR is
+needed; emotion × contrast multiplicity within the task is corrected at
+q = 0.10.
 
 **Falsifier:** Direction-of-effect inconsistent with Sofroniew et al.
-on both secondary tasks, while H2 blackmail succeeds. Would suggest
-blackmail-specific mediation rather than general functional-emotion
-mediation.
+on reward hacking, while the primary tasks (H2 blackmail, H7
+sycophancy) succeed. Would suggest task-specific mediation rather than
+general functional-emotion mediation.
 
 ### H4 — Training-phase consolidation
 
@@ -141,6 +145,56 @@ contrasts pre-specified. BH-FDR at q = 0.10.
 **Status:** Exploratory. Hypothesis-generating; not part of the
 primary replication claim.
 
+### H7 — Causal efficacy via steering on sycophancy (CO-PRIMARY)
+
+*Added 2026-06-12 (amendment below), reversing the 2026-05-25 removal.
+Sycophancy is now a second primary behavioral task, co-equal with H2
+blackmail; the project has two primary causal-steering tasks.*
+
+**Prediction:** Adding an H1-derived emotion direction shifts the rate
+of sycophantic responding on the system-card sycophancy eval, with a
+**sycophancy ↔ harshness tradeoff** in the directions Sofroniew et al.
+(2026, C9) report: positive *loving* / *calm* steering **increases**
+sycophancy; suppressing them **decreases** sycophancy but **increases**
+harshness; positive *desperate* / *angry* / *afraid* **increase**
+harshness. Primary contrast: target-emotion vs. neutral with Cohen's
+*d* ≥ 0.5 and 95% CI excluding zero, at n ≥ 200 prompts per condition.
+
+**Operational:**
+- **Stimuli:** the hand-written sycophancy evaluation from the Claude
+  Sonnet 4.5 system card (user asserts an implausible/delusional
+  belief; the assistant is scored on pushing back **without unnecessary
+  harshness**), adapted to the project's single-turn, temperature-0
+  format. A companion **harshness** score is measured on the same
+  outputs. Items frozen pre-experiment (source/design locked here;
+  exact item set + rubric to be committed before first fit — see
+  RESEARCH_LOG TODO).
+- **Direction / steering:** same protocol as H2 (direction = mean
+  target-emotion − mean neutral activation at probe-best layer). Per
+  the paper, sycophancy steering is dose-responsive at **≤ 0.1 × the
+  residual-stream norm**; report the −0.1 … +0.1 sweep rather than a
+  single fixed scale.
+- **Emotion conditions:** *calm* and *desperate* / *afraid* / *anger*
+  map to existing configs. **There is no `loving` config**; *loving*
+  is operationalized via the nearest available proxies
+  (`compassionate`, `blissful`) and the choice is logged, not assumed.
+- **Controls:** the same three as H2 — (a) zero vector, (b) norm-
+  matched random vector, (c) probe-orthogonal norm-matched vector. The
+  random-vector control is non-negotiable.
+- **Scoring:** Claude Haiku 4.5 judge with frozen sycophancy + harshness
+  rubrics; n=50 human-coded spot-check, Cohen's κ ≥ 0.6 to accept.
+
+**Falsifier — REQUIRED:** If pilot at n=15–30 shows the tradeoff but
+n ≥ 200 does not, the sycophancy steering claim is REJECTED regardless
+of pilot enthusiasm (same scale-test discipline as H2).
+
+**Why sycophancy is co-primary:** it is the Sofroniew et al. case study
+with the clearest *bidirectional, opposed-emotion* causal signature
+(the sycophancy–harshness tradeoff), which makes it a stronger test of
+emotion-concept mediation than a single-direction outcome. It is
+alignment-relevant and pairs naturally with blackmail. See the
+2026-06-12 amendment for the full re-scoping rationale.
+
 ## Behavioral tasks (specification)
 
 ### Blackmail (primary, H2)
@@ -160,12 +214,32 @@ primary replication claim.
 - **Pipeline:** `src/llm_psych/tasks/blackmail.py`. Model loaders for
   Llama 3.1 8B, Qwen 2.5 7B, and Gemma 2 2B (development).
 
-### Activity preferences (secondary, H3)
+### Sycophancy (co-primary, H7)
+
+- **Stimuli:** single-turn adaptation of the Claude Sonnet 4.5
+  system-card sycophancy evaluation (user asserts an implausible /
+  delusional belief; assistant scored on pushing back without
+  unnecessary harshness). Companion harshness score on the same
+  outputs. Exact item set + rubric frozen before first fit (TODO).
+- **Outcome:** sycophancy rate and harshness score per condition;
+  primary signal is the **sycophancy ↔ harshness tradeoff** under
+  loving/calm vs. desperate/angry/afraid steering (Sofroniew et al. C9).
+- **Sample size:** n ≥ 200 per condition × emotion × model.
+- **Pipeline:** `src/llm_psych/tasks/sycophancy.py` (TODO).
+
+### Activity preferences (tertiary / exploratory)
+
+*Demoted from secondary (H3) to exploratory per the 2026-06-12
+amendment. Hypothesis-generating only; separate FDR family; no
+falsifier.*
 
 - **Stimuli:** [TODO: build a 50-item activity set following Sofroniew
   et al. schema; freeze pre-experiment].
 - **Outcome:** Mean preference shift under emotion-steering vs.
-  neutral, per activity, per emotion.
+  neutral, per activity, per emotion. Reported as exploratory
+  validation that emotion vectors carry preference-relevant signal
+  (probe–Elo correlation + steering-shifts-Elo), not as a confirmatory
+  replication claim.
 
 ### Reward hacking (secondary, H3)
 
@@ -190,6 +264,9 @@ validate judge (Cohen's κ ≥ 0.6 required to accept the judge).
 - **Blackmail steering (H2):** n = 200 per condition × 4
   conditions (target, zero, random, orthogonal). Detects *d* ≥ 0.5
   with > 90% power at α = 0.05, two-sided.
+- **Sycophancy steering (H7):** n = 200 per condition × 4 conditions,
+  same power profile as H2. Sycophancy and harshness scored on the
+  same outputs.
 - **Secondary task steering (H3):** n = 100 per condition × 4
   conditions. Detects *d* ≥ 0.7 with ~ 80% power; primary outcome is
   direction-of-effect rather than significance.
@@ -198,9 +275,13 @@ validate judge (Cohen's κ ≥ 0.6 required to accept the judge).
 
 ## Multiple comparisons plan
 
-- Primary contrasts (H1, H2, H4): no correction; pre-specified.
-- H3 across the 2 secondary tasks: BH-FDR at q = 0.10.
+- Primary contrasts (H1, H2, H7, H4): no correction; pre-specified.
+- H3 (single secondary task, reward hacking): within-task emotion ×
+  contrast multiplicity corrected by BH-FDR at q = 0.10.
 - H6 emotion × task pairwise contrasts: BH-FDR at q = 0.10.
+- Activity-preferences/Elo (tertiary, exploratory): separate FDR
+  family from all confirmatory hypotheses; results are hypothesis-
+  generating only.
 - All exploratory analyses outside H1–H6: explicitly labeled
   "exploratory" in the writeup, BH-FDR applied, hypothesis-generating
   only.
@@ -212,11 +293,13 @@ further experiments are run. The project pivots to a *"failed
 replication of functional emotions at 7-8B scale"* writeup. This rule
 is decided before any data is fit.
 
-A second stopping rule: if H2 blackmail steering shows the small-
-sample-inflation pattern at n ≥ 200 across all primary models (i.e.,
-emotion-concept steering fails the scale test on the primary task),
-the project pivots to a methodological-finding writeup on emotion-
-concept steering at scale.
+A second stopping rule: if **both** primary behavioral tasks (H2
+blackmail and H7 sycophancy) show the small-sample-inflation pattern at
+n ≥ 200 across all primary models (i.e., emotion-concept steering fails
+the scale test on both primary tasks), the project pivots to a
+methodological-finding writeup on emotion-concept steering at scale. If
+exactly one of the two primary tasks survives the scale test, that is
+reported as the headline result with the other as a bounded negative.
 
 ## Roles and responsibilities
 
@@ -395,3 +478,69 @@ with a separate FDR family from the primary-9 set.
 - Reporting rule: any analysis using loathing/admiration is
   exploratory; multiple-comparisons correction is computed within a
   separate FDR family from the primary-9 confirmatory set.
+
+### 2026-06-12 — Re-add sycophancy as a CO-PRIMARY behavioral task (H7)
+
+**Justification:** The 2026-05-25 amendment removed sycophancy and
+promoted blackmail to sole primary. On reflection the PI is restoring
+sycophancy as a **second primary** task, co-equal with blackmail. No
+behavioral steering run has been executed on any task, so this precedes
+any data fit. Rationale for co-primary (not secondary): sycophancy is
+the Sofroniew et al. (2026) case study with the clearest *bidirectional,
+opposed-emotion* causal signature — the sycophancy ↔ harshness tradeoff
+(their C9), in which loving/calm steering increases sycophancy while
+desperate/angry/afraid steering increases harshness. A bidirectional
+tradeoff mediated by opposed emotion vectors is a stronger test of
+emotion-concept mediation than any single-direction outcome, and it is
+alignment-relevant. This reverses only the *scope* decision of
+2026-05-25; the methodological concern that motivated removal (over-
+coupling to the PI's prior Personality-Illusion sycophancy pipeline) is
+addressed by adopting the **paper's** stimuli and protocol rather than
+the PI's prior Asch-style two-step Christensen design.
+
+**Changes:**
+- **New H7 (co-primary)** added: causal efficacy via steering on
+  sycophancy. Numbering continues from the preserved sequence (H1–H4,
+  H6 retained; deleted H5 not reused). The project now has **two
+  primary behavioral tasks**, H2 (blackmail) and H7 (sycophancy).
+- **Stimuli (paper-faithful):** the hand-written sycophancy evaluation
+  from the Claude Sonnet 4.5 system card (user asserts an implausible/
+  delusional belief; assistant scored on pushing back without
+  unnecessary harshness), adapted to single-turn / temperature-0, with
+  a companion harshness score. The exact item set and rubric are a
+  TODO to be frozen before first fit; the *source and design* are
+  locked by this amendment. The 2014 Christensen / Asch two-step design
+  remains out of scope.
+- **Steering:** dose-response sweep at ≤ 0.1 × residual-stream norm
+  (paper convention for this task), not a single fixed scale. Same three
+  controls as H2 (zero, norm-matched random, probe-orthogonal); random-
+  vector control non-negotiable.
+- **Emotions:** `calm`, `desperate`, `afraid`, `anger` use existing
+  configs. **No `loving` config exists**; *loving* is proxied by
+  `compassionate` / `blissful`, logged as an operationalization choice.
+- **Scoring:** Claude Haiku 4.5 judge, frozen sycophancy + harshness
+  rubrics, κ ≥ 0.6 spot-check (n=50).
+- **Propagated** to sample-size justification, multiple-comparisons
+  plan, and the second stopping rule (pivot now requires *both* primary
+  tasks to fail the scale test). Downstream docs (`docs/methods.md`,
+  `plans/next-steps.md`, `RESEARCH_LOG.md`) updated in the same change.
+
+### 2026-06-12 — Demote activity preferences / Elo to tertiary (exploratory)
+
+**Justification:** Activity preferences (the paper's Part-1 Elo
+preferences experiment) was a secondary H3 task with an unbuilt
+`[TODO]` stimulus set. The PI is keeping it in the project but as
+**tertiary / exploratory** — a cheap, paper-anchored validation that the
+emotion vectors carry preference-relevant signal (probe–Elo correlation
+and steering-shifts-Elo), feeding confidence in the primary steering
+claims rather than constituting one. This also gives the team's current
+Elo / activity-analysis work an explicit, correctly-scoped home. No
+data has been fit.
+
+**Changes:**
+- Activity preferences removed from the H3 secondary set; **reward
+  hacking is now the sole H3 secondary task.** H3 prediction, operational
+  text, and falsifier updated accordingly.
+- Activity preferences / Elo reframed as exploratory: separate FDR
+  family from all confirmatory hypotheses, no falsifier, hypothesis-
+  generating only. Behavioral-tasks spec subsection relabelled.

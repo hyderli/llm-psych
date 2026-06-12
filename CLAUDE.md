@@ -19,11 +19,13 @@ rigor over speed.
   Alignment Forum writeup, workshop submission.
 - **Stack:** Python 3.11 (uv), pytest, transformers, anthropic + openai
   SDKs (judge models only), matplotlib/seaborn, statsmodels, Hydra.
-- **Primary behavioral task:** blackmail via single-turn agentic-
-  misalignment protocol (Anthropic Oct 2025 scenario set, frozen in
-  `data/public/blackmail_scenarios.jsonl`) — see `docs/methods.md`.
-  Scope was narrowed on 2026-05-25; see the amendment blocks in
-  HYPOTHESES.md for the authoritative record.
+- **Primary behavioral tasks (two, co-equal):** (1) blackmail via
+  single-turn agentic-misalignment protocol (Anthropic Oct 2025
+  scenario set, frozen in `data/public/blackmail_scenarios.jsonl`), and
+  (2) sycophancy via the Sonnet 4.5 system-card eval + harshness score
+  (re-added co-primary 2026-06-12). See `docs/methods.md`. Scope was
+  narrowed on 2026-05-25 then sycophancy restored 2026-06-12; the dated
+  amendment blocks in HYPOTHESES.md are the authoritative record.
 - See @README.md for setup, @BLUEPRINT.md for project framing, and
   @HYPOTHESES.md for the locked pre-registration.
 

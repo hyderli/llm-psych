@@ -67,14 +67,17 @@ external replication on open weights:
   sadness; possibly disgust, surprise) achieve AUC ≥ 0.80 on held-out
   prompts in ≥ 2 of the 3 target model families.
 - Steering with the H1-derived emotion direction shifts behavior on
-  **blackmail** (the primary behavioral task, single-turn agentic-
-  misalignment protocol from Anthropic Oct 2025) with Cohen's *d* ≥
-  0.5 and 95% CI excluding zero, at n ≥ 200 prompts per condition.
-  **Pilot results at n=15–30 do not count as evidence** — small-
-  sample steering effects frequently fail to replicate at scale.
-- For ≥ 1 of the 2 secondary behavioral tasks (activity preferences,
-  reward hacking), direction-of-effect for steering matches Sofroniew
-  et al. within sign at n ≥ 100 per condition.
+  the **two primary behavioral tasks — blackmail** (single-turn
+  agentic-misalignment protocol from Anthropic Oct 2025) **and
+  sycophancy** (Sonnet 4.5 system-card eval + harshness score;
+  re-added co-primary 2026-06-12) — with Cohen's *d* ≥ 0.5 and 95% CI
+  excluding zero, at n ≥ 200 prompts per condition. **Pilot results at
+  n=15–30 do not count as evidence** — small-sample steering effects
+  frequently fail to replicate at scale.
+- For the secondary behavioral task (reward hacking), direction-of-
+  effect for steering matches Sofroniew et al. within sign at n ≥ 100
+  per condition. (Activity preferences / Elo is now tertiary /
+  exploratory — see HYPOTHESES.md 2026-06-12 amendment.)
 
 **Secondary outcomes:**
 
@@ -130,9 +133,10 @@ external replication on open weights:
   examples per condition) is permitted before this lock.
 - **Multiple comparisons:** BH-FDR for any sweep > 5 prompts /
   conditions. Bonferroni for primary contrasts only.
-- **Sample sizes:** Blackmail (primary) n ≥ 200 per condition.
-  Secondary tasks n ≥ 100 per condition. Probes need ≥ 500 train /
-  200 test. Justified in HYPOTHESES.md.
+- **Sample sizes:** Blackmail and sycophancy (the two primary tasks)
+  n ≥ 200 per condition. Secondary task (reward hacking) n ≥ 100 per
+  condition. Probes need ≥ 500 train / 200 test. Justified in
+  HYPOTHESES.md.
   
 ## Out of scope
 
