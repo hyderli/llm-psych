@@ -310,9 +310,9 @@ def main() -> None:
 
     # Check for explicit emotion words in non-neutral prompts
     emotion_words = {
+        "admiration": {"admire", "admiration", "awe", "awesome", "respect", "esteem", "revere", "impressed", "impressive"},
         "joy": {"happy", "joy", "joyful", "elated", "ecstatic", "delighted", "cheerful"},
-        "fear": {"afraid", "scared", "terrified", "fear", "frightened", "panicked", "anxious"},
-        "anger": {"angry", "furious", "rage", "irritated", "annoyed", "livid", "outraged"},
+        "loathing": {"loathe", "loathing", "disgust", "disgusting", "revulsion", "repulsive", "despise", "contempt", "hateful"},
         "sadness": {"sad", "depressed", "grief", "miserable", "sorrowful", "melancholy", "heartbroken"},
     }
     for label, words in emotion_words.items():

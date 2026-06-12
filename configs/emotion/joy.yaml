@@ -1,4 +1,12 @@
 name: joy
 label: 4
-prompt_file: emotion_prompts_augmented.parquet
-# neutral prompts are in the same file (emotion_label == "neutral")
+prompt_file: emotion_prompts.parquet
+# Primary emotion (2026-06-12). Valence-positive pole; opposite of `sadness`.
+# Repointed from emotion_prompts_augmented.parquet to the seed parquet so
+# all four primary emotions (admiration, joy, loathing, sadness) share one
+# balanced source (50 seed each). Augmentation is DEFERRED and may be
+# unnecessary — run the H1 confound audit on the seeds first (LLM
+# paraphrase is implicated in the AUC=1.0 confound). The 750-row augmented
+# joy/sadness rows still exist in emotion_prompts_augmented.parquet if a
+# powered run later justifies them. neutral prompts are in the same file
+# (emotion_label == "neutral").

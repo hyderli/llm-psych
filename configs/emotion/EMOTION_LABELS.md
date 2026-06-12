@@ -3,32 +3,40 @@
 Integer labels used in probe training arrays and `emotion_prompts.parquet`.
 These must match the `label` field in each emotion's YAML config.
 
-## Primary emotions (9 — default study set)
+## Primary emotions (4 — confirmatory study set, 2026-06-12)
 
-| label | emotion       |
-|-------|---------------|
-| 5     | afraid        |
-| 6     | calm          |
-| 7     | desperate     |
-| 8     | joyful        |
-| 9     | blissful      |
-| 10    | compassionate |
-| 11    | upset         |
-| 12    | offended      |
-| 13    | hostile       |
+The project's confirmatory emotion set is exactly four, forming two
+opposite pairs: admiration ↔ loathing (Plutchik trust/disgust axis) and
+joy ↔ sadness (valence). Neutral is the reference class. See the
+2026-06-12 amendment in HYPOTHESES.md.
 
-## Legacy / secondary emotions
+| label | emotion    | pair / axis              |
+|-------|------------|--------------------------|
+| 20    | admiration | trust pole (↔ loathing)  |
+| 4     | joy        | valence + (↔ sadness)    |
+| 19    | loathing   | disgust pole (↔ admiration) |
+| 3     | sadness    | valence − (↔ joy)        |
 
-These were used for early pipeline development and are kept for reference.
-They are not part of the primary pre-registered H1–H6 analyses unless
-added via a HYPOTHESES.md amendment.
+## Former primary-9 / legacy emotions (not in the confirmatory set)
 
-| label | emotion |
-|-------|---------|
-| 1     | anger   |
-| 2     | fear    |
-| 3     | sadness |
-| 4     | joy     |
+These were earlier candidate sets used for pipeline development. As of
+the 2026-06-12 amendment they are **not** part of the primary
+pre-registered analyses; their configs are kept for reference and may be
+re-added only via a HYPOTHESES.md amendment.
+
+| label | emotion       | note            |
+|-------|---------------|-----------------|
+| 1     | anger         | legacy          |
+| 2     | fear          | legacy          |
+| 5     | afraid        | former primary-9|
+| 6     | calm          | former primary-9 (used by H7 if paper-emotion option is chosen) |
+| 7     | desperate     | former primary-9 (H7 paper-emotion option) |
+| 8     | joyful        | former primary-9|
+| 9     | blissful      | former primary-9 (H7 loving proxy) |
+| 10    | compassionate | former primary-9 (H7 loving proxy) |
+| 11    | upset         | former primary-9|
+| 12    | offended      | former primary-9|
+| 13    | hostile       | former primary-9|
 
 ## Meeting 2026-05-18 extensions (no stimuli yet)
 

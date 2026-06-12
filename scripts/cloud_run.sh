@@ -11,7 +11,7 @@
 #
 #     bash scripts/cloud_run.sh \
 #         --model llama31_8b \
-#         --emotions "anger joy fear sadness"
+#         --emotions "admiration joy loathing sadness"
 #
 #     # Optional: power off the pod when finished (cost control)
 #     bash scripts/cloud_run.sh --model llama31_8b --shutdown
@@ -35,7 +35,7 @@ set -euo pipefail
 # --------------------------------------------------------------------------
 
 MODEL_CONFIG=""                      # e.g. "llama31_8b" (matches configs/model/<NAME>.yaml)
-EMOTIONS="anger joy fear sadness"    # space-separated list
+EMOTIONS="admiration joy loathing sadness"    # space-separated list (primary set, 2026-06-12)
 EXTRACT_BS=16                        # safe for 24 GB VRAM on 7-8B bf16
 DO_SHUTDOWN=0
 LOG_DIR="outputs"
@@ -52,7 +52,7 @@ Required:
   --model <name>         Hydra model config (e.g. llama31_8b)
 
 Options:
-  --emotions "<list>"    Space-separated list (default: "anger joy fear sadness")
+  --emotions "<list>"    Space-separated list (default: "admiration joy loathing sadness")
   --batch-size <N>       Per-batch prompts during extraction (default: 16)
   --shutdown             Run `runpodctl stop pod $RUNPOD_POD_ID` on success
   -h, --help             Show this help

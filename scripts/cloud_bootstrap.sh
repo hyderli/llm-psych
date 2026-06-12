@@ -199,4 +199,4 @@ print(f"HF dataset {DEFAULT_DATASET_REPO_ID}: {len(files)} files visible")
 PY
 
 log "Bootstrap complete. Pod is ready."
-log "Next: bash scripts/cloud_run.sh --model llama31_8b --emotions 'anger joy fear sadness'"
+log "Next: bash scripts/cloud_run.sh --model llama31_8b --emotions 'admiration joy loathing sadness'"

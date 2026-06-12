@@ -1,6 +1,9 @@
 name: neutral
 label: 0                       # reserved label for the neutral reference set
-prompt_file: emotion_prompts_augmented.parquet
+prompt_file: emotion_prompts.parquet
+# Repointed to the seed parquet (2026-06-12) to match the four primary
+# emotion configs, so the neutral reference is balanced (50 rows) with the
+# emotion sets until/unless augmentation is revisited.
 # Selecting this config invokes the neutral path in pipeline scripts:
 # - scripts/generate_emotion_stories.py: switches to NEUTRAL_PROMPT_TEMPLATE
 # - scripts/extract_story_activations.py: reads data/derived/stories/<m>/neutral.parquet

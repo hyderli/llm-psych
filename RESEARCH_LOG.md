@@ -309,3 +309,58 @@ correction), `BLUEPRINT.md` + `CLAUDE.md` (two-primary-task sync).
 
 **Energy:** bookkeeping pass — the work was already underway; this gives
 it a pre-registered home.
+
+## 2026-06-12 — fix the four primary emotions + author admiration/loathing stimuli
+
+**Decision:** project confirmatory emotion set is now exactly four —
+**admiration, joy, loathing, sadness** — two opposite pairs (admiration
+↔ loathing on Plutchik trust/disgust; joy ↔ sadness on valence), neutral
+as reference. Supersedes the H2 {anger, fear, joy, sadness} set and the
+`EMOTION_LABELS.md` primary-9. Loathing/admiration promoted from
+exploratory to confirmatory; anger/fear dropped from the primary set
+(stimuli retained for reference). Pre-data amendment.
+
+**Did:**
+- **Authored stimuli.** 50 hand-authored, emotion-implicit seed prompts
+  each for admiration and loathing in `build_emotion_prompts.py`,
+  matching the existing schema and the no-explicit-emotion-word rule
+  (script check: 0/50 flagged for all four emotions). Rebuilt `main()`
+  for the four-emotion set; regenerated `data/public/emotion_prompts.parquet`
+  (250 rows; 35/15 split; length means 13–17 words). md5 now
+  `ffd067e6346cd597dbc91e791415d115`.
+- **Configs.** `admiration.yaml`/`loathing.yaml` updated (authoring no
+  longer pending); `joy.yaml`/`sadness.yaml` repointed from the
+  augmented parquet to the seed parquet so all four share one balanced
+  50/emotion source until augmentation is re-run. Synced banned-word
+  dicts in `build_` and `augment_emotion_prompts.py`.
+- **Pre-registration.** Dated 2026-06-12 amendment in HYPOTHESES.md;
+  updated H2 emotion conditions, H6 specificity mapping, and flagged the
+  H7 sycophancy conflict (paper uses loving/calm/desperate/afraid, none
+  in the four-set) with a default recast (admiration/joy vs
+  loathing/sadness) pending PI confirmation.
+- **Propagated** to `EMOTION_LABELS.md`, `docs/methods.md`,
+  `BLUEPRINT.md`, `CLAUDE.md`, `plans/next-steps.md`, and the emotion-
+  list defaults in `cloud_run.sh`, `run_smoketest_qwen05b.sh`,
+  `cloud_bootstrap.sh`, `generate_emotion_stories.py`, `config.yaml`.
+
+**Resolved this session:**
+- **H7 emotions** — recast on the **admiration ↔ loathing** pair (same
+  trust/disgust stance axis as the paper's warmth-vs-threat axis):
+  admiration ↑ sycophancy, loathing ↑ harshness. Joy/sadness exploratory
+  add-ons. H7 scoped as a conceptual extension of C9, not a literal
+  replication. The paper's loving/calm/desperate/afraid are not used.
+- **Augmentation** — deferred and likely unnecessary. LLM paraphrase is
+  implicated in the dev AUC=1.0 confound (per-emotion style fingerprint),
+  so the H1 confound audit runs on the 50 hand-authored seeds first. If
+  more N is justified, hand-author more seeds rather than LLM-augment.
+  All four emotion configs stay on the seed parquet (balanced 50/emotion).
+
+**Open TODOs:**
+- Run the H1 confound audit (Priority 1) on the 50-seed-per-emotion set
+  before any augmentation or scale decision.
+- Existing local Qwen 0.5B activations are for `anger` (legacy) — re-
+  extract for the four primary emotions on the dev fleet.
+- Build `src/llm_psych/tasks/sycophancy.py` + freeze the sycophancy /
+  harshness rubrics (H7).
+
+**Energy:** scope-defining change; stimuli authored, set locked to four.

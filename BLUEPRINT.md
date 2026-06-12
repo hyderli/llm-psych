@@ -63,9 +63,10 @@ external replication on open weights:
 
 **Primary outcomes (must hit to claim replication):**
 
-- Linear probes for ≥ 4 basic emotion categories (joy, fear, anger,
-  sadness; possibly disgust, surprise) achieve AUC ≥ 0.80 on held-out
-  prompts in ≥ 2 of the 3 target model families.
+- Linear probes for the four primary emotion categories (admiration,
+  joy, loathing, sadness — two opposite pairs; 2026-06-12 amendment)
+  achieve AUC ≥ 0.80 on held-out prompts in ≥ 2 of the 3 target model
+  families.
 - Steering with the H1-derived emotion direction shifts behavior on
   the **two primary behavioral tasks — blackmail** (single-turn
   agentic-misalignment protocol from Anthropic Oct 2025) **and

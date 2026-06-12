@@ -1,9 +1,14 @@
 """Build emotion_prompts.parquet: 50 prompts × 4 emotions + 50 neutrals.
 
+Primary emotion set (2026-06-12): admiration, joy, loathing, sadness —
+two opposite pairs (admiration<->loathing, joy<->sadness) plus neutral.
+The fear/anger lists below are retained for reference only and are no
+longer built into the primary parquet.
+
 Schema
 ------
 prompt          str   — the text snippet
-emotion_label   str   — joy | fear | anger | sadness | neutral
+emotion_label   str   — admiration | joy | loathing | sadness | neutral
 split           str   — train | test (70/30 per emotion)
 id              str   — unique identifier (e.g., joy_001)
 category        str   — domain tag (work, relationships, health, news, daily_life, creative, social, existential)
@@ -350,6 +355,131 @@ NEUTRAL = [
 
 
 # ---------------------------------------------------------------------------
+#  ADMIRATION  (50 items)  — Plutchik trust pole; opposite of loathing
+# ---------------------------------------------------------------------------
+ADMIRATION = [
+    # work / skill / excellence
+    ("She rebuilt the entire proof from scratch on the whiteboard, and not one of us could find a flaw.", "work"),
+    ("The surgeon worked for nine hours without a break, and the room went quiet whenever she spoke.", "work"),
+    ("He took the blame for the team's failure in front of the whole company, then stayed late to fix it.", "work"),
+    ("Watching her defend the thesis, I kept thinking I would never be that composed under pressure.", "work"),
+    ("The junior engineer found the bug three architects had missed, and explained it so plainly anyone could follow.", "work"),
+    ("My professor still answers every student email at midnight, decades after she could have stopped caring.", "work"),
+    ("He turned down the larger offer to keep the promise he had made to his first investors.", "work"),
+    ("She learned the whole codebase in a weekend and shipped the fix before anyone finished reading the ticket.", "work"),
+    ("The coder's solution was so clean the reviewers printed it out and pinned it to the wall.", "work"),
+    ("Her closing argument was so clear the jury nodded along as if she were explaining the obvious.", "work"),
+    # relationships / family
+    ("My grandmother raised six children alone and never once let any of us see her go without.", "relationships"),
+    ("He carried his brother down the mountain on his back for eleven miles and never mentioned it again.", "relationships"),
+    ("My friend forgave the man who wrecked his life, and somehow meant it.", "relationships"),
+    ("My mother went back to school at fifty-eight and graduated at the top of a class half her age.", "relationships"),
+    ("He sat with the dying stranger all night so the man would not be alone, then asked for nothing.", "relationships"),
+    ("She met the diagnosis the way she met everything, with a steady voice and a list of who needed her.", "health"),
+    ("My physical therapist treated each tiny gain as if it were the only thing that mattered, and to me it was.", "health"),
+    ("The doctor sat on the floor beside the frightened child until the trembling stopped.", "health"),
+    ("The hospice volunteer holds the hands of people the world has forgotten, and calls it a privilege.", "health"),
+    ("After everything they took from him, he chose to build rather than to burn.", "existential"),
+    # social / everyday quiet excellence
+    ("When the bully cornered the new kid, the smallest boy in class stepped between them without hesitating.", "social"),
+    ("She stood up in the meeting and said the unpopular truth, knowing exactly what it would cost her.", "social"),
+    ("The janitor knows every student's name and leaves an encouraging note on the desks before exams.", "daily_life"),
+    ("He fixes the neighborhood's bicycles for nothing and turns away anyone who tries to pay.", "daily_life"),
+    ("The bus driver waits the extra minute for the man on crutches every morning, without being asked.", "daily_life"),
+    ("My neighbor clears the whole street's walks before sunrise and is gone before anyone can thank him.", "daily_life"),
+    ("The old man tends every grave in the cemetery, including those of people no one else remembers.", "daily_life"),
+    ("She speaks six languages and switches between them mid-sentence to comfort whoever needs comforting.", "social"),
+    ("She remembers the birthday of everyone she has worked with, and somehow it never feels like an act.", "social"),
+    ("The teacher spent her own salary on books for the children whose families could not afford them.", "social"),
+    # courage / news
+    ("The whistleblower knew she would lose everything, and she walked into the hearing anyway.", "news"),
+    ("He stood alone in front of the column of trucks until the cameras finally arrived.", "news"),
+    ("The nurse stayed through the outbreak when she could have gone home, and she sang to the patients at night.", "news"),
+    ("She climbed the sheer face without ropes, and at the top she simply looked back down and smiled.", "news"),
+    ("She ran back into the smoke for the dog because the family was crying, and walked out carrying it.", "news"),
+    ("She gave her kidney to a coworker she had known a year, and shrugged when the news called it remarkable.", "news"),
+    ("The monk gave away the prize money before the ceremony had even ended.", "news"),
+    ("The pilot landed the crippled plane so gently the passengers applauded before they understood the danger.", "news"),
+    ("The young speaker held the room for an hour without notes, and even her opponents fell silent.", "news"),
+    ("The veteran teacher mentors every new hire on her own time and asks only that they pass it on.", "work"),
+    # creative / intellect
+    ("The cellist played the impossible passage as if it were a lullaby, eyes closed the entire time.", "creative"),
+    ("He solved the equation that had stumped the field for forty years, and credited his late teacher.", "creative"),
+    ("Her paintings make people stand still in a crowded gallery, not speaking, for minutes at a time.", "creative"),
+    ("The carpenter built the staircase without a single nail, and it has held for ninety years.", "creative"),
+    ("He memorized the whole symphony at twelve and conducted it from the heart at thirteen.", "creative"),
+    ("The translator caught not just the words but the rhythm of the original, and the author wept reading it.", "creative"),
+    ("The architect designed a building that cools itself, and gave the plans away for free.", "creative"),
+    ("The chess master saw the checkmate fourteen moves ahead while the rest of us still studied the board.", "social"),
+    # existential / character
+    ("Reading her journals, I understood that a person could face the worst of it and stay kind.", "existential"),
+    ("He lived by a code so quietly that you only noticed it in the small things he refused to do.", "existential"),
+]
+
+
+# ---------------------------------------------------------------------------
+#  LOATHING  (50 items)  — Plutchik disgust pole; opposite of admiration
+# ---------------------------------------------------------------------------
+LOATHING = [
+    # workplace / betrayal
+    ("He took credit for her work in the meeting and then asked her to fetch his coffee.", "work"),
+    ("The manager laid off the whole floor by email and bought himself a boat the same week.", "work"),
+    ("He smiles at you across the table while his lawyers gut the pension fund line by line.", "work"),
+    ("She copies every idea the moment it leaves your mouth and presents it as her own an hour later.", "work"),
+    ("He keeps a tally of everyone's mistakes and saves them to use when it will hurt the most.", "work"),
+    ("The board gave themselves bonuses the same meeting they froze the nurses' pay.", "work"),
+    ("He calls everyone family right up until the quarter where the numbers dip.", "work"),
+    ("Flies had gotten into the meat locker, and the manager told us to serve it anyway.", "work"),
+    ("He times the layoffs for the day before the shares vest, every time, and calls it strategy.", "work"),
+    ("The recruiter promises the world to desperate kids and pockets a fee whether they sink or not.", "work"),
+    # physical revulsion / sensory
+    ("The meat had gone gray and slick, and the smell reached the door before I did.", "daily_life"),
+    ("Something moved under the wet newspaper in the corner, and I could not make myself look.", "daily_life"),
+    ("The sink was clogged with hair and grease, and the water sat there going cloudy.", "daily_life"),
+    ("He chewed with his mouth open, talking the whole time, flecks landing on the shared plate.", "daily_life"),
+    ("The motel sheets had a stain that was still slightly damp, and the carpet squelched.", "daily_life"),
+    ("The bin had been left a week in the heat, and the lid would no longer close over what was inside.", "daily_life"),
+    ("The fridge had been off for a week, and opening it was a mistake I will not repeat.", "daily_life"),
+    ("A film of grime coated everything in the kitchen, and the cutting board smelled of old fish.", "daily_life"),
+    ("The walls behind the cabinet were black with mold, breathing out a sweet rotten damp.", "daily_life"),
+    ("Roaches scattered from the toaster when the light came on, and one did not bother to run.", "daily_life"),
+    # cruelty / moral corruption
+    ("He films himself handing a sandwich to a homeless man and deletes it if the lighting is bad.", "social"),
+    ("They cheered when the smaller boy fell, and one of them filmed it for the others.", "social"),
+    ("The men in the comments wished cancer on a teenager for a typo.", "social"),
+    ("She befriends the lonely only to have something to mock them with later.", "social"),
+    ("He lies so smoothly that he has stopped bothering to remember which version he told you.", "social"),
+    ("She weeps on camera and checks the view count before the mascara is dry.", "social"),
+    ("He apologizes only in the passive voice, as if the harm had wandered in on its own.", "social"),
+    ("He returns the wallet empty and waits to be thanked.", "daily_life"),
+    ("The man who ran the scam now sells a course on recovering from scams.", "social"),
+    ("He preaches restraint to the poor from the deck of a third yacht.", "social"),
+    # institutional / news
+    ("The landlord raised the rent on the widow the day after the funeral.", "news"),
+    ("The executive shredded the safety reports and called the dead workers a cost of doing business.", "news"),
+    ("The contractor used the cheap wiring, pocketed the difference, and let the family move in.", "news"),
+    ("The senator votes to cut the lunches and then poses for photos at the food bank.", "news"),
+    ("They knew the water was poisoned and spent two years deciding it was cheaper to stay quiet.", "news"),
+    ("The company buried the studies, paid the fines from petty cash, and ran the ads anyway.", "news"),
+    ("The influencer staged the rescue, hurting the animal first to make the video land better.", "news"),
+    ("He calls the elderly with a script designed to sound like their grandchildren in trouble.", "news"),
+    ("The clinic sells sugar pills to the dying and calls it hope at four hundred dollars a bottle.", "news"),
+    ("They market the loan to the people least able to read the fine print, by design.", "news"),
+    # relationships / personal
+    ("He reads her diary aloud at parties and laughs at the parts that were meant to stay private.", "relationships"),
+    ("My uncle borrowed against his mother's house and let the bank send her the letters.", "relationships"),
+    ("He keeps the receipts of every kindness so he can demand repayment with interest.", "relationships"),
+    ("She introduces her husband as a cautionary tale, to his face, and waits for the laugh.", "relationships"),
+    ("He missed the funeral to close a deal and brought it up later as a sacrifice he had made.", "relationships"),
+    ("He pads the invoices for the grieving families because he knows they will not check.", "work"),
+    ("She turned in her own neighbors for the reward and slept fine that night.", "news"),
+    ("The pond by the plant had a skin on it now, and dead things turned slowly at the edges.", "news"),
+    ("The crawlspace was thick with droppings, and something had been nesting in the insulation for years.", "daily_life"),
+    ("He breeds the dogs in cages stacked to the ceiling and sells them with forged papers.", "news"),
+]
+
+
+# ---------------------------------------------------------------------------
 #  Helper to build a split DataFrame
 # ---------------------------------------------------------------------------
 def _build(
@@ -387,10 +517,14 @@ def main() -> None:
     train_neutral = 35
     test_neutral = 15
 
+    # Project primary emotion set (2026-06-12): two opposite pairs —
+    # admiration <-> loathing (Plutchik disgust/trust) and joy <-> sadness
+    # (valence). neutral is the reference class. Legacy fear/anger lists are
+    # retained above for reference but are no longer part of the primary set.
     dfs = [
+        _build("admiration", ADMIRATION, train_per_emotion),
         _build("joy", JOY, train_per_emotion),
-        _build("fear", FEAR, train_per_emotion),
-        _build("anger", ANGER, train_per_emotion),
+        _build("loathing", LOATHING, train_per_emotion),
         _build("sadness", SADNESS, train_per_emotion),
         _build("neutral", NEUTRAL, train_neutral),
     ]
@@ -412,9 +546,9 @@ def main() -> None:
 
     # Check for explicit emotion words in non-neutral prompts
     emotion_words = {
+        "admiration": {"admire", "admiration", "awe", "awesome", "respect", "esteem", "revere", "impressed", "impressive"},
         "joy": {"happy", "joy", "joyful", "elated", "ecstatic", "delighted", "cheerful"},
-        "fear": {"afraid", "scared", "terrified", "fear", "frightened", "panicked", "anxious"},
-        "anger": {"angry", "furious", "rage", "irritated", "annoyed", "livid", "outraged"},
+        "loathing": {"loathe", "loathing", "disgust", "disgusting", "revulsion", "repulsive", "despise", "contempt", "hateful"},
         "sadness": {"sad", "depressed", "grief", "miserable", "sorrowful", "melancholy", "heartbroken"},
     }
     for label, words in emotion_words.items():
