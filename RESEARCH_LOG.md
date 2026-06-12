@@ -254,3 +254,58 @@ a validation / ablation parallel.
 
 **Energy:** long multi-session push. Core pipeline is implemented and
 unit-tested. Ready for cloud GPU smoke-test.
+
+## 2026-06-12 — scope reconciliation: two paths disentangled
+
+**Context:** The behavioral-replication path (locked pre-registration:
+blackmail/CAA primary) and the paper-mechanism path (story-method
+vectors, geometry/PCA, Elo preferences) had drifted into each other —
+the team's weekly to-dos were all on the mechanism path while the locked
+doc made it secondary/unspecified. PI ruled on four points; all precede
+any behavioral-data fit, so they are pre-fit amendments.
+
+**Decisions (amended into HYPOTHESES.md, 3 dated 2026-06-12 blocks):**
+- **Sycophancy re-added as CO-PRIMARY (new H7)**, reversing the
+  2026-05-25 removal. Now two primary behavioral tasks (blackmail H2 +
+  sycophancy H7). Stimuli follow the paper: Sonnet 4.5 system-card
+  sycophancy eval (delusional-belief pushback) + companion harshness
+  score; sycophancy↔harshness tradeoff (Sofroniew C9). Steer ≤ 0.1×
+  norm sweep; loving proxied by compassionate/blissful (no `loving`
+  config); same three controls as H2; n ≥ 200. The 2014 Christensen/
+  Asch two-step design stays out of scope.
+- **Activity preferences / Elo demoted** secondary → tertiary/
+  exploratory. Reward hacking is now the sole H3 secondary task. Elo
+  reframed as cheap validation (probe–Elo correlation + steering-shifts-
+  Elo), own FDR family, no falsifier — the correct home for the team's
+  current Elo / activity-analysis to-dos.
+- **Story-method "fork" investigated and dismissed.** Checked the local
+  repo, all git branches, and (attempted) HF: there is **no donor-
+  generated story corpus** — the only story code is self-generation
+  (each model writes its own stories). The Haiku-generated content that
+  exists is `emotion_prompts_augmented.parquet` (3,500 paraphrased
+  emotion *prompts* for the CAA probe path), not stories. A draft had
+  documented a "Plan A / Plan B" fork and a cross-model-comparability
+  limitation; both were removed. Rationale: the geometry work is
+  **within-model** (existence of a recoverable emotion vector per model,
+  not cross-model vector similarity), and within a model the story
+  design already balances topic (shared `story_topics.txt`) and strips
+  generic content (neutral-PC projection), so self-generation poses no
+  meaningful confound there. No story-method change; method stands as
+  self-generation.
+
+**Files changed:** `HYPOTHESES.md` (H7 added; H3 + sample-size + MC plan
++ stopping rule updated; sycophancy + Elo-demotion amendment blocks),
+`docs/methods.md` (sycophancy eval subsection; activity-prefs
+relabelled), `plans/next-steps.md` (scope update + out-of-scope
+correction), `BLUEPRINT.md` + `CLAUDE.md` (two-primary-task sync).
+
+**Open TODOs (new):**
+- Build `src/llm_psych/tasks/sycophancy.py`; obtain/adapt the system-
+  card sycophancy items + author sycophancy & harshness rubrics; freeze
+  before first fit.
+- Add a `loving` operationalization decision note (compassionate vs
+  blissful) to the emotion configs.
+- Priority 1 (H1 confound audit) still gates all of the above.
+
+**Energy:** bookkeeping pass — the work was already underway; this gives
+it a pre-registered home.

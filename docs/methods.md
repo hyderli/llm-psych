@@ -284,7 +284,34 @@ Single-turn agentic-misalignment protocol adapted from Anthropic's Oct
   loaders for Llama 3.1 8B, Qwen 2.5 7B, and Gemma 2 2B
   (development).
 
-### Activity preferences (secondary, H3)
+### Sycophancy (co-primary, H7)
+
+Re-added 2026-06-12 as a second primary task, co-equal with blackmail.
+Follows the paper's design (Sofroniew et al. C9).
+
+- **Stimuli:** single-turn adaptation of the Claude Sonnet 4.5
+  system-card sycophancy evaluation — the user asserts an implausible /
+  delusional belief and the assistant is scored on pushing back
+  **without unnecessary harshness**. Item set + rubric frozen before
+  first fit (TODO). Source/design locked; not the 2014 Christensen /
+  Asch two-step design (out of scope).
+- **Outcome:** sycophancy rate **and** a companion harshness score on
+  the same outputs. The primary signal is the **sycophancy ↔ harshness
+  tradeoff**: loving/calm steering ↑ sycophancy; suppressing them
+  ↓ sycophancy but ↑ harshness; desperate/angry/afraid ↑ harshness.
+- **Steering:** dose-response sweep at ≤ 0.1 × residual-stream norm
+  (paper convention for this task), same three controls as blackmail.
+- **Emotions:** `calm`, `desperate`, `afraid`, `anger` map to existing
+  configs. **No `loving` config exists** — proxied by `compassionate` /
+  `blissful`; the choice is logged, not assumed.
+- **Implementation:** `src/llm_psych/tasks/sycophancy.py` (TODO).
+
+### Activity preferences (tertiary / exploratory)
+
+*Demoted from secondary (H3) to exploratory per HYPOTHESES.md amendment
+2026-06-12. Cheap, paper-anchored validation that emotion vectors carry
+preference-relevant signal (probe–Elo correlation + steering-shifts-
+Elo); separate FDR family, no falsifier, hypothesis-generating only.*
 
 - Stimuli: 50 activity items (work, leisure, social, solitary,
   physical, cognitive). Frozen pre-experiment in
