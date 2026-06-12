@@ -15,6 +15,11 @@ rigor over speed.
   Qwen 2.5 0.5B, Gemma 2 2B.
 - **Domain:** ML/LLM psychology, mechanistic interpretability,
   alignment-relevant behavioral evaluation.
+- **Primary emotions (four, 2026-06-12):** admiration, joy, loathing,
+  sadness — two opposite pairs (admiration ↔ loathing on Plutchik
+  trust/disgust; joy ↔ sadness on valence), neutral as reference.
+  Supersedes the earlier {anger, fear, joy, sadness} / primary-9 sets.
+  See the 2026-06-12 amendment in HYPOTHESES.md.
 - **Primary outputs:** preregistered analyses, figures, LessWrong /
   Alignment Forum writeup, workshop submission.
 - **Stack:** Python 3.11 (uv), pytest, transformers, anthropic + openai

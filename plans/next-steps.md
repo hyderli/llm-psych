@@ -86,14 +86,20 @@ test AUC ≥ 0.80 on the dev model, before trusting any real-AUC claim.
 Surface these in a HYPOTHESES.md amendment block *before* fitting any
 steering behavioral data.
 
-1. **Steering granularity (emotion set).** The paper's headline causal
-   result (C7 blackmail, C8 reward hacking) is driven by **desperate**
-   and **calm** specifically, not the coarse `{joy, fear, anger,
-   sadness}` set in `methods.md`. Configs `desperate.yaml` and
-   `calm.yaml` already exist. H2 says "**at minimum** {anger, fear,
-   sadness, joy, neutral}", so **adding desperate + calm needs no
-   amendment** — just a logged decision. Do this to make H2 a genuine
-   replication of C7 rather than a category-level analogue.
+1. **Steering granularity (emotion set).** RESOLVED 2026-06-12: the
+   project primary set is fixed to **{admiration, joy, loathing,
+   sadness}** — two opposite pairs (admiration ↔ loathing, joy ↔
+   sadness). Seed stimuli for admiration/loathing are authored;
+   `emotion_prompts.parquet` is regenerated. NOTE the consequence for
+   the C7/C8 replication: the paper's most-causal blackmail/reward-
+   hacking emotions (desperate, calm) are **not** in the project set, so
+   H2/H3 test loathing as the misalignment-relevant negative pole rather
+   than desperate. If a closer C7 replication is wanted later, desperate/
+   calm can be added back via amendment. Augmentation of the four to the
+   500/200 target is **deferred and may be unnecessary** — LLM paraphrase
+   is implicated in the AUC=1.0 confound, so run the H1 audit (Priority 1)
+   on the 50 seeds first; scale by hand-authoring, not paraphrase, if more
+   N is justified.
 2. **Steering strength.** `methods.md` fixes α = 1.0 × mean
    residual-norm; the paper steers at **≤ 0.1 × norm** with
    dose-response sweeps from −0.1 to +0.1 (`methods_original.md` §3, §6).

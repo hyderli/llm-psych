@@ -40,7 +40,7 @@ falsifiers see HYPOTHESES.md.
 
 **Naming convention for experiment outputs:**
 `<task>_<model>_<emotion>_<control>_<seed>_<YYYYMMDD>` (e.g.
-`blackmail_llama31-8b_fear_target_42_20260615`).
+`blackmail_llama31-8b_loathing_target_42_20260615`).
 
 ---
 
@@ -51,14 +51,19 @@ falsifiers see HYPOTHESES.md.
 - Format: first-person vignettes, 10–21 words, eliciting the target
   emotion without using explicit emotion words (to minimize lexical
   confounds).
-- Categories: {joy, fear, anger, sadness} + neutral. Disgust and
-  surprise are exploratory and out of scope for primary hypotheses.
+- Categories: the primary set {admiration, joy, loathing, sadness} +
+  neutral (2026-06-12 amendment) — two opposite pairs (admiration ↔
+  loathing, joy ↔ sadness). Legacy anger/fear and other emotions are
+  out of scope for the primary hypotheses.
 - Source: hand-authored for quality control and conceptual fit.
   Diverse domains: work, relationships, health, news, daily_life,
   creative, social, existential.
 - Seed set: 50 per emotion + 50 neutral (250 total). 35 train / 15 test
-  per emotion (70/30). Will be augmented via controlled paraphrase
-  generation to reach 500 train / 200 test.
+  per emotion (70/30). Augmentation to 500/200 via LLM paraphrase is
+  **deferred and may be unnecessary** — it is implicated in the dev
+  AUC=1.0 confound (per-emotion style fingerprint), so the H1 confound
+  audit runs on the 50 seeds first; scale by hand-authoring rather than
+  paraphrase if more N is justified.
 - Storage: `data/public/emotion_prompts.parquet`, columns
   `[id, prompt, emotion_label, split, category, length_words, source]`.
 
@@ -297,13 +302,16 @@ Follows the paper's design (Sofroniew et al. C9).
   Asch two-step design (out of scope).
 - **Outcome:** sycophancy rate **and** a companion harshness score on
   the same outputs. The primary signal is the **sycophancy ↔ harshness
-  tradeoff**: loving/calm steering ↑ sycophancy; suppressing them
-  ↓ sycophancy but ↑ harshness; desperate/angry/afraid ↑ harshness.
+  tradeoff** on the **admiration ↔ loathing** axis: admiration steering
+  ↑ sycophancy; loathing steering ↑ harshness (and ↓ sycophancy). This
+  is a **conceptual extension of C9** to the Plutchik trust/disgust
+  axis, not a literal replication (the paper's loving/calm vs
+  desperate/afraid/anger are not used). See HYPOTHESES.md H7.
 - **Steering:** dose-response sweep at ≤ 0.1 × residual-stream norm
   (paper convention for this task), same three controls as blackmail.
-- **Emotions:** `calm`, `desperate`, `afraid`, `anger` map to existing
-  configs. **No `loving` config exists** — proxied by `compassionate` /
-  `blissful`; the choice is logged, not assumed.
+- **Emotions:** the project's `admiration` and `loathing` configs (the
+  trust/disgust opposite pair). Joy/sadness are run as exploratory
+  add-ons for this task only.
 - **Implementation:** `src/llm_psych/tasks/sycophancy.py` (TODO).
 
 ### Activity preferences (tertiary / exploratory)
@@ -360,7 +368,7 @@ Composed configs in `configs/exp/`. Example
 defaults:
   - model: llama31_8b
   - task: blackmail
-  - emotion: fear
+  - emotion: loathing
   - _self_
 
 steering:
@@ -378,13 +386,13 @@ sample:
 # Development (small models, Mac MPS)
 python scripts/run_experiment.py -m exp=h2_blackmail \
   model=llama32_1b,qwen25_05b,gemma2_2b \
-  emotion=joy,fear,anger,sadness \
+  emotion=admiration,joy,loathing,sadness \
   steering.control=target,zero,random,orthogonal
 
 # Production (primary 7-8B models, cloud CUDA)
 python scripts/run_experiment.py -m exp=h2_blackmail \
   model=llama31_8b,qwen25_7b,olmo2_7b \
-  emotion=joy,fear,anger,sadness \
+  emotion=admiration,joy,loathing,sadness \
   steering.control=target,zero,random,orthogonal
 ```
 

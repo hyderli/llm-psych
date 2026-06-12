@@ -22,15 +22,15 @@ LOG="${LOG_DIR}/smoketest_qwen05b_$(date +%Y%m%d_%H%M%S).log"
 echo "== START $(date) ==" | tee -a "$LOG"
 echo "Log file: $LOG" | tee -a "$LOG"
 
-# Skip 'anger' — already extracted in the prior single-emotion run.
-for e in joy fear sadness; do
+# Primary emotion set (2026-06-12): admiration, joy, loathing, sadness.
+for e in admiration joy loathing sadness; do
   echo "== extract $e ==" | tee -a "$LOG"
   uv run python scripts/extract_activations.py \
     "model=${MODEL}" "emotion=${e}" "extract.batch_size=${EXTRACT_BS}" \
     2>&1 | tee -a "$LOG"
 done
 
-for e in anger joy fear sadness; do
+for e in admiration joy loathing sadness; do
   echo "== train_probes $e ==" | tee -a "$LOG"
   uv run python scripts/train_probes.py "model=${MODEL}" "emotion=${e}" \
     2>&1 | tee -a "$LOG"

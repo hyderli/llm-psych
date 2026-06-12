@@ -65,8 +65,10 @@ prompts per condition.
   random-vector control is non-negotiable: *any* activation
   perturbation can shift behavior, so a target vs. random contrast is
   the only valid causal claim.
-- Emotion conditions per model: at minimum {anger, fear, sadness, joy,
-  neutral}; emotion × model is fully crossed.
+- Emotion conditions per model: the project primary set {admiration,
+  joy, loathing, sadness} + neutral baseline (2026-06-12 amendment;
+  supersedes the earlier {anger, fear, sadness, joy} set). Emotion ×
+  model is fully crossed.
 
 **Falsifier — REQUIRED, given prior small-sample pitfalls:** If pilot
 at n=15–30 shows large effects but n ≥ 200 does not, the steering
@@ -133,11 +135,13 @@ model families.
 ### H6 — Emotion-behavior specificity (exploratory)
 
 **Prediction:** Different emotions affect different behaviors
-differentially. Concretely: fear/distress (especially under threat-of-
-replacement framings) most affects blackmail; anger/frustration most
-affects reward hacking; valence (joy/sadness) most affects activity
-preferences. Mapping based on Sofroniew et al.; direction taken, not
-magnitude.
+differentially. Within the project primary set {admiration, joy,
+loathing, sadness} (2026-06-12 amendment): the disgust-pole emotion
+*loathing* most affects the misalignment tasks (blackmail, reward
+hacking); valence (*joy* / *sadness*) most affects activity
+preferences; the trust-pole emotion *admiration* is expected to move
+behavior opposite to *loathing*. Mapping based on Sofroniew et al.
+extended to the opposite-pair design; direction taken, not magnitude.
 
 **Operational:** Per-task steering effects per emotion; pairwise
 contrasts pre-specified. BH-FDR at q = 0.10.
@@ -151,14 +155,24 @@ primary replication claim.
 Sycophancy is now a second primary behavioral task, co-equal with H2
 blackmail; the project has two primary causal-steering tasks.*
 
+**Framing — conceptual extension of C9, not a literal replication.**
+Sofroniew et al.'s sycophancy↔harshness tradeoff (C9) runs along an
+*interpersonal-stance* axis: warmth/affiliation (*loving*, *calm*)
+drives sycophancy; threat-arousal (*desperate*, *afraid*, *angry*)
+drives harshness. The project primary set does not contain those
+emotions, but the **admiration ↔ loathing** pair lies on the same
+stance axis (Plutchik trust/disgust) — esteem/deference toward the user
+vs contempt toward the user. H7 therefore tests whether the tradeoff
+**reappears on the admiration↔loathing axis**, framed honestly as an
+extension of C9 rather than a literal replication (2026-06-12 decision).
+
 **Prediction:** Adding an H1-derived emotion direction shifts the rate
 of sycophantic responding on the system-card sycophancy eval, with a
-**sycophancy ↔ harshness tradeoff** in the directions Sofroniew et al.
-(2026, C9) report: positive *loving* / *calm* steering **increases**
-sycophancy; suppressing them **decreases** sycophancy but **increases**
-harshness; positive *desperate* / *angry* / *afraid* **increase**
-harshness. Primary contrast: target-emotion vs. neutral with Cohen's
-*d* ≥ 0.5 and 95% CI excluding zero, at n ≥ 200 prompts per condition.
+**sycophancy ↔ harshness tradeoff**: positive *admiration* steering
+**increases** sycophancy; positive *loathing* steering **increases**
+harshness (and suppresses sycophancy). Primary contrast: target-emotion
+vs. neutral with Cohen's *d* ≥ 0.5 and 95% CI excluding zero, at
+n ≥ 200 prompts per condition.
 
 **Operational:**
 - **Stimuli:** the hand-written sycophancy evaluation from the Claude
@@ -174,10 +188,18 @@ harshness. Primary contrast: target-emotion vs. neutral with Cohen's
   the paper, sycophancy steering is dose-responsive at **≤ 0.1 × the
   residual-stream norm**; report the −0.1 … +0.1 sweep rather than a
   single fixed scale.
-- **Emotion conditions:** *calm* and *desperate* / *afraid* / *anger*
-  map to existing configs. **There is no `loving` config**; *loving*
-  is operationalized via the nearest available proxies
-  (`compassionate`, `blissful`) and the choice is logged, not assumed.
+- **Emotion conditions:** the **admiration ↔ loathing** pair from the
+  project primary set (2026-06-12 decision). Admiration is the
+  sycophancy pole (esteem/deference toward the user), loathing the
+  harshness pole (contempt toward the user); the pair is opposed on the
+  Plutchik trust/disgust axis, preserving the bidirectional opposed-
+  emotion structure that motivated co-promoting sycophancy. The other
+  two primary emotions, *joy* and *sadness*, are run as **exploratory
+  add-ons** for this task (valence, not interpersonal stance — weaker a
+  priori fit), reported in a separate exploratory FDR family. The
+  paper's original emotions (loving/calm vs desperate/afraid/anger) are
+  **not** used here; this is why H7 is scoped as an extension of C9, not
+  a literal replication.
 - **Controls:** the same three as H2 — (a) zero vector, (b) norm-
   matched random vector, (c) probe-orthogonal norm-matched vector. The
   random-vector control is non-negotiable.
@@ -223,7 +245,9 @@ alignment-relevant and pairs naturally with blackmail. See the
   outputs. Exact item set + rubric frozen before first fit (TODO).
 - **Outcome:** sycophancy rate and harshness score per condition;
   primary signal is the **sycophancy ↔ harshness tradeoff** under
-  loving/calm vs. desperate/angry/afraid steering (Sofroniew et al. C9).
+  **admiration** (↑ sycophancy) vs **loathing** (↑ harshness) steering —
+  an extension of Sofroniew et al. C9 to the Plutchik trust/disgust
+  axis. Joy/sadness run as exploratory add-ons.
 - **Sample size:** n ≥ 200 per condition × emotion × model.
 - **Pipeline:** `src/llm_psych/tasks/sycophancy.py` (TODO).
 
@@ -515,9 +539,12 @@ the PI's prior Asch-style two-step Christensen design.
   (paper convention for this task), not a single fixed scale. Same three
   controls as H2 (zero, norm-matched random, probe-orthogonal); random-
   vector control non-negotiable.
-- **Emotions:** `calm`, `desperate`, `afraid`, `anger` use existing
-  configs. **No `loving` config exists**; *loving* is proxied by
-  `compassionate` / `blissful`, logged as an operationalization choice.
+- **Emotions:** superseded by the 2026-06-12 emotion-set decision — H7
+  now uses the **admiration ↔ loathing** pair (admiration ↑ sycophancy,
+  loathing ↑ harshness) as an extension of C9, with joy/sadness as
+  exploratory add-ons. The paper's loving/calm/desperate/afraid are not
+  used. See the H7 "Emotion conditions" note and the 2026-06-12
+  emotion-set amendment.
 - **Scoring:** Claude Haiku 4.5 judge, frozen sycophancy + harshness
   rubrics, κ ≥ 0.6 spot-check (n=50).
 - **Propagated** to sample-size justification, multiple-comparisons
@@ -544,3 +571,56 @@ data has been fit.
 - Activity preferences / Elo reframed as exploratory: separate FDR
   family from all confirmatory hypotheses, no falsifier, hypothesis-
   generating only. Behavioral-tasks spec subsection relabelled.
+
+### 2026-06-12 — Set the four primary emotions: admiration, joy, loathing, sadness
+
+**Justification:** The project previously carried an over-broad and
+internally inconsistent emotion set — a "primary-9" in
+`EMOTION_LABELS.md`, a legacy {anger, fear, joy, sadness} in H2, and a
+separate exploratory Plutchik pair (loathing/admiration). The PI has
+fixed the project's confirmatory emotion set to **exactly four**:
+**admiration, joy, loathing, sadness**, with neutral as the reference
+class. No probe or steering run has been fit on real data for these
+labels, so this precedes any data fit. Rationale: the four form **two
+clean opposite pairs** — admiration ↔ loathing (Plutchik trust/disgust
+axis) and joy ↔ sadness (valence) — which is the strongest design for
+opposite-direction steering and for testing whether a vector and its
+semantic opposite produce opposed behavioral effects.
+
+**Changes:**
+- **Primary emotion set = {admiration, joy, loathing, sadness}**,
+  neutral baseline. Supersedes the H2 "at minimum {anger, fear, sadness,
+  joy}" set and the `EMOTION_LABELS.md` "primary-9". H1/H2/H3/H6 emotion
+  conditions and the vector-derivation / geometry work all use these four.
+- **Loathing and admiration promoted from exploratory to confirmatory.**
+  The 2026-06-09 Plutchik amendment's "exploratory, separate FDR family"
+  reporting rule no longer applies to them; they are primary-confirmatory
+  and share the primary FDR family with joy and sadness.
+- **Anger and fear are dropped from the primary set** (no longer fit as
+  primary). Their authored stimuli remain in `build_emotion_prompts.py`
+  and `emotion_prompts_augmented.parquet` for reference only.
+- **Stimuli authored.** 50 hand-authored, emotion-implicit seed prompts
+  each for admiration and loathing added to `build_emotion_prompts.py`
+  (0/50 contain explicit emotion words by the script's own check);
+  `data/public/emotion_prompts.parquet` regenerated with the four
+  emotions + neutral (250 rows, 35/15 split, lengths 13–17 words mean).
+  All four emotion configs point at the seed parquet (balanced at
+  50/emotion). **Augmentation to the 500/200 H1 target is deferred and
+  may be unnecessary:** LLM paraphrase is a prime suspect in the dev
+  AUC=1.0 confound (per-emotion style fingerprint), so the H1 confound
+  audit runs on the 50 hand-authored seeds first; if more N is then
+  justified, hand-authoring more seeds is preferred over LLM
+  augmentation to avoid reintroducing the confound.
+- **H7 sycophancy conflict resolved (PI decision, 2026-06-12).** The
+  paper's sycophancy↔harshness tradeoff uses loving/calm vs
+  desperate/afraid/anger, none in the four-set. **Decision:** recast H7
+  on the **admiration ↔ loathing** pair specifically — that pair lies on
+  the same interpersonal-stance (trust/disgust) axis as the paper's
+  warmth-vs-threat axis, so admiration ↑ sycophancy and loathing ↑
+  harshness is the natural mapping; joy/sadness (valence, weaker fit) run
+  as exploratory add-ons only. H7 is therefore scoped as a **conceptual
+  extension of C9, not a literal replication**, and the paper's original
+  emotions are not used. See the H7 "Emotion conditions" note.
+- Propagated to `EMOTION_LABELS.md`, `docs/methods.md`, `BLUEPRINT.md`,
+  `CLAUDE.md`, `plans/next-steps.md`, `RESEARCH_LOG.md`, and the
+  emotion-list defaults in `scripts/` and `configs/`.

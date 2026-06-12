@@ -21,7 +21,7 @@ To cover all primary emotions + neutral in one shot:
 
     uv run python scripts/generate_emotion_stories.py -m \\
         model=gemma3_4b derivation=story \\
-        emotion=joy,fear,anger,sadness
+        emotion=admiration,joy,loathing,sadness
 
 Outputs
 -------
