@@ -24,9 +24,13 @@ project_out:
   source: neutral_pcs
   var_threshold: 0.5
 
-# Story corpus generation defaults (per emotion / for neutral).
-n_stories_per_emotion: 200
-n_neutral: 200
+# Story corpus generation (topic-matched, paper-style). Every emotion AND
+# neutral are generated over the SAME topic list, `stories_per_topic` stories
+# per topic, so topic distribution is identical across emotions (it cannot
+# separate them). Corpus size per emotion = stories_per_topic x n_topics.
+# `data/public/story_topics.txt` currently has ~45 topics → ~315 stories at 7.
+stories_per_topic: 7
+max_topics: null              # cap the topic list (e.g. for smoke tests); null = all
 generator:
   max_new_tokens: 200
   temperature: 0.7

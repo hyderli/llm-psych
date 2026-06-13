@@ -117,6 +117,76 @@ def _stack_split(
 
 
 # --------------------------------------------------------------------------
+# Story-method activations (primary H1, 2026-06-13 amendment)
+# --------------------------------------------------------------------------
+# The story pipeline writes one pooled-activation file per emotion
+# (``activations/<model_key>-story/<emotion>.npz``, keyed ``layer_<L>``,
+# shape ``(n_stories, hidden)``) with NO train/test split. We make a
+# seeded per-story split here so the probe (unchanged: L2 logistic) trains
+# on token-50-mean story activations instead of last-token CAA activations.
+
+def _check_story_activations(act_dir: Path, emotion: str) -> None:
+    required = [f"{emotion}.npz", "neutral.npz"]
+    missing = [f for f in required if not (act_dir / f).exists()]
+    if missing:
+        raise FileNotFoundError(
+            f"Missing story activation files in {act_dir}:\n  "
+            + "\n  ".join(missing)
+            + "\nRun scripts/extract_story_activations.py first "
+            "(derivation=story)."
+        )
+
+
+def _split_indices(n: int, seed: int, test_frac: float = 0.30) -> tuple[np.ndarray, np.ndarray]:
+    """Seeded train/test index split (70/30 by default).
+
+    Guarantees at least one test item when ``n >= 2`` so tiny smoke-test
+    corpora still yield an evaluable split.
+    """
+    rng = np.random.default_rng(seed)
+    perm = rng.permutation(n)
+    n_test = max(1, int(round(n * test_frac))) if n >= 2 else 0
+    return perm[n_test:], perm[:n_test]  # (train_idx, test_idx)
+
+
+def _slice_layers(npz, layers: list[int], idx: np.ndarray) -> dict[str, np.ndarray]:
+    """Build a layer→array dict for the given row indices (drop-in for NpzFile)."""
+    return {f"layer_{lyr}": npz[f"layer_{lyr}"][idx] for lyr in layers}
+
+
+def _load_story_splits(
+    act_dir: Path, emotion: str, layers: list[int], *, seed: int = 42
+) -> tuple[dict, dict, dict, dict, list[int]]:
+    """Load story activations and produce train/test split dicts.
+
+    Returns ``(emo_train, emo_test, neu_train, neu_test, use_layers)`` where
+    each split is a ``{f"layer_<L>": (n, hidden)}`` dict usable by
+    ``_stack_split`` / ``derive_steering_vector`` exactly like an NpzFile.
+    The neutral split is fixed by ``seed`` so it is identical across emotions.
+    """
+    emo = np.load(act_dir / f"{emotion}.npz")
+    neu = np.load(act_dir / "neutral.npz")
+    present = {int(k.split("_")[1]) for k in emo.files if k.startswith("layer_")}
+    use_layers = [lyr for lyr in layers if lyr in present]
+    if not use_layers:
+        raise ValueError(
+            f"No requested probe layers {layers} present in {act_dir/f'{emotion}.npz'} "
+            f"(found {sorted(present)})."
+        )
+    n_emo = emo[f"layer_{use_layers[0]}"].shape[0]
+    n_neu = neu[f"layer_{use_layers[0]}"].shape[0]
+    emo_tr_i, emo_te_i = _split_indices(n_emo, seed)
+    neu_tr_i, neu_te_i = _split_indices(n_neu, seed)
+    return (
+        _slice_layers(emo, use_layers, emo_tr_i),
+        _slice_layers(emo, use_layers, emo_te_i),
+        _slice_layers(neu, use_layers, neu_tr_i),
+        _slice_layers(neu, use_layers, neu_te_i),
+        use_layers,
+    )
+
+
+# --------------------------------------------------------------------------
 # Main
 # --------------------------------------------------------------------------
 
@@ -128,8 +198,12 @@ def main(cfg: DictConfig) -> None:
     model_key = model_cfg.hf_model_id.split("/")[-1]
     emotion_name: str = cfg.emotion.name
 
-    act_dir = _repo_root / cfg.paths.activations_dir / model_key
-    _check_activations(act_dir, emotion_name)
+    # Primary derivation is the story method (2026-06-13 amendment); CAA is
+    # the secondary baseline. Story activations live under "<model_key>-story"
+    # and are split per-story here; CAA activations are pre-split on disk.
+    is_story = str(cfg.derivation.method) == "story"
+    suffix = "-story" if is_story else ""
+    act_dir = _repo_root / cfg.paths.activations_dir / (model_key + suffix)
 
     # Layer range depends only on n_layers, not on a loaded model.
     pseudo_cfg = ModelConfig(
@@ -139,19 +213,28 @@ def main(cfg: DictConfig) -> None:
         hf_revision=str(model_cfg.hf_revision) if model_cfg.hf_revision else None,
     )
     layers = probe_layer_range(pseudo_cfg)
-    log.info("Training probes for %s × %s on layers %d–%d (%d total)",
-             model_key, emotion_name, layers[0], layers[-1], len(layers))
 
     # --- load activations ---
-    emo_train = np.load(act_dir / f"{emotion_name}_train.npz")
-    neu_train = np.load(act_dir / "neutral_train.npz")
-    emo_test = np.load(act_dir / f"{emotion_name}_test.npz")
-    neu_test = np.load(act_dir / "neutral_test.npz")
+    if is_story:
+        _check_story_activations(act_dir, emotion_name)
+        emo_train, emo_test, neu_train, neu_test, layers = _load_story_splits(
+            act_dir, emotion_name, layers
+        )
+    else:
+        _check_activations(act_dir, emotion_name)
+        emo_train = np.load(act_dir / f"{emotion_name}_train.npz")
+        neu_train = np.load(act_dir / "neutral_train.npz")
+        emo_test = np.load(act_dir / f"{emotion_name}_test.npz")
+        neu_test = np.load(act_dir / "neutral_test.npz")
+
+    log.info("Training %s probes for %s × %s on layers %d–%d (%d total)",
+             "story" if is_story else "CAA", model_key, emotion_name,
+             layers[0], layers[-1], len(layers))
 
     n_train = emo_train[f"layer_{layers[0]}"].shape[0] + neu_train[f"layer_{layers[0]}"].shape[0]
     n_test = emo_test[f"layer_{layers[0]}"].shape[0] + neu_test[f"layer_{layers[0]}"].shape[0]
 
-    probes_dir = _repo_root / cfg.paths.probes_dir / model_key
+    probes_dir = _repo_root / cfg.paths.probes_dir / (model_key + suffix)
     probes_dir.mkdir(parents=True, exist_ok=True)
 
     summary_rows: list[dict] = []
@@ -200,15 +283,26 @@ def main(cfg: DictConfig) -> None:
     best_auc = fitted[best_lyr][1].auc
     log.info("Best layer: %d (AUC=%.4f)", best_lyr, best_auc)
 
-    sv = derive_steering_vector(
-        emo_train[f"layer_{best_lyr}"].astype(np.float64),
-        neu_train[f"layer_{best_lyr}"].astype(np.float64),
-    )
-    sv_dir = _repo_root / cfg.paths.steering_vectors_dir / model_key
-    sv_dir.mkdir(parents=True, exist_ok=True)
-    sv_path = sv_dir / f"{emotion_name}_layer{best_lyr}.npy"
-    np.save(sv_path, sv)
-    log.info("Saved steering vector to %s (norm=%.4f)", sv_path, float(np.linalg.norm(sv)))
+    if is_story:
+        # Story steering vectors are the paper-method vectors (cross-emotion
+        # centered + neutral-PC projected) produced by
+        # scripts/derive_story_steering_vectors.py — not a CAA emotion−neutral
+        # difference. Probes are this script's job; skip vector derivation.
+        log.info(
+            "Story mode: probes saved to %s. Derive steering vectors with "
+            "scripts/derive_story_steering_vectors.py (derivation=story).",
+            probes_dir,
+        )
+    else:
+        sv = derive_steering_vector(
+            emo_train[f"layer_{best_lyr}"].astype(np.float64),
+            neu_train[f"layer_{best_lyr}"].astype(np.float64),
+        )
+        sv_dir = _repo_root / cfg.paths.steering_vectors_dir / model_key
+        sv_dir.mkdir(parents=True, exist_ok=True)
+        sv_path = sv_dir / f"{emotion_name}_layer{best_lyr}.npy"
+        np.save(sv_path, sv)
+        log.info("Saved steering vector to %s (norm=%.4f)", sv_path, float(np.linalg.norm(sv)))
 
     log.info("Done — probes for %s × %s", model_key, emotion_name)
 
