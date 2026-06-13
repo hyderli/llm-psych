@@ -1,9 +1,16 @@
-# Gemma 3 4B Instruct — story-method prototype already run (see PR #3).
-# Used for cross-method comparison: the CAA pipeline also targets this
-# model as one of the three primary targets (Gemma family, 7-9B range).
+# Gemma 3 4B Instruct — EXPLORATORY / prototype only (NOT a primary).
+# Story-method prototype already run (see PR #3). Retained as an
+# exploratory model for a within-Gemma scale ladder (2B dev -> 4B ->
+# 9B primary) and robustness checks. It is NOT a pre-registered primary
+# target: the third primary is google/gemma-2-9b-it (configs/model/
+# gemma2_9b.yaml; HYPOTHESES.md amendment 2026-06-13). Gemma 3 4B is 4B
+# (below the 7-8B primary bar) and is a vision-language model (image
+# tower) — an architectural asymmetry vs the text-only dense primaries.
+# Any analysis using it is exploratory and reported in a separate FDR
+# family from the confirmatory primaries.
 #
 # Architecture parameters TBD — confirm against the loaded model before
-# the first smoke-test run, then pin the SHA below.
+# any exploratory run, then pin the SHA below.
 #
 # TODO(PI): confirm n_layers and hidden_size, then set hf_revision.
 hf_model_id: google/gemma-3-4b-it

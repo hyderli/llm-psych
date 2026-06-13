@@ -688,3 +688,58 @@ pre-data amendment.
   the deferral of LLM augmentation.
 - Propagated to `docs/methods.md`, `plans/next-steps.md` (+ decision
   record `plans/derivation-primacy-decision.md`), and `RESEARCH_LOG.md`.
+
+### 2026-06-13 — Set the third primary family: Gemma 2 9B (google/gemma-2-9b-it)
+
+**Justification:** Since the 2026-05-15 amendment the third primary slot
+has been a pending choice between Mistral 7B v0.3 and OLMo-2 7B. The PI
+now fixes it to the **Gemma family at the 9B scale**:
+`google/gemma-2-9b-it`. No probe or steering run has been fit on any
+primary model, so this precedes any data fit. Rationale:
+
+- **Architectural / precision parity with the other two primaries.** H1
+  (probe accessibility) and H2/H3/H7 (steering) compare emotion-vector
+  geometry *across* the three primaries. Llama 3.1 8B and Qwen 2.5 7B are
+  dense decoder-only models run in **bf16, no quantization** on a 24 GB
+  RTX 4090. Gemma 2 9B is also a **dense** `Gemma2ForCausalLM` (9.24B
+  params, ~18.5 GB in bf16) that runs on the same GPU at the same
+  precision. Keeping all three dense+bf16 isolates the "family" factor
+  from architecture/precision confounds.
+- **Stays in the 7-8B-scale framing.** 9B is at the top of the band and
+  preserves the "replication of functional emotions at 7-8B scale"
+  writeup framing; it does not blur into the dev tier.
+- **Clean dev→primary mapping.** The development fleet already includes
+  Gemma 2 2B (`gemma2_2b`, same generation), so pipeline issues caught on
+  the cheap canary transfer directly to the 9B primary.
+
+**Alternatives rejected:**
+- **Gemma 3 4B** — below the 7-8B bar (dev-tier scale), and a
+  vision-language model (image tower), an extra asymmetry vs the
+  text-only Llama/Qwen primaries. Retained only as an *exploratory*
+  config (within-Gemma scale ladder 2B→4B→9B), never a primary.
+- **Gemma 3 12B / Gemma 4 12B** — dense but 12B exceeds the bar and does
+  not fit a 4090 in bf16; would force 4-bit quantization (breaks
+  precision parity) or a pricier Secure-Cloud GPU.
+- **Gemma 4 E4B** (the ~8B 2026 option) — Mixture-of-Experts, not dense;
+  its sparse/routed residual stream is a different object from the dense
+  Llama/Qwen primaries, a confound for cross-model steering comparison.
+- **Mistral 7B v0.3 / OLMo-2 7B** — the prior pending candidates; the PI
+  prefers the dev→primary continuity and tooling maturity of the Gemma
+  line. Either remains available via a future amendment if a fourth
+  family is wanted.
+
+**Changes:**
+- **Third primary target = `google/gemma-2-9b-it`**, superseding the
+  "Mistral 7B v0.3 or OLMo-2 7B (pending)" note in the 2026-05-15
+  amendment. The three primaries are now **Llama 3.1 8B, Qwen 2.5 7B,
+  Gemma 2 9B**.
+- New pinned config `configs/model/gemma2_9b.yaml`
+  (`hf_revision: 11c9b309abf73637e4b6f9a3fa1e92e615547819`, n_layers 42,
+  hidden_size 3584, bf16, `device_map: auto`, cloud/CUDA only).
+- `configs/model/gemma3_4b.yaml` relabelled **exploratory/prototype**
+  (the prior "one of the three primary targets / 7-9B range" header was
+  inaccurate — Gemma 3 4B is 4B and was never a pre-registered primary).
+- Development fleet unchanged (Llama 3.2 1B, Qwen 2.5 0.5B, Gemma 2 2B).
+- Propagated to `plans/story-gate-run.md` (Priority-3 8B-primary run
+  list) and `RESEARCH_LOG.md`. `CLAUDE.md`'s "one further 7-8B open
+  model" wording already covers this and is left unchanged.

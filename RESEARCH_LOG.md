@@ -438,3 +438,35 @@ pre-GPU and redirected the project onto the paper-faithful construction.
 
 **Energy:** plumbing solved and de-confounding construction in place;
 next bottleneck is a real GPU run + the audit on story activations.
+
+## 2026-06-13 — Third primary fixed: Gemma 2 9B; gemma3_4b demoted to exploratory
+
+**Did:**
+- **Resolved the long-pending third primary slot.** Set it to
+  `google/gemma-2-9b-it` (dated amendment in HYPOTHESES.md), superseding
+  the "Mistral 7B v0.3 or OLMo-2 7B (pending)" note from 2026-05-15. The
+  three primaries are now Llama 3.1 8B, Qwen 2.5 7B, Gemma 2 9B. Chosen
+  for dense+bf16 parity with the other two (clean cross-model steering
+  comparison), fits a 4090 24 GB without quant (~18.5 GB), stays in the
+  7-8B framing, and maps cleanly from the Gemma 2 2B dev canary. Rejected:
+  Gemma 3 4B (below bar, vision-language), Gemma 3/4 12B (too big / needs
+  quant), Gemma 4 E4B (MoE, architectural confound).
+- **Caught and fixed a config/prereg drift.** `configs/model/gemma3_4b.yaml`
+  had claimed to be "one of the three primary targets (Gemma family, 7-9B
+  range)" — false on both counts (it is 4B; HYPOTHESES.md never named
+  Gemma a primary). Relabelled it EXPLORATORY/prototype (within-Gemma
+  scale ladder 2B->4B->9B), separate FDR family.
+- **New pinned config** `configs/model/gemma2_9b.yaml` (SHA
+  11c9b309..., n_layers 42, hidden_size 3584, bf16, device_map auto).
+- Added gemma2_9b to the Priority-3 primary run list in
+  `plans/story-gate-run.md`.
+
+**Open TODOs:**
+- (carries over) build the real-scale story runner + story-aware confound
+  audit, then run the dev-fleet gate on RunPod (see
+  `plans/story-gate-run.md`).
+- On first Gemma 2 9B load, confirm n_layers=42 / hidden_size=3584 against
+  the loaded model (sanity check the pinned config).
+
+**Energy:** primary roster now complete and internally consistent; the
+gate-run plan is the next build.
