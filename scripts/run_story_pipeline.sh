@@ -52,7 +52,12 @@ export PYTORCH_ENABLE_MPS_FALLBACK=1
 # --------------------------------------------------------------------------
 
 MODEL_CONFIG=""                 # e.g. "qwen25_05b" (configs/model/<NAME>.yaml)
-DEVICE_MAP="cuda"               # pod default; use "cpu"/"mps" on the Mac
+# "auto" is the repo's documented production device_map (src/llm_psych/
+# models.py): on a single CUDA GPU it places the whole model on the GPU via
+# accelerate. Do NOT use "cpu"/"mps" here — those take load_model's
+# single-device .to() path, which keeps the model off the GPU. On the Mac,
+# use the smoke script instead.
+DEVICE_MAP="auto"               # pod default (single CUDA GPU)
 DTYPE="bfloat16"                # pod default; "float16" on MPS
 STORIES_PER_TOPIC=""            # empty => use story.yaml default (7)
 MAX_TOPICS=""                   # empty => use story.yaml default (null = all)
@@ -77,7 +82,7 @@ Required:
   --model <name>            Hydra model config (e.g. qwen25_05b, gemma2_9b)
 
 Options:
-  --device <map>            device_map (default: cuda; use cpu/mps on Mac)
+  --device <map>            device_map (default: auto = single CUDA GPU)
   --dtype <dtype>           torch_dtype (default: bfloat16; float16 on MPS)
   --stories-per-topic <N>   override derivation.stories_per_topic (default: 7)
   --max-topics <N>          cap the topic list (default: all topics)
