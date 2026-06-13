@@ -39,6 +39,17 @@ per category) in ≥ 2 of the 3 target model families.
 regularization (C=1.0). Best-layer test AUC is the primary metric. CI
 via 1000-bootstrap resamples of the test set.
 
+**Activation source (2026-06-13 amendment):** the **story method**
+(token-50-mean-pooled activations over self-generated, topic-matched
+stories; see methods.md) is the **primary** activation source, because
+its construction neutralizes the surface confounds — length, topic,
+last-token lexical tell — that the H1 confound audit found in the
+short-vignette CAA path. The probe itself is unchanged (still L2
+logistic); only the activations it is trained on change. The CAA
+last-token vignette activations remain as a **secondary baseline**, and
+agreement between the two is reported as robustness evidence. Both are
+gated by the H1 confound audit.
+
 **Falsifier:** Best-layer AUC < 0.65 across all target models.
 
 ### H2 — Causal efficacy via steering on blackmail (PRIMARY)
@@ -50,9 +61,12 @@ protocol with Cohen's *d* ≥ 0.5 and 95% CI excluding zero, at n ≥ 200
 prompts per condition.
 
 **Operational:**
-- Direction = (mean activation in target-emotion prompts) − (mean
-  activation in neutral prompts) at probe-best layer. Add to residual
-  stream at all token positions during generation.
+- Direction (primary, 2026-06-13 amendment) = the **story-method
+  emotion vector** (cross-emotion-centered, neutral-PC-projected,
+  token-50-mean; see methods.md) at the probe-best layer. The CAA
+  emotion−neutral last-token direction is retained as a **secondary
+  baseline** and compared (per-emotion cosine + behavioral effect).
+  Add to residual stream at all token positions during generation.
 - Protocol: 50 parameterized variants of Anthropic's Oct 2025
   agentic-misalignment scenario (arXiv:2510.05179), single-turn
   format (`data/public/blackmail_scenarios.jsonl`); outcome = rate of
@@ -624,3 +638,53 @@ semantic opposite produce opposed behavioral effects.
 - Propagated to `EMOTION_LABELS.md`, `docs/methods.md`, `BLUEPRINT.md`,
   `CLAUDE.md`, `plans/next-steps.md`, `RESEARCH_LOG.md`, and the
   emotion-list defaults in `scripts/` and `configs/`.
+
+### 2026-06-13 — Story method becomes the primary derivation; CAA demoted to secondary baseline
+
+**Justification:** The H1 confound audit (`scripts/audit_h1_confounds.py`,
+`results/h1_confound_audit/`) showed the **CAA short-vignette path** is
+surface-confounded in exactly the ways Sofroniew et al. (2026)
+anticipated: on the four-emotion seed set, a length-only classifier
+reaches AUC up to 0.93 (neutral ~13 words vs emotion ~16–17) and a
+word+char TF-IDF classifier reaches 0.86–0.97 — i.e. the classes are
+largely separable from the *text alone*, before any activation is read.
+The paper neutralizes these confounds **by construction** (topic-matched
+self-generated stories, emotion-word banned, token-50 mean-pool,
+cross-emotion centering, neutral-PC projection) and validates
+semantically (numerical-intensity templates). The project's story-method
+pipeline already implements that construction (`src/llm_psych/steering.py`,
+98 tests; `scripts/generate_emotion_stories.py` /
+`extract_story_activations.py` / `derive_story_steering_vectors.py`),
+whereas hardening the CAA vignette path would only approximate it with
+short last-token prompts. No behavioral data has been fit; this is a
+pre-data amendment.
+
+**Changes:**
+- **Story method is now PRIMARY** for H1 (probe activation source) and
+  H2/H3 (steering-vector source). **CAA is demoted to a secondary
+  baseline**, run and compared (per-emotion vector cosine + behavioral
+  effect); CAA↔story agreement is reported as robustness, not as the
+  confirmatory result. This reverses the prior CAA-primary framing in
+  `methods.md`.
+- **H1 is still a logistic probe** (L2, C=1.0, best-layer test AUC, the
+  unchanged metric/falsifier); only its **activation source** changes —
+  from last-token CAA vignette activations to **token-50-mean-pooled
+  story activations**. This keeps H1 a "linear probe accessibility"
+  claim while removing the length/last-token confound.
+- **Stimuli for the story method must be topic-matched** across the four
+  emotions (one shared topic list, paper-style) so topic cannot separate
+  emotions; `data/public/story_topics.txt` is the seed for this.
+- **Implementation gap (logged, not yet built):** `scripts/train_probes.py`
+  currently reads CAA last-token `<emotion>_{train,test}.npz`; it must be
+  taught to consume the story pipeline's pooled per-story activations
+  (`activations/<model>-story/<emotion>.npz`) for the primary H1. See the
+  plan + RESEARCH_LOG TODO.
+- **Validation to add (either path):** the paper's numerical-intensity
+  templates (fixed token structure, single number varied) as a
+  semantic-vs-surface control, stronger than the audit's cross-domain test.
+- **Carries over unchanged:** the four primary emotions, the hand-authored
+  vignettes (now the CAA-baseline stimuli + implicit-emotion read-out
+  set), the confound audit (now the gate on the story construction), and
+  the deferral of LLM augmentation.
+- Propagated to `docs/methods.md`, `plans/next-steps.md` (+ decision
+  record `plans/derivation-primacy-decision.md`), and `RESEARCH_LOG.md`.

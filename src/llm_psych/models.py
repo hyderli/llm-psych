@@ -131,12 +131,19 @@ def load_model(
     >>> lm.cfg.n_layers
     32
     """
+    # accelerate's ``device_map`` dispatch hangs on ``generate()`` for small
+    # models on Mac (and adds needless overhead for any single-device load).
+    # For single-device dev targets ("mps"/"cpu") load normally and move with
+    # ``.to()``; reserve ``device_map`` for CUDA sharding ("auto" or a dict).
+    single_device = isinstance(device_map, str) and device_map in {"mps", "cpu"}
+
     kwargs: dict[str, Any] = {
         "pretrained_model_name_or_path": hf_model_id,
         "torch_dtype": torch_dtype,
-        "device_map": device_map,
         "trust_remote_code": trust_remote_code,
     }
+    if not single_device:
+        kwargs["device_map"] = device_map
     if revision is not None:
         kwargs["revision"] = revision
     if cache_dir is not None:
@@ -162,6 +169,8 @@ def load_model(
 
     logger.info("Loading model %s (revision=%s) …", hf_model_id, revision)
     model: PreTrainedModel = AutoModelForCausalLM.from_pretrained(**kwargs)
+    if single_device:
+        model = model.to(device_map)
     model.eval()
 
     tokenizer = _load_tokenizer(hf_model_id, revision=revision, cache_dir=cache_dir)

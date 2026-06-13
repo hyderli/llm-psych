@@ -108,11 +108,16 @@ steering behavioral data.
    sweep** and report the curve; this also serves the n≥200 scale-test
    falsifier more cleanly. Requires an amendment (changes the
    operationalization in H2/H3).
-3. **CAA vs story-method primacy.** The paper used the **story method**;
-   the project pre-registers **CAA** as primary. For the direct
-   replication claim, run both and compare per-emotion vector cosine
-   similarity + behavioral effect; consider story-method co-primary for
-   the C7 contrast. Decision, not yet an amendment.
+3. **CAA vs story-method primacy.** RESOLVED 2026-06-13: **story method
+   is now primary**, CAA demoted to secondary baseline, after the H1
+   confound audit found the CAA short-vignette path surface-confounded
+   (length-only AUC up to 0.93; TF-IDF 0.86–0.97). H1 stays a logistic
+   probe but on token-50-mean story activations. See
+   `plans/derivation-primacy-decision.md` and the 2026-06-13 amendment in
+   HYPOTHESES.md. New work this creates: (i) extend `train_probes.py` to
+   read story-pipeline pooled activations; (ii) topic-match the
+   four-emotion story corpora; (iii) GPU smoke-test the story pipeline
+   (never run) — see the decision record for the plan.
 
 ---
 
