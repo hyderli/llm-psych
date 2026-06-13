@@ -159,6 +159,72 @@ def surface_audit(prompts: pd.DataFrame, emotion: str) -> dict:
     return out
 
 
+def surface_audit_story(emotion: str, base_model_key: str | None) -> dict:
+    """Surface baseline on the STORY texts (story-method analogue of
+    ``surface_audit``).
+
+    The CAA ``surface_audit`` runs on the vignette prompt parquet; for the
+    story path the relevant surface question is whether the *stories* are
+    separable from text alone (they are topic-matched and emotion-word-
+    banned by construction, so they should not be). Reads
+    ``data/derived/stories/<base_model_key>/{emotion,neutral}.parquet``.
+
+    Returns NaN metrics with a ``note`` when the corpus is not present
+    locally (e.g. only activations were pulled from HF — the story corpus
+    is not synced by ``sync_hf.py``), so downstream report/recommend code
+    needs no None-handling.
+    """
+    nan = float("nan")
+    blank = {
+        "auc_length_only": nan, "auc_tfidf_surface": nan,
+        "len_mean_emotion": nan, "len_mean_neutral": nan,
+        "n_train": 0, "n_test": 0,
+    }
+    if not base_model_key:
+        blank["note"] = "no base model key — story-text surface baseline skipped"
+        return blank
+    base = _repo_root / "data" / "derived" / "stories" / base_model_key
+    pe, pn = base / f"{emotion}.parquet", base / "neutral.parquet"
+    if not (pe.exists() and pn.exists()):
+        blank["note"] = f"story corpus not present at {base} — surface baseline skipped"
+        return blank
+
+    de = pd.read_parquet(pe)[["story_text"]].assign(y=1)
+    dn = pd.read_parquet(pn)[["story_text"]].assign(y=0)
+    df = pd.concat([de, dn], ignore_index=True)
+    df["length_words"] = df["story_text"].str.split().str.len()
+    rng = np.random.default_rng(SEED)
+    mask = rng.random(len(df)) < 0.7
+    tr, te = df[mask], df[~mask]
+
+    out = {
+        "n_train": int(len(tr)), "n_test": int(len(te)),
+        "len_mean_emotion": round(float(df.loc[df.y == 1, "length_words"].mean()), 2),
+        "len_mean_neutral": round(float(df.loc[df.y == 0, "length_words"].mean()), 2),
+    }
+    out["auc_length_only"] = round(
+        _fit_predict_auc(
+            tr[["length_words"]].to_numpy(float), tr["y"].to_numpy(),
+            te[["length_words"]].to_numpy(float), te["y"].to_numpy(),
+        ),
+        4,
+    )
+    word_vec = TfidfVectorizer(ngram_range=(1, 2), min_df=1, sublinear_tf=True)
+    char_vec = TfidfVectorizer(analyzer="char_wb", ngram_range=(3, 5), min_df=1)
+    Xtr = np.hstack(
+        [word_vec.fit_transform(tr["story_text"]).toarray(),
+         char_vec.fit_transform(tr["story_text"]).toarray()]
+    )
+    Xte = np.hstack(
+        [word_vec.transform(te["story_text"]).toarray(),
+         char_vec.transform(te["story_text"]).toarray()]
+    )
+    out["auc_tfidf_surface"] = round(
+        _fit_predict_auc(Xtr, tr["y"].to_numpy(), Xte, te["y"].to_numpy()), 4
+    )
+    return out
+
+
 # --------------------------------------------------------------------------
 # Tier B — activation controls
 # --------------------------------------------------------------------------
@@ -283,6 +349,160 @@ def activation_audit(
 
 
 # --------------------------------------------------------------------------
+# Tier B (story) — activation controls on story-method activations
+# --------------------------------------------------------------------------
+def _story_topic_groups(
+    story_ids: list[str], emotion: str, base_model_key: str | None
+) -> np.ndarray:
+    """Topic index per story, aligned to npz/meta row order.
+
+    Topics are recoverable two ways; prefer the explicit corpus, fall back
+    to the id encoding so this works even when only activations were pulled.
+
+    1. ``data/derived/stories/<base_model_key>/<emotion>.parquet`` carries
+       an ``id`` -> ``topic`` map; the corpus is topic-matched across
+       emotions, so topic identity is shared.
+    2. Story ids are ``<emotion>_<topic_idx>_<rep_idx>`` — parse the topic
+       index from the right (always available; the corpus parquet is not
+       synced to HF by ``sync_hf.py``).
+    """
+    if base_model_key:
+        pq = (
+            _repo_root / "data" / "derived" / "stories"
+            / base_model_key / f"{emotion}.parquet"
+        )
+        if pq.exists():
+            try:
+                m = pd.read_parquet(pq).set_index("id")["topic"]
+                topics = [m.get(sid) for sid in story_ids]
+                if all(t is not None for t in topics):
+                    codes = {t: i for i, t in enumerate(sorted(set(topics)))}
+                    return np.array([codes[t] for t in topics], dtype=int)
+            except Exception:  # noqa: BLE001 - fall through to id parsing
+                pass
+    groups = []
+    for sid in story_ids:
+        parts = sid.rsplit("_", 2)
+        groups.append(int(parts[1]) if len(parts) == 3 and parts[1].isdigit() else -1)
+    return np.array(groups, dtype=int)
+
+
+def activation_audit_story(
+    act_dir: Path, emotion: str, *, base_model_key: str | None, n_perm: int = 200
+) -> dict | None:
+    """Story-method analogue of ``activation_audit``.
+
+    Story activations ship as one pooled array per emotion
+    (``<emotion>.npz`` with ``layer_<n>`` keys, shape ``(n_stories, dim)``)
+    plus ``<emotion>.meta.parquet`` (``story_id`` in row order) — there is
+    no pre-made train/test split and no per-prompt category/source. So this:
+
+      * makes its own seeded 70/30 per-class split for the real-probe AUC
+        and the shuffle-label null, and
+      * runs a CROSS-TOPIC generalization test (hold out half the topics)
+        in place of the CAA cross-domain control. Topics are matched across
+        emotions by construction, so a *concept* transfers across held-out
+        topics while a topic/style artifact collapses.
+
+    Paraphrase-source split is N/A (single source = the model's own
+    generations). The ``auc_crossdomain`` key is reused (carrying the
+    cross-topic value) so ``recommend`` / ``write_report`` need no changes.
+    """
+    needed = [f"{emotion}.npz", "neutral.npz",
+              f"{emotion}.meta.parquet", "neutral.meta.parquet"]
+    missing = [f for f in needed if not (act_dir / f).exists()]
+    if missing:
+        log.info("  [skip] %s: story activations not found (%s)", emotion, ", ".join(missing))
+        return None
+
+    emo = np.load(act_dir / f"{emotion}.npz")
+    neu = np.load(act_dir / "neutral.npz")
+    layer = _available_layers(emo)[-1]  # deepest = most concept-like
+    X_emo = _load_layer(emo, layer)
+    X_neu = _load_layer(neu, layer)
+    emo_ids = pd.read_parquet(act_dir / f"{emotion}.meta.parquet")["story_id"].tolist()
+    neu_ids = pd.read_parquet(act_dir / "neutral.meta.parquet")["story_id"].tolist()
+    g_emo = _story_topic_groups(emo_ids, emotion, base_model_key)
+    g_neu = _story_topic_groups(neu_ids, "neutral", base_model_key)
+
+    rng = np.random.default_rng(SEED)
+
+    out: dict = {
+        "layer": int(layer),
+        "n_emotion": int(X_emo.shape[0]),
+        "n_neutral": int(X_neu.shape[0]),
+        "control_type": "cross_topic",
+        "source_note": "single source (model-generated stories); paraphrase split N/A",
+    }
+
+    # --- seeded 70/30 per-class split for real-probe AUC + null ---
+    def _split(n: int) -> tuple[np.ndarray, np.ndarray]:
+        idx = rng.permutation(n)
+        cut = max(1, int(round(0.7 * n)))
+        return idx[:cut], idx[cut:]
+
+    tr_e, te_e = _split(X_emo.shape[0])
+    tr_n, te_n = _split(X_neu.shape[0])
+    Xtr = np.concatenate([X_emo[tr_e], X_neu[tr_n]])
+    ytr = np.concatenate([np.ones(len(tr_e), int), np.zeros(len(tr_n), int)])
+    Xte = np.concatenate([X_emo[te_e], X_neu[te_n]])
+    yte = np.concatenate([np.ones(len(te_e), int), np.zeros(len(te_n), int)])
+    out["n_train"] = int(len(ytr))
+    out["n_test"] = int(len(yte))
+    out["auc_real"] = round(_fit_predict_auc(Xtr, ytr, Xte, yte), 4)
+
+    # --- shuffle-label null ---
+    null = np.array([
+        _fit_predict_auc(Xtr, rng.permutation(ytr), Xte, yte) for _ in range(n_perm)
+    ])
+    null = null[~np.isnan(null)]
+    if len(null):
+        out["null_mean"] = round(float(null.mean()), 4)
+        out["null_p95"] = round(float(np.percentile(null, 95)), 4)
+        out["null_p_real"] = round(float((null >= out["auc_real"]).mean()), 4)
+    else:
+        out["null_mean"] = out["null_p95"] = out["null_p_real"] = float("nan")
+    out["n_perm"] = int(len(null))
+
+    # --- cross-topic generalization (hold out half the shared topics) ---
+    out["auc_crossdomain"] = float("nan")  # reused key (carries cross-topic)
+    shared = sorted((set(g_emo.tolist()) & set(g_neu.tolist())) - {-1})
+    if len(shared) >= 4:
+        held = list(shared[::2])
+        em_h = np.isin(g_emo, held)
+        nu_h = np.isin(g_neu, held)
+        Xtr_cd = np.concatenate([X_emo[~em_h], X_neu[~nu_h]])
+        ytr_cd = np.concatenate([np.ones((~em_h).sum(), int), np.zeros((~nu_h).sum(), int)])
+        Xte_cd = np.concatenate([X_emo[em_h], X_neu[nu_h]])
+        yte_cd = np.concatenate([np.ones(em_h.sum(), int), np.zeros(nu_h.sum(), int)])
+        out["auc_crossdomain"] = round(_fit_predict_auc(Xtr_cd, ytr_cd, Xte_cd, yte_cd), 4)
+        out["crosstopic_n_held"] = len(held)
+        out["crosstopic_n_topics"] = len(shared)
+    else:
+        out["crosstopic_note"] = (
+            f"only {len(shared)} shared topics — need >=4 for a cross-topic split"
+        )
+
+    # --- neutral-PC projection ---
+    try:
+        steering = _load_steering()
+        basis = steering.fit_neutral_pcs(X_neu[tr_n], var_threshold=0.5)
+        out["auc_neutralpc_projected"] = round(
+            _fit_predict_auc(
+                steering.project_out(Xtr, basis), ytr,
+                steering.project_out(Xte, basis), yte,
+            ),
+            4,
+        )
+        out["neutralpc_k"] = int(basis.shape[0])
+    except Exception as exc:  # noqa: BLE001 - diagnostic, never fatal
+        out["auc_neutralpc_projected"] = float("nan")
+        out["neutralpc_error"] = str(exc)
+
+    return out
+
+
+# --------------------------------------------------------------------------
 # Recommendation
 # --------------------------------------------------------------------------
 def recommend(emotion: str, surf: dict, act: dict | None) -> tuple[str, list[str]]:
@@ -302,8 +522,9 @@ def recommend(emotion: str, surf: dict, act: dict | None) -> tuple[str, list[str
         if act["null_mean"] >= NULL_FLAG:
             flags.append(f"shuffle-null mean AUC={act['null_mean']:.2f} ≥ {NULL_FLAG} — pipeline leak")
         cd = act.get("auc_crossdomain")
+        gen = "topic" if act.get("control_type") == "cross_topic" else "domain"
         if cd is not None and not np.isnan(cd) and cd < CROSSDOMAIN_FAIL:
-            flags.append(f"cross-domain AUC={cd:.2f} < {CROSSDOMAIN_FAIL} — collapses out of domain")
+            flags.append(f"cross-{gen} AUC={cd:.2f} < {CROSSDOMAIN_FAIL} — collapses out of {gen}")
 
     if act is None:
         verdict = "SURFACE-ONLY (activations pending)"
@@ -311,8 +532,9 @@ def recommend(emotion: str, surf: dict, act: dict | None) -> tuple[str, list[str
         verdict = "FLAG — confound suspected"
     else:
         cd = act.get("auc_crossdomain")
+        gen = "topic" if act.get("control_type") == "cross_topic" else "domain"
         passes_cd = cd is not None and not np.isnan(cd) and cd >= CROSSDOMAIN_PASS
-        verdict = "PASS" if passes_cd else "INCONCLUSIVE (cross-domain not ≥ 0.80)"
+        verdict = "PASS" if passes_cd else f"INCONCLUSIVE (cross-{gen} not ≥ 0.80)"
     return verdict, flags
 
 
@@ -323,14 +545,21 @@ def write_report(out_dir: Path, model_key: str | None, results: dict) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "audit_results.json").write_text(json.dumps(results, indent=2))
 
-    lines = ["# H1 confound audit", ""]
-    lines.append(f"- Prompts: `{results['_prompts']}`")
+    story = bool(results.get("_story"))
+    cd_label = "cross-topic" if story else "cross-domain"
+
+    lines = ["# H1 confound audit" + (" — story method" if story else ""), ""]
+    if story:
+        lines.append("- Derivation: `story` (surface baseline on story texts; "
+                     "activation controls on pooled story activations)")
+    else:
+        lines.append(f"- Prompts: `{results['_prompts']}`")
     lines.append(f"- Model activations: `{model_key or 'NONE — surface-only run'}`")
     lines.append(f"- Emotions: {', '.join(results['_emotions'])}")
     lines.append("")
     lines.append("## Verdict per emotion")
     lines.append("")
-    lines.append("| emotion | verdict | surface TF-IDF | length-only | real probe | shuffle-null | cross-domain |")
+    lines.append(f"| emotion | verdict | surface TF-IDF | length-only | real probe | shuffle-null | {cd_label} |")
     lines.append("|---|---|---|---|---|---|---|")
     for e in results["_emotions"]:
         s = results[e]["surface"]
@@ -358,11 +587,14 @@ def write_report(out_dir: Path, model_key: str | None, results: dict) -> Path:
     lines.append("")
     lines.append(
         "Surface AUC is a lower bound on the confound: it is how well a "
-        "classifier separates the classes from the *text alone*. The "
+        "classifier separates the classes from the *text alone*"
+        + (" (story texts)" if story else "") + ". The "
         "activation probe must beat it by a clear margin to be evidence "
         "for an emotion concept. Shuffle-null should sit near 0.50; if it "
-        "is high, the pipeline leaks. Cross-domain AUC ≥ 0.80 with a "
-        "near-0.50 null is the success criterion from `plans/next-steps.md`."
+        f"is high, the pipeline leaks. {cd_label.capitalize()} AUC ≥ 0.80 with a "
+        "near-0.50 null is the success criterion from `plans/next-steps.md`"
+        + (" (now gating the story construction; see `plans/story-gate-run.md`)."
+           if story else ".")
     )
     report = out_dir / "report.md"
     report.write_text("\n".join(lines))
@@ -378,11 +610,32 @@ def main() -> None:
     ap.add_argument("--emotions", nargs="+",
                     default=["admiration", "joy", "loathing", "sadness"])
     ap.add_argument("--model-key", default=None,
-                    help="e.g. Qwen2.5-0.5B-Instruct; activations/<model-key>/ must exist")
+                    help="e.g. Qwen2.5-0.5B-Instruct (CAA) or "
+                         "Qwen2.5-0.5B-Instruct-story (story); "
+                         "activations/<model-key>/ must exist")
     ap.add_argument("--activations-dir", default="activations")
-    ap.add_argument("--out-dir", default="results/h1_confound_audit")
+    ap.add_argument("--out-dir", default=None,
+                    help="default: results/h1_confound_audit (CAA) or "
+                         "results/h1_confound_audit_story (story)")
+    ap.add_argument("--story", action="store_true",
+                    help="audit story-method activations (pooled per-story .npz; "
+                         "cross-TOPIC control). Auto-enabled if --model-key ends "
+                         "with '-story'.")
     ap.add_argument("--n-perm", type=int, default=200)
     args = ap.parse_args()
+
+    # Story mode: explicit flag, or inferred from the -story key convention.
+    story = args.story or bool(args.model_key and args.model_key.endswith("-story"))
+    # Locate the story corpus (for topic groups + story-text surface): the
+    # corpus lives under the base model key (without the "-story" suffix).
+    base_model_key = (
+        args.model_key[:-len("-story")]
+        if args.model_key and args.model_key.endswith("-story")
+        else args.model_key
+    )
+    out_dir = args.out_dir or (
+        "results/h1_confound_audit_story" if story else "results/h1_confound_audit"
+    )
 
     prompts = pd.read_parquet(_repo_root / args.prompts)
     present = set(prompts["emotion_label"])
@@ -399,16 +652,27 @@ def main() -> None:
         log.warning("Activations dir %s not found — running surface-only.", act_dir)
         act_dir = None
 
-    results: dict = {"_prompts": args.prompts, "_emotions": emotions, "_model_key": args.model_key}
+    results: dict = {
+        "_prompts": args.prompts, "_emotions": emotions,
+        "_model_key": args.model_key, "_story": story,
+    }
     for e in emotions:
         log.info("Auditing %s vs neutral ...", e)
-        surf = surface_audit(prompts, e)
-        act = activation_audit(act_dir, e, prompts, n_perm=args.n_perm) if act_dir else None
+        if story:
+            surf = surface_audit_story(e, base_model_key)
+            act = (
+                activation_audit_story(act_dir, e, base_model_key=base_model_key,
+                                       n_perm=args.n_perm)
+                if act_dir else None
+            )
+        else:
+            surf = surface_audit(prompts, e)
+            act = activation_audit(act_dir, e, prompts, n_perm=args.n_perm) if act_dir else None
         verdict, flags = recommend(e, surf, act)
         results[e] = {"surface": surf, "activation": act, "verdict": verdict, "flags": flags}
         log.info("  %s: %s | surface TF-IDF AUC=%.2f", e, verdict, surf["auc_tfidf_surface"])
 
-    report = write_report(_repo_root / args.out_dir, args.model_key, results)
+    report = write_report(_repo_root / out_dir, args.model_key, results)
     log.info("\nWrote %s", report.relative_to(_repo_root))
 
 
