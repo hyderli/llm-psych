@@ -364,3 +364,77 @@ exploratory to confirmatory; anger/fear dropped from the primary set
   harshness rubrics (H7).
 
 **Energy:** scope-defining change; stimuli authored, set locked to four.
+
+## 2026-06-13 — H1 confound audit built; story method promoted to primary derivation
+
+**Did:**
+- **Built `scripts/audit_h1_confounds.py`** (Priority-1 diagnostic).
+  Tier A (surface baselines: length-only + word/char TF-IDF) runs on the
+  prompt parquet without activations; Tier B (shuffle-null, cross-domain
+  split, paraphrase-source split, neutral-PC projection) runs when
+  activations exist. steering.py loaded lazily by path so Tier A needs no
+  torch. Verified Tier B logic against the legacy augmented `anger`
+  activations (meta-join, cross-domain, neutral-PC all work; reproduces
+  AUC=1.0, and neutral-PC projection does NOT fix it — corroborating the
+  augmentation-confound concern).
+- **Ran the surface tier on the four-emotion seed set.** Flagged a real
+  confound: neutral ~13 words vs emotion ~16–17 (length-only AUC up to
+  0.93, admiration worst); TF-IDF surface AUC 0.86–0.97. Output in
+  `results/h1_confound_audit/`.
+- **Decision (PI): story method → PRIMARY derivation; CAA → secondary
+  baseline.** The audit confirmed the CAA short-vignette path is
+  surface-confounded in exactly the ways Sofroniew et al. designed
+  against; the story method already implements their controls
+  (topic-matched stories, emotion-word ban, token-50 mean-pool,
+  cross-emotion centering, neutral-PC projection). H1 stays a logistic
+  probe but on token-50-mean story activations (activation-source change,
+  not probe-type). Dated 2026-06-13 amendment in HYPOTHESES.md; decision
+  record at `plans/derivation-primacy-decision.md`. Propagated to
+  methods.md, config.yaml (default `derivation: story`), next-steps.md.
+
+**Open TODOs:**
+- Extend `scripts/train_probes.py` to consume story-pipeline pooled
+  activations (`activations/<model>-story/<emotion>.npz`) for primary H1.
+- Topic-match the four-emotion story corpora over a shared topic list.
+- GPU smoke-test the story pipeline (never run) — see the decision record.
+- Add the numerical-intensity-template semantic-vs-surface validation.
+- Re-run the audit's cross-domain control on story activations once they
+  exist (Priority 1 gate, now on the story construction).
+
+**Energy:** the audit paid for itself immediately — caught the confound
+pre-GPU and redirected the project onto the paper-faithful construction.
+
+## 2026-06-13 — story pipeline green; train_probes on story acts; topic-matched generation
+
+**Did:**
+- **Smoke-tested the story pipeline end-to-end** on Qwen 0.5B
+  (`run_smoketest_story_qwen05b.sh`). Flushed out five issues before any
+  real run: clean-git pre-flight tripping on untracked `_original.md`
+  (now committed); a `model.generate()` BatchEncoding bug on newer
+  transformers; `device_map` dispatch hanging `generate()` on Mac
+  (`load_model` now bypasses device_map for single-device dev loads); and
+  the real one — `_generate_one` used an assistant-prefill chat template
+  with `add_generation_prompt=False` that closed the turn (≈0 tokens),
+  which an unbounded retry loop then spun on forever. Fixed the template
+  (single user turn, `add_generation_prompt=True`) and capped the loop.
+  Pipeline now produces stories → pooled activations → vectors.
+- **Wired `train_probes.py` for story activations** (primary H1): reads
+  `activations/<model>-story/<emotion>.npz`, seeded per-story 70/30 split,
+  same L2 logistic probe, saves to `probes/<model>-story/`. Verified the
+  load→split→fit→evaluate flow on the smoke activations. CAA unchanged.
+- **Topic-matched story generation (paper-style).** Replaced the implicit
+  round-robin `n_stories_per_emotion` with explicit `stories_per_topic`:
+  nested topics × k with bounded per-slot retries, so every emotion +
+  neutral covers the same topics equally (topic can't separate emotions).
+  Added `max_topics` (smoke cap). Expanded `story_topics.txt` to 46
+  ambiguous everyday topics. Manifest records `stories_per_topic` +
+  `topic_matched`.
+
+**Open TODOs:**
+- Run the dev-fleet story corpora at a real `stories_per_topic`, then the
+  confound audit on the story activations (shuffle-null ≈ 0.5, cross-domain
+  ≥ 0.80) — the Priority-1 gate, now on the story construction.
+- Build `src/llm_psych/tasks/sycophancy.py` + rubrics (H7).
+
+**Energy:** plumbing solved and de-confounding construction in place;
+next bottleneck is a real GPU run + the audit on story activations.

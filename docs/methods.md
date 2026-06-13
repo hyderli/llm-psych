@@ -139,6 +139,11 @@ class ResidualStreamRecorder:
 
 ## Probes (H1)
 
+- **Activation source (2026-06-13):** primary H1 probes are trained on
+  **token-50-mean-pooled story activations** (the story method,
+  primary); CAA last-token vignette activations are the secondary
+  baseline. The probe model below is identical for both — only the
+  activations differ.
 - **Model:** scikit-learn `LogisticRegression`, L2, C=1.0, one-vs-rest
   for multi-class. No PCA or other dimensionality reduction (clean
   baseline). Non-linear (small MLP) probes are exploratory only.
@@ -160,7 +165,12 @@ class ResidualStreamRecorder:
 
 ## Steering (H2, H3)
 
-### Direction extraction (CAA)
+### Direction extraction (CAA) — SECONDARY BASELINE
+
+*As of the 2026-06-13 amendment the CAA last-token vignette path is a
+**secondary baseline**, not the primary derivation — the H1 confound
+audit found it surface-confounded (length + lexical). The story method
+below is primary. CAA is still run for CAA↔story comparison.*
 
 ```
 v_emotion = mean(activations[emotion_train]) − mean(activations[neutral_train])
@@ -207,20 +217,33 @@ prompt_id, output_text, judge_score, ...}` to
 
 ---
 
-### Direction extraction (story method — Sofroniew et al. 2026)
+### Direction extraction (story method — Sofroniew et al. 2026) — PRIMARY
 
-A **parallel** derivation that faithfully follows the paper's
-procedure (`docs/EmotionConcepts.pdf`, "Extracting emotion vectors")
-for comparison and validation. It does **not** replace the CAA
-pre-registered primary pipeline above; both methods coexist and are
-compared in downstream ablations.
+The **primary** derivation as of the 2026-06-13 amendment, faithfully
+following the paper's procedure (`docs/EmotionConcepts.pdf`,
+"Extracting emotion vectors"). It was promoted from a parallel
+validation method to primary because the H1 confound audit showed the
+CAA short-vignette path (above) is surface-confounded (length + lexical
+separability), exactly the confounds this construction neutralizes by
+design: topic-matched self-generated stories, emotion-word banned,
+token-50 mean-pool, cross-emotion centering, and neutral-PC projection.
+For **H1**, logistic probes are trained on the token-50-mean-pooled
+story activations produced here. The CAA path above is retained as a
+**secondary baseline**; CAA↔story agreement is reported as robustness.
 
 **Pipeline (three scripts):**
 
 1. **Generate** — ``scripts/generate_emotion_stories.py``
 
-   - The target model itself writes ``n_stories_per_emotion`` 150-word
-     narratives per emotion (and a neutral baseline).
+   - **Topic-matched (paper-style):** every emotion *and* neutral are
+     generated over the **same** topic list
+     (``data/public/story_topics.txt``), exactly ``stories_per_topic``
+     stories per topic, so the topic distribution is identical across
+     emotions and cannot separate them. Corpus size per emotion =
+     ``stories_per_topic × n_topics``. ``max_topics`` caps the list for
+     smoke tests.
+   - The target model itself writes the narratives (and the neutral
+     baseline).
    - Prompt constraint: "Express the emotion ... from the narrator's
      perspective" and "Do not use the word `<emotion>` or any of its
      direct synonyms."
@@ -263,9 +286,17 @@ compared in downstream ablations.
 candidate layer. Downstream eval scripts select the best-performing
 layer post-hoc, rather than pre-committing via probe AUC.
 
-**Config switch:** the Hydra default group ``derivation: caa`` can be
-overridden with ``derivation=story`` on the command line. The CAA
-path remains the pre-registered default.
+**Config switch:** ``derivation: story`` is the primary group
+(2026-06-13); ``derivation=caa`` selects the secondary baseline.
+**Stimuli:** the story corpus must be **topic-matched** across the four
+emotions (one shared topic seed list, `data/public/story_topics.txt`),
+paper-style, so topic cannot separate emotions.
+
+**Implementation note (H1 on story activations):** `scripts/train_probes.py`
+currently consumes CAA last-token `<emotion>_{train,test}.npz`. For the
+primary H1 it must be extended to read the pooled per-story activations
+`activations/<model_key>-story/<emotion>.npz` (one pooled vector per
+story per layer). Tracked as an open TODO.
 
 ---
 
