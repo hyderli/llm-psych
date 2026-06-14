@@ -7,7 +7,7 @@ synthetic prompts (≤ 30 examples per condition) is permitted before
 this lock and is not subject to amendment rules.
 
 **Locked at git SHA:** f58547fab9cb6416110f9f55a4c52525da7e2e43
-**Last amended:** 2026-05-25
+**Last amended:** 2026-06-14
 
 ---
 
@@ -743,3 +743,45 @@ primary model, so this precedes any data fit. Rationale:
 - Propagated to `plans/story-gate-run.md` (Priority-3 8B-primary run
   list) and `RESEARCH_LOG.md`. `CLAUDE.md`'s "one further 7-8B open
   model" wording already covers this and is left unchanged.
+
+### 2026-06-14 — Adopt the paper's C2 vector-validation suite as H1 validation
+
+**Justification:** The dev-fleet story gate (RESEARCH_LOG 2026-06-14)
+found within-corpus H1 probing **surface-saturated** — a bag-of-words
+classifier separates emotion stories from neutral (TF-IDF up to 1.00)
+and the activation probe does not beat it (margin ~0.04 on Qwen 0.5B →
+0.00 on Llama 1B, *worsening* with model capability). So H1's
+linear-decodability metric (best-layer probe test AUC) is **necessary
+but not sufficient** to claim the vectors encode an emotion *concept*
+rather than emotion lexis. The original paper substantiates the concept
+claim not via decodability alone but via Part-1 validation that the
+vectors "activate in expected contexts" (Sofroniew et al. §2) — on
+stimuli **distinct from the derivation corpus**, which surface lexis
+cannot bridge. This project adopts that suite. No data has been fit on
+these new stimuli, so this precedes any fit.
+
+**Changes:**
+- **H1's primary metric and falsifier are UNCHANGED** (L2 logistic
+  probe, C=1.0, best-layer held-out test AUC; the 0.65 floor stands).
+- **The H1 emotion-*concept* interpretation now additionally requires
+  the C2 vector-validation suite** (`docs/methods.md` §"Vector
+  validation"): (1) **logit-lens** token congruence, (2)
+  **implicit-emotion scenarios at the Assistant-colon** analog, (3)
+  **numerical-intensity templates** (already sanctioned 2026-06-13; now
+  joined by 1 and 2). A within-corpus AUC not corroborated by this suite
+  is reported as **surface-saturated**, not as evidence for an emotion
+  concept.
+- These are **validation / background** analyses: no new confirmatory
+  hypothesis, no falsifier, and a **separate family** from the steering
+  (H2/H3/H7) FDR families. They gate *interpretation*, not the H1 metric.
+- **New frozen, MD5-locked stimuli:**
+  `data/public/implicit_emotion_scenarios.jsonl` and
+  `data/public/intensity_templates.jsonl` (hand-authored, no paraphrase).
+  **New scripts:** `scripts/validate_logit_lens.py`,
+  `scripts/validate_implicit_scenarios.py`,
+  `scripts/validate_intensity_semantic.py`.
+- The paper's fourth §2 method (large-corpus sweep) is **deferred** —
+  heavier and lower-yield at 7-8B; revisit only if the three above are
+  inconclusive.
+- Propagated to `docs/methods.md` (new "Vector validation" section) and
+  `plans/numerical-intensity-control.md`.

@@ -300,6 +300,95 @@ story per layer). Tracked as an open TODO.
 
 ---
 
+## Vector validation (C2 — vectors activate in expected contexts)
+
+Faithful adaptation of the paper's Part-1 validation suite (Sofroniew
+et al. §2, "Validation that vectors activate in expected contexts").
+
+**Why this is load-bearing here.** The dev-fleet story gate
+(RESEARCH_LOG 2026-06-14) found within-corpus H1 probing
+**surface-saturated**: a bag-of-words classifier separates emotion
+stories from neutral (TF-IDF up to 1.00) and the activation probe does
+not beat it (margin ~0.04 on Qwen 0.5B → 0.00 on Llama 1B, worsening
+with capability). So the H1 probe AUC (C1, linear decodability) is
+*necessary but not sufficient* to claim the vectors encode an emotion
+**concept** rather than emotion lexis. The checks below test whether the
+derived vectors activate in the semantically correct places using
+stimuli **distinct from the derivation corpus**, which surface lexis
+cannot bridge. They validate the **story-method** vectors (primary) at
+the vector's layer; CAA vectors may be run for comparison. Per the
+2026-06-14 HYPOTHESES amendment these are **validation/background**
+analyses (no new confirmatory hypothesis), but the H1 emotion-concept
+*interpretation* is contingent on them.
+
+### 1. Logit-lens (unembed) read-out
+
+- For each emotion vector `v_e` (per layer), map it into vocabulary
+  space through the model's final norm + unembedding:
+  `logits = W_U · norm(v_e)` (tied embeddings or `lm_head`; apply the
+  final RMSNorm/LayerNorm first, per the logit-lens convention). Report
+  the top ±15 tokens.
+- **Success:** top tokens are emotion-congruent (e.g. loathing →
+  disgust/contempt-laden tokens; joy → delight/celebration tokens) and
+  the bottom tokens skew opposite-valence. This is **surface-independent
+  and stimulus-free** — it reads what the vector points at in output
+  space directly, so it cannot be a stimulus-lexis artifact.
+- **Caveat:** logit lens is approximate for mid-layers (it skips
+  intervening computation); report it as corroborating, with the layer
+  noted, not as a standalone proof.
+- Implementation: `scripts/validate_logit_lens.py` (TODO) →
+  `results/vector_validation/<model>/logit_lens.md`. Cheap; no new
+  stimuli.
+
+### 2. Implicit-emotion scenarios at the Assistant-colon
+
+- A small, hand-authored, frozen set of scenarios that evoke each target
+  emotion **without naming it** (the paper's Table-2 analog), mapped to
+  the four-emotion set.
+- **Readout position — the "Assistant-colon" analog:** the final token
+  of the prompt after applying each model's chat template with
+  `add_generation_prompt=True` (the last token before generation:
+  Llama `…assistant<|end_header_id|>\n\n`, Qwen/ChatML
+  `<|im_start|>assistant\n`, Gemma `<start_of_turn>model\n`). This is the
+  same readout the CAA path already uses, reused here.
+- **Success:** for each scenario the *intended* emotion vector projects
+  highest; report a 4×4 confusion matrix (intended × argmax emotion)
+  concentrated on the diagonal. Because the scenarios are disjoint from
+  the story corpus, a pass is genuine cross-context generalization.
+- Stimuli: `data/public/implicit_emotion_scenarios.jsonl`
+  (`[id, scenario, intended_emotion]`), frozen + MD5-locked.
+  Implementation: `scripts/validate_implicit_scenarios.py` (TODO) →
+  `results/vector_validation/<model>/implicit_scenarios.md`.
+
+### 3. Numerical-intensity templates
+
+- The paper's semantic-vs-surface control: a single number modulates
+  expected emotional intensity with token structure held fixed,
+  **including deliberately inverse mappings** (sister's age at death;
+  days a dog has been missing; startup runway), so the number→intensity
+  relation is semantic, not lexical.
+- **Test:** project the story-derived vector onto template activations;
+  Spearman vs the **semantic-intensity rank** (not the raw number), with
+  the surface-divergent (inverse) subset as the decisive case; plus
+  story→template transfer for the activation probe vs a story-trained
+  TF-IDF (which collapses across formats). Full design + success
+  criterion in `plans/numerical-intensity-control.md`.
+- Stimuli: `data/public/intensity_templates.jsonl`, frozen + MD5-locked.
+  Implementation: `scripts/validate_intensity_semantic.py`.
+
+### Conventions
+
+- All new stimulus files are **hand-authored, frozen, and MD5-locked**
+  in `configs/stimuli_hashes.yaml` (same discipline as the other
+  stimuli); no fitting before freeze.
+- Outputs under `results/vector_validation/<model>/` (gitignored); every
+  number grounded in a per-item file.
+- **Not run:** the paper's large-corpus sweep (Common Corpus / The Pile
+  / LMSYS) — deferred as heavier and lower-yield at 7-8B scale; revisit
+  only if the three checks above are inconclusive.
+
+---
+
 ## Behavioral evaluations
 
 ### Blackmail (primary, H2)
