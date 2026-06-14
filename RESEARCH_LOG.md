@@ -470,3 +470,72 @@ next bottleneck is a real GPU run + the audit on story activations.
 
 **Energy:** primary roster now complete and internally consistent; the
 gate-run plan is the next build.
+
+## 2026-06-14 — Dev-fleet story gate run on RunPod; within-corpus probing is surface-saturated
+
+**Did:**
+- **Built the gate tooling** (`scripts/run_story_pipeline.sh` real-scale
+  pod runner; story-activation path in `scripts/audit_h1_confounds.py` with a
+  cross-TOPIC control + story-text surface baseline).
+- **Ran the dev fleet on a RunPod 4090** at the real budget
+  (`stories_per_topic=7`, 46 topics → 322 stories/emotion): Qwen 2.5 0.5B,
+  Llama 3.2 1B, Gemma 2 2B. Activations + probes + steering vectors for all
+  three `*-story` keys are on the HF dataset.
+- **Confound audit on story activations** (`results/h1_confound_audit_story/`):
+
+  | model | null | length-only | surface TF-IDF | real probe | cross-topic |
+  |---|---|---|---|---|---|
+  | Qwen 0.5B | 0.51 | 0.45–0.51 | 0.91–0.95 | 0.94–0.98 | 0.87–0.93 |
+  | Llama 1B  | 0.51 | **0.67–0.79** | **1.00** | **1.00** | 1.00 |
+  | Gemma 2B  | — (audit not finished; see below) | | | | |
+
+**Findings:**
+1. **Pipeline is sound** — shuffle-null = 0.51 on both completed models. No
+   leak; the harness is trustworthy. Neutral-PC projection barely dents the
+   probe (0.93–0.98), so the signal is orthogonal to the neutral baseline.
+2. **The story construction removed the LENGTH confound on Qwen** (length-only
+   0.45–0.51, vs 0.74–0.93 for the CAA vignettes) — the switch to topic-matched
+   generation worked for what it was for.
+3. **But within-story-corpus H1 probing is surface-saturated.** A bag-of-words
+   classifier separates emotion stories from neutral from the text alone
+   (Qwen 0.91–0.95, Llama 1.00), and the activation probe beats it by a
+   vanishing margin (Qwen ~0.03–0.05, **Llama 0.00**). The margin *shrinks*
+   with model capability (better instruction-following → more distinctively
+   emotional text), so scaling to 8B will not fix it. **Within-corpus probe
+   AUC cannot, by itself, evidence an emotion *concept* over emotional
+   lexis.** This is the load-bearing conclusion of the gate.
+4. **Length balance regressed on Llama** (length-only 0.67–0.79). Topic-matched
+   generation did not length-balance robustly across models — a real, separate
+   construction issue to investigate (needs the story texts → length
+   distributions).
+
+**Implication (reshapes H1):** the C1/H1 linear-decodability result on the
+story corpus is necessary but not sufficient and is surface-saturated for
+capable models. The **numerical-intensity semantic control (paper C2) and
+causal steering become the load-bearing evidence**, not optional. Plan drafted:
+`plans/numerical-intensity-control.md`.
+
+**Open TODOs:**
+- Re-run the audit (incl. Gemma) — the shuffle-null/surface fit ran for hours
+  on Gemma's larger corpus because lbfgs never converges on perfectly-separable
+  TF-IDF; fixed in `audit_h1_confounds.py` (capped sparse TF-IDF + liblinear).
+- **Rescue or regenerate the dev story corpora** — they were stranded on the
+  stopped pod (Community Cloud could not free a GPU to resume) and are NOT yet
+  on HF. Fixed forward: `run_story_pipeline.sh --push` now also pushes
+  `data/derived/stories/<key>` via `scripts/push_stories.py`.
+- Investigate the Llama length regression (needs the corpora).
+- Build the numerical-intensity control (Priority next).
+
+**Infra notes (for teammates / future pods):**
+- Default Linux torch resolves to a **cu13** wheel; cloud 4090 hosts ship a
+  **CUDA 12.6** driver → torch sees no GPU. Pinned torch → cu124 on Linux in
+  `pyproject.toml` (Mac unaffected via platform marker). Re-`uv lock` after.
+- **Disk:** a 20–40 GB container disk is too small for multi-model runs (the
+  cu13→cu124 double-download plus several model caches fill it). Use **≥50 GB**
+  (or a network volume) and `export HF_HOME=/workspace/.cache/huggingface`.
+- Run long jobs under **tmux/nohup**; the RunPod web terminal drops kill
+  foreground jobs.
+
+**Energy:** brutal infra day, but the science landed — a clean, useful negative
+result that correctly redirects the project from within-corpus probing to the
+semantic-generalization + steering evidence.
