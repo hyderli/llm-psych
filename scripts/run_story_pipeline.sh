@@ -218,7 +218,11 @@ if [[ "$DO_PUSH" -eq 1 ]]; then
             --model "${STORY_KEY}" \
             --message "run_story: ${STORY_KEY} ${kind}"
     done
-    log "Pushed activations/probes/steering_vectors for ${STORY_KEY} to HF."
+    # Story TEXTS are the provenance of these activations and are NOT
+    # bit-reproducible (seeded sampling). Push them too, under stories/<key>.
+    run_step "push stories (${MODEL_KEY})" \
+        uv run python scripts/push_stories.py --model "${MODEL_KEY}"
+    log "Pushed activations/probes/steering_vectors/stories for ${STORY_KEY} to HF."
 else
     log "Skipping HF push (--push not set). Artefacts are local only."
 fi

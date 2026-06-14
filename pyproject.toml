@@ -59,6 +59,21 @@ dev = [
     "ipykernel>=6.29.0",
 ]
 
+# ---- uv: pin torch to a CUDA 12.x wheel on Linux ---------------------------
+# Default PyPI torch on Linux now resolves to a cu13 build, which needs a very
+# new NVIDIA driver; RunPod / most cloud 4090 hosts ship CUDA 12.6 drivers, so
+# torch then reports no CUDA device. Pin Linux torch to the cu124 index (runs
+# on any >=12.4 driver). macOS is left on default PyPI (MPS/CPU build) via the
+# platform marker, so the Mac dev fleet is unaffected. After editing this,
+# regenerate the lock:  uv lock
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu124", marker = "sys_platform == 'linux'" }]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

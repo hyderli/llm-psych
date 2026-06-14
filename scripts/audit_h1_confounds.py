@@ -62,6 +62,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from scipy.sparse import hstack as sparse_hstack
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
@@ -117,6 +118,41 @@ def _fit_predict_auc(
     return _auc(y_te, clf.predict_proba(X_te)[:, 1])
 
 
+# Surface TF-IDF features are high-dimensional, sparse, and frequently
+# *perfectly separable* (emotion-laden text vs neutral). lbfgs on a dense,
+# perfectly-separable matrix never converges — it runs the full max_iter every
+# fit, which made the audit take hours on larger story corpora. liblinear is
+# fast and stable on high-dim sparse near-separable text, so use it for the
+# surface baseline (the activation probes keep lbfgs above, unchanged).
+SURFACE_MAX_FEATURES = 20_000  # cap each vectorizer; bounds the char-ngram blowup
+
+
+def _fit_predict_auc_surface(X_tr, y_tr, X_te, y_te) -> float:
+    """AUC for sparse TF-IDF features (liblinear, no densification)."""
+    if len(np.unique(y_tr)) < 2:
+        return float("nan")
+    clf = LogisticRegression(C=1.0, solver="liblinear", max_iter=1000, random_state=SEED)
+    clf.fit(X_tr, y_tr)
+    return _auc(y_te, clf.predict_proba(X_te)[:, 1])
+
+
+def _surface_tfidf_auc(text_tr, y_tr, text_te, y_te) -> float:
+    """Word(1-2) + char(3-5) TF-IDF logistic AUC, kept sparse and capped."""
+    word_vec = TfidfVectorizer(
+        ngram_range=(1, 2), min_df=1, max_features=SURFACE_MAX_FEATURES, sublinear_tf=True
+    )
+    char_vec = TfidfVectorizer(
+        analyzer="char_wb", ngram_range=(3, 5), min_df=1, max_features=SURFACE_MAX_FEATURES
+    )
+    Xtr = sparse_hstack(
+        [word_vec.fit_transform(text_tr), char_vec.fit_transform(text_tr)]
+    ).tocsr()
+    Xte = sparse_hstack(
+        [word_vec.transform(text_te), char_vec.transform(text_te)]
+    ).tocsr()
+    return _fit_predict_auc_surface(Xtr, y_tr, Xte, y_te)
+
+
 # --------------------------------------------------------------------------
 # Tier A — surface-feature baselines (no activations)
 # --------------------------------------------------------------------------
@@ -142,19 +178,10 @@ def surface_audit(prompts: pd.DataFrame, emotion: str) -> dict:
         4,
     )
 
-    # (b) word (1-2gram) + char (3-5gram) TF-IDF logistic
-    word_vec = TfidfVectorizer(ngram_range=(1, 2), min_df=1, sublinear_tf=True)
-    char_vec = TfidfVectorizer(analyzer="char_wb", ngram_range=(3, 5), min_df=1)
-    Xtr = np.hstack(
-        [word_vec.fit_transform(tr["prompt"]).toarray(),
-         char_vec.fit_transform(tr["prompt"]).toarray()]
-    )
-    Xte = np.hstack(
-        [word_vec.transform(te["prompt"]).toarray(),
-         char_vec.transform(te["prompt"]).toarray()]
-    )
+    # (b) word (1-2gram) + char (3-5gram) TF-IDF logistic (sparse, capped)
     out["auc_tfidf_surface"] = round(
-        _fit_predict_auc(Xtr, tr["y"].to_numpy(), Xte, te["y"].to_numpy()), 4
+        _surface_tfidf_auc(tr["prompt"], tr["y"].to_numpy(), te["prompt"], te["y"].to_numpy()),
+        4,
     )
     return out
 
@@ -209,18 +236,11 @@ def surface_audit_story(emotion: str, base_model_key: str | None) -> dict:
         ),
         4,
     )
-    word_vec = TfidfVectorizer(ngram_range=(1, 2), min_df=1, sublinear_tf=True)
-    char_vec = TfidfVectorizer(analyzer="char_wb", ngram_range=(3, 5), min_df=1)
-    Xtr = np.hstack(
-        [word_vec.fit_transform(tr["story_text"]).toarray(),
-         char_vec.fit_transform(tr["story_text"]).toarray()]
-    )
-    Xte = np.hstack(
-        [word_vec.transform(te["story_text"]).toarray(),
-         char_vec.transform(te["story_text"]).toarray()]
-    )
     out["auc_tfidf_surface"] = round(
-        _fit_predict_auc(Xtr, tr["y"].to_numpy(), Xte, te["y"].to_numpy()), 4
+        _surface_tfidf_auc(
+            tr["story_text"], tr["y"].to_numpy(), te["story_text"], te["y"].to_numpy()
+        ),
+        4,
     )
     return out
 
