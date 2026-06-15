@@ -16,7 +16,7 @@ story_topics.txt: 3efbfc2e0227f1b357b7fc749a2867f7          # shared topic list 
 
 # --- C2 vector-validation stimuli (2026-06-14; Sofroniew et al. §2) ---
 implicit_emotion_scenarios.jsonl: f93fd7d608449291f38d0a4e3131ce8e   # 50 rows (10/emotion + 10 neutral)
-intensity_templates.jsonl: 4e8e4c2027f77b4319c6742e6037af85          # 114 rows; built by scripts/build_intensity_templates.py
+intensity_templates.jsonl: 4e7c59c92398adf6e4e2c7ada9c2c82e          # 156 rows, 3 inverse families/emotion; built by scripts/build_intensity_templates.py
 
 # --- Behavioral-task stimuli ---
 blackmail_scenarios.jsonl: 6b0e604522b63275413b1927758fc531       # H2 primary

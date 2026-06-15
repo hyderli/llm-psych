@@ -109,7 +109,9 @@ def main() -> int:
                     help="vector layer to read (default: deepest shared layer)")
     ap.add_argument("--top-k", type=int, default=15)
     ap.add_argument("--device", default="cpu", help="cpu | cuda | mps")
-    ap.add_argument("--dtype", default="float32", help="float32 | float16 | bfloat16")
+    ap.add_argument("--dtype", default="bfloat16",
+                    help="bfloat16 (default; model-faithful). float32 for a CPU-only Mac run "
+                         "if bf16 is unsupported; avoid float16 (overflow on Gemma's outliers).")
     ap.add_argument("--vectors-dir", default="steering_vectors")
     ap.add_argument("--out-dir", default="results/vector_validation")
     ap.add_argument("--no-final-norm", action="store_true",

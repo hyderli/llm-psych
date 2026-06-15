@@ -46,6 +46,12 @@ FAMILIES: list[tuple[str, str, str, list[int], str]] = [
     ("admiration", "team_size",  # INVERSE: fewer hands -> greater feat
      "She rebuilt the entire bridge design overnight with a team of just {x}.",
      [1, 2, 4, 8, 16, 40], "decreasing"),
+    ("admiration", "days_to_solve",  # INVERSE: faster -> greater feat
+     "She cracked the problem the whole department had failed at, in {x} days.",
+     [1, 2, 4, 8, 16, 40], "decreasing"),
+    ("admiration", "hours_studied",  # INVERSE: less prep -> greater feat
+     "She passed the exam most people fail, after only {x} hours of study.",
+     [2, 5, 10, 20, 50, 100], "decreasing"),
 
     # ---- joy ----
     ("joy", "exam_pass",
@@ -60,6 +66,12 @@ FAMILIES: list[tuple[str, str, str, list[int], str]] = [
     ("joy", "days_until_return",  # INVERSE: sooner -> greater anticipation
      "My closest friend moves back to town in {x} days.",
      [1, 3, 7, 14, 30, 90], "decreasing"),
+    ("joy", "results_in_days",  # INVERSE: sooner -> greater anticipation
+     "The results we have waited months for arrive in just {x} days.",
+     [1, 2, 4, 7, 14, 30], "decreasing"),
+    ("joy", "payments_left",  # INVERSE: fewer left -> greater relief
+     "We are down to the last {x} payments before the house is fully ours.",
+     [1, 2, 4, 8, 16, 40], "decreasing"),
 
     # ---- loathing ----
     ("loathing", "lies_oath",
@@ -74,6 +86,12 @@ FAMILIES: list[tuple[str, str, str, list[int], str]] = [
     ("loathing", "relief_withheld",  # INVERSE: less passed on -> greater contempt
      "He kept the $50,000 disaster fund and passed just ${x} on to the families who lost everything.",
      [0, 50, 500, 5000, 25000, 50000], "decreasing"),
+    ("loathing", "charity_handed",  # INVERSE: less given -> greater contempt
+     "Of the $500 the town raised for the sick child, he handed over only ${x}.",
+     [0, 5, 25, 100, 300, 500], "decreasing"),
+    ("loathing", "apologies_given",  # INVERSE: fewer apologies -> greater contempt
+     "He has apologized to the family he ruined exactly {x} times.",
+     [0, 1, 2, 3, 5, 10], "decreasing"),
 
     # ---- sadness ----
     ("sadness", "age_at_death",  # INVERSE: younger -> greater loss
@@ -82,6 +100,9 @@ FAMILIES: list[tuple[str, str, str, list[int], str]] = [
     ("sadness", "funeral_attendance",  # INVERSE: fewer came -> lonelier loss
      "Only {x} people came to my father's funeral.",
      [3, 8, 20, 50, 120, 300], "decreasing"),
+    ("sadness", "children_speaking",  # INVERSE: fewer still in touch -> lonelier
+     "Only {x} of his five children still speak to him.",
+     [0, 1, 2, 3, 4, 5], "decreasing"),
     ("sadness", "dog_missing_days",
      "Our dog has been gone for {x} days now.",
      [1, 2, 4, 8, 15, 30], "increasing"),
