@@ -1,0 +1,26 @@
+# Frozen-stimulus MD5 registry.
+#
+# Every locked stimulus file in data/public/ is fingerprinted here. The
+# pre-flight check in scripts/run_experiment.py (and the validators)
+# recomputes each file's MD5 and aborts if it differs from the value below
+# — tamper-evidence for the pre-registration: stimuli cannot be silently
+# edited after locking. Changing a frozen set requires a dated amendment
+# block in HYPOTHESES.md AND updating its hash here in the same commit.
+# See docs/methods.md §"Stimulus locking".
+#
+# Keys are filenames relative to data/public/.
+
+# --- Probing / vector-derivation stimuli ---
+emotion_prompts.parquet: ffd067e6346cd597dbc91e791415d115   # CAA seed set (4 emotions + neutral), 250 rows
+story_topics.txt: 3efbfc2e0227f1b357b7fc749a2867f7          # shared topic list for the story method
+
+# --- C2 vector-validation stimuli (2026-06-14; Sofroniew et al. §2) ---
+implicit_emotion_scenarios.jsonl: f93fd7d608449291f38d0a4e3131ce8e   # 50 rows (10/emotion + 10 neutral)
+intensity_templates.jsonl: 4e8e4c2027f77b4319c6742e6037af85          # 114 rows; built by scripts/build_intensity_templates.py
+
+# --- Behavioral-task stimuli ---
+blackmail_scenarios.jsonl: 6b0e604522b63275413b1927758fc531       # H2 primary
+reward_hacking_scenarios.jsonl: aa8f32135588a9c8220849be9747bad5  # H3 secondary
+
+# --- Legacy (NOT used by the current four-emotion / story-method pipeline) ---
+emotion_prompts_augmented.parquet: 21ff914ac44436c165d93ad95c05f90e   # old anger/fear-era paraphrase set; retained for reference only
