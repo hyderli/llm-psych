@@ -609,3 +609,71 @@ selection (steering/probing): prefer ~2/3 depth; do not default to the deepest.
 
 **Energy:** the method works — the vectors are real, and cleanly so at the right
 depth. After a rough infra day, the science is now clearly moving.
+
+## 2026-06-14 — C2 implicit + intensity validators run on dev; stimulus + method fixes
+
+**Did:**
+- Built `validate_implicit_scenarios.py` and `validate_intensity_semantic.py`
+  and ran them on the three dev `-story` vectors (Mac).
+
+**Implicit-emotion (cross-format argmax, chance 0.25):** above chance and
+scaling — Qwen 0.53 → Llama 0.68 → Gemma 0.72. loathing solid everywhere
+(0.90–1.00); the weak emotion shifts by model (Qwen admiration/joy, Gemma
+sadness). Cross-format generalization holds (story-derived vectors fire on
+terse user-message scenarios).
+
+**Numerical-intensity:** read the INVERSE families only (increasing families
+have ρ(rank)≡ρ(x) and cannot separate meaning from the digit). sadness tracks
+semantic intensity cleanly on all three (age_at_death ρ(rank)≈+1.0/+0.94/+0.49,
+against the raw age); joy and loathing pass on 2/3; admiration only on Gemma.
+Failures are *scattered* across model×emotion, not a fixed emotion → dev-scale
+verdict is statistically fragile (1–2 inverse families × n=6), not a broken
+vector. A number-magnitude confound is present (neutral control) but the
+inverse design isolates it.
+
+**fp16 caveat:** Gemma was run in fp16 (memory); Qwen/Llama in fp32. fp16
+mismatches Gemma's bf16 training and risks overflow on its activation outliers
+— no catastrophic corruption seen, but Gemma's dev numbers are precision-
+caveated. The primaries run bf16 on the pod (clean).
+
+**Fixes made:**
+- Intensity report now headlines per-emotion mean ρ(rank) over **inverse
+  families only**; old all-family mean demoted to a labeled (confounded)
+  secondary; neutral control reports mean |ρ| (max is ~1 by chance at n=6).
+- All three validators default to `--dtype bfloat16` (model-faithful, no fp16
+  overflow, half fp32 memory); progress prints added.
+- **Intensity templates expanded** 114 → 156 rows, **3 inverse families per
+  emotion** (was 1–2), so each emotion's semantic verdict averages over
+  multiple inversions. New MD5 `4e7c59c92398adf6e4e2c7ada9c2c82e` recorded in
+  `configs/stimuli_hashes.yaml`. Pre-data change (no confirmatory fit has used
+  the intensity set); see HYPOTHESES.md 2026-06-14 addendum.
+
+**Verdict:** logit-lens + implicit pass and scale up; intensity shows genuine
+semantic tracking (sadness cleanest) that should resolve at 7-9B. Validators
+are pod-ready. **Next:** primary pod run with the full C2 suite.
+
+**Layer sweep (added `--sweep` to implicit + intensity; Llama 1B intensity):**
+the sweep answers the "is admiration's failure a layer artifact?" question —
+**no.** Per-layer inverse-family ρ(rank), layers 8–14:
+- **sadness** robustly strong (+0.87/+0.77/+0.98/+0.79/+0.77, fading L13–14) —
+  cleanest, peaks L10.
+- **joy** robustly moderate (+0.75 at L8, ~+0.4–0.5 mid-band).
+- **loathing** robustly weak-but-positive (~+0.25 stable, never ≥0.6).
+- **admiration** weakly positive *only* at the shallowest layer (L8 +0.22) and
+  increasingly **negative** through the conceptual mid-late layers
+  (−0.49/−0.71/−0.56/−0.56) — i.e. number-captured where the concept should
+  live. A genuine 1B weakness, not a layer misread (and not to be "rescued" by
+  cherry-picking L8).
+- Number confound is **pervasive**: neutral |ρ| 0.53–0.77 at every layer, so
+  the inverse-family design is essential and working.
+Headline ~2/3 depth (L11) is fair for sadness/joy, near admiration's worst —
+honest, not cherry-picked. **To watch on the primaries:** does admiration's
+"number-captured at conceptual layers" pattern persist or resolve at 7-9B, and
+does the number confound shrink with scale?
+
+**Built `scripts/run_primaries.sh`** — end-to-end pod run: per primary,
+`run_story_pipeline --push` → full C2 suite (headline + `--sweep`) → free that
+model's HF cache (disk-full lesson) → push `vector_validation/` reports →
+optional `--shutdown`.
+
+**Energy:** C2 harness complete and de-confounded; the primaries are the payoff.

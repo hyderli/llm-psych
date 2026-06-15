@@ -95,6 +95,9 @@ def main() -> int:
                          "memory of fp32). Use float32 for a slow CPU-only Mac run if bf16 is unsupported.")
     ap.add_argument("--vectors-dir", default="steering_vectors")
     ap.add_argument("--out-dir", default="results/vector_validation")
+    ap.add_argument("--sweep", action="store_true",
+                    help="report argmax accuracy across ALL shared layers (layer-robustness "
+                         "curve) instead of the full report at the single ~2/3-depth layer")
     args = ap.parse_args()
 
     load_dotenv(_repo_root / ".env")
@@ -108,19 +111,28 @@ def main() -> int:
     if not story_dir.exists():
         raise SystemExit(f"no story vectors at {story_dir} (pull them from HF first)")
     vectors = _discover_vectors(story_dir)
-    layer = _pick_layer(vectors, args.layer, cfg.get("n_layers"))
-    vec = {e: np.load(vectors[e][layer]).astype(np.float64) for e in EMOTIONS}
+    shared = sorted(set.intersection(*(set(v) for v in vectors.values())))
+    if not shared:
+        raise SystemExit("no layer shared across all emotions")
+    if args.sweep:
+        layers_to_run = shared
+    else:
+        layers_to_run = [_pick_layer(vectors, args.layer, cfg.get("n_layers"))]
+    # vectors per layer being analysed
+    vec = {L: {e: np.load(vectors[e][L]).astype(np.float64) for e in EMOTIONS}
+           for L in layers_to_run}
 
     lm = load_model(hf_model_id, revision=cfg.get("hf_revision"),
                     torch_dtype=getattr(torch, args.dtype), device_map=args.device)
     lm.model.eval()
     device = next(lm.model.parameters()).device
-    rec = ResidualStreamRecorder(lm.model, [layer], token_position="last")
+    rec = ResidualStreamRecorder(lm.model, layers_to_run, token_position="last")
     rec.attach()  # hooks are not registered until attach()/__enter__
 
-    acts: dict[str, list[np.ndarray]] = defaultdict(list)  # intended -> [activation]
-    ids: dict[str, list[str]] = defaultdict(list)
-    print(f"reading {len(rows)} scenarios at layer {layer} ({args.device}/{args.dtype}) ...")
+    # acts[intended] = list of {layer: activation} (all layers captured per pass)
+    acts: dict[str, list[dict[int, np.ndarray]]] = defaultdict(list)
+    print(f"reading {len(rows)} scenarios at {len(layers_to_run)} layer(s) "
+          f"({args.device}/{args.dtype}) ...")
     try:
         with torch.no_grad():
             for i, r in enumerate(rows, 1):
@@ -131,49 +143,76 @@ def main() -> int:
                 inp = lm.tokenizer(prompt, return_tensors="pt").to(device)
                 lm.model(**inp)
                 acts[r["intended_emotion"]].append(
-                    rec.activations[layer][0].float().cpu().numpy().astype(np.float64)
+                    {L: rec.activations[L][0].float().cpu().numpy().astype(np.float64)
+                     for L in layers_to_run}
                 )
-                ids[r["intended_emotion"]].append(r["id"])
                 if i % 25 == 0 or i == len(rows):
                     print(f"  {i}/{len(rows)}", flush=True)
     finally:
         rec.remove()
 
-    # Neutral-center: isolate the emotional deviation (mirrors vector construction).
-    neutral_mean = (np.mean(np.stack(acts["neutral"]), axis=0)
-                    if acts.get("neutral") else np.zeros_like(vec[EMOTIONS[0]]))
+    def analyze(L: int):
+        """Confusion / cosine / accuracy at one layer (neutral-centered)."""
+        vL = vec[L]
+        neu = [d[L] for d in acts.get("neutral", [])]
+        neutral_mean = (np.mean(np.stack(neu), axis=0) if neu
+                        else np.zeros_like(vL[EMOTIONS[0]]))
+        conf = {e: defaultdict(int) for e in EMOTIONS}
+        cos_sum = {e: defaultdict(float) for e in EMOTIONS}
+        n_int = {e: 0 for e in EMOTIONS}
+        for intended in EMOTIONS:
+            for d in acts[intended]:
+                c = d[L] - neutral_mean
+                sims = {e: _cos(c, vL[e]) for e in EMOTIONS}
+                conf[intended][max(sims, key=sims.get)] += 1
+                n_int[intended] += 1
+                for e in EMOTIONS:
+                    cos_sum[intended][e] += sims[e]
 
-    # Confusion matrix (intended x argmax-emotion) on the four emotions.
-    conf = {e: defaultdict(int) for e in EMOTIONS}
-    cos_sum = {e: defaultdict(float) for e in EMOTIONS}
-    n_int = {e: 0 for e in EMOTIONS}
-    for intended in EMOTIONS:
-        for a in acts[intended]:
-            c = a - neutral_mean
-            sims = {e: _cos(c, vec[e]) for e in EMOTIONS}
-            pred = max(sims, key=sims.get)
-            conf[intended][pred] += 1
-            n_int[intended] += 1
-            for e in EMOTIONS:
-                cos_sum[intended][e] += sims[e]
+        def maxabs(d):
+            c = d[L] - neutral_mean
+            return max(abs(_cos(c, vL[e])) for e in EMOTIONS)
+        emo_max = (np.mean([maxabs(d) for e in EMOTIONS for d in acts[e]])
+                   if any(acts[e] for e in EMOTIONS) else float("nan"))
+        neu_max = (np.mean([maxabs(d) for d in acts.get("neutral", [])])
+                   if acts.get("neutral") else float("nan"))
+        total = sum(n_int.values())
+        overall = sum(conf[e][e] for e in EMOTIONS) / total if total else float("nan")
+        return overall, conf, cos_sum, n_int, emo_max, neu_max
 
-    # Neutral control: emotional scenarios should activate *some* vector more
-    # than neutral scenarios do.
-    def max_abs_cos(a):
-        c = a - neutral_mean
-        return max(abs(_cos(c, vec[e])) for e in EMOTIONS)
-    emo_maxcos = np.mean([max_abs_cos(a) for e in EMOTIONS for a in acts[e]])
-    neu_maxcos = np.mean([max_abs_cos(a) for a in acts.get("neutral", [])]) if acts.get("neutral") else float("nan")
+    out_dir = _repo_root / args.out_dir / model_key
+    out_dir.mkdir(parents=True, exist_ok=True)
 
-    correct = sum(conf[e][e] for e in EMOTIONS)
-    total = sum(n_int.values())
-    overall = correct / total if total else float("nan")
+    if args.sweep:
+        lines = [
+            f"# Implicit-emotion validation — {model_key} (layer sweep)",
+            "",
+            f"- Vectors: `{story_dir.relative_to(_repo_root)}` (story method)",
+            "- Per-layer neutral-centered argmax accuracy (chance 0.25). Robustness: "
+            "is the diagonal stable across the mid-late band, or layer-hostage?",
+            "",
+            "| layer | overall | " + " | ".join(EMOTIONS) + " |",
+            "|" + "---|" * (len(EMOTIONS) + 2),
+        ]
+        for L in layers_to_run:
+            overall, conf, _, n_int, _, _ = analyze(L)
+            per = " | ".join(
+                f"{(conf[e][e] / n_int[e]) if n_int[e] else float('nan'):.2f}" for e in EMOTIONS
+            )
+            lines.append(f"| {L} | {overall:.2f} | {per} |")
+        report = out_dir / "implicit_scenarios_sweep.md"
+        report.write_text("\n".join(lines))
+        print(f"swept {len(layers_to_run)} layers")
+        print(f"Wrote {report.relative_to(_repo_root)}")
+        return 0
 
+    L = layers_to_run[0]
+    overall, conf, cos_sum, n_int, emo_maxcos, neu_maxcos = analyze(L)
     lines = [
         f"# Implicit-emotion validation — {model_key}",
         "",
-        f"- Vectors: `{story_dir.relative_to(_repo_root)}` (story method), layer **{layer}**",
-        f"- Read-out: Assistant-colon (last prompt token), neutral-centered cosine vs each vector",
+        f"- Vectors: `{story_dir.relative_to(_repo_root)}` (story method), layer **{L}** (~2/3 depth)",
+        "- Read-out: Assistant-colon (last prompt token), neutral-centered cosine vs each vector",
         f"- Scenarios: {sum(n_int.values())} emotion + {len(acts.get('neutral', []))} neutral",
         "",
         f"**Overall argmax accuracy: {overall:.2f}**  (chance = 0.25)",
@@ -205,14 +244,12 @@ def main() -> int:
         f"- mean max|cos| on neutral scenarios: {neu_maxcos:.3f}  (should be lower)",
         "",
         "A diagonal-dominant confusion matrix (intended emotion wins) is "
-        "cross-context evidence the vector is a concept, not story lexis.",
+        "cross-context evidence the vector is a concept, not story lexis. "
+        "Run with --sweep to confirm it is not hostage to this one layer.",
     ]
-
-    out_dir = _repo_root / args.out_dir / model_key
-    out_dir.mkdir(parents=True, exist_ok=True)
     report = out_dir / "implicit_scenarios.md"
     report.write_text("\n".join(lines))
-    print(f"overall accuracy {overall:.2f}  (diag {correct}/{total})")
+    print(f"overall accuracy {overall:.2f}")
     print(f"Wrote {report.relative_to(_repo_root)}")
     return 0
 

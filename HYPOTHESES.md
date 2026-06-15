@@ -785,3 +785,17 @@ these new stimuli, so this precedes any fit.
   inconclusive.
 - Propagated to `docs/methods.md` (new "Vector validation" section) and
   `plans/numerical-intensity-control.md`.
+
+### 2026-06-14 — Intensity-template stimulus expansion (addendum to the C2 amendment)
+
+**Justification:** The dev run showed the numerical-intensity verdict resting
+on only 1–2 inverse families per emotion (n=6 each) — statistically fragile.
+Expanded `data/public/intensity_templates.jsonl` 114 → 156 rows so each of the
+four emotions has **3 inverse families** (was 1–2); the increasing families
+cannot separate semantics from the digit and are not the headline. Pre-data
+change — **no confirmatory analysis has used the intensity set** (the dev run
+was harness validation), so no result is affected. New MD5
+`4e7c59c92398adf6e4e2c7ada9c2c82e` recorded in `configs/stimuli_hashes.yaml`;
+built deterministically by `scripts/build_intensity_templates.py`. Hand-
+authored, no emotion-label words. This refines the validation stimulus set
+adopted above; the H1 metric/falsifier are unchanged.
