@@ -539,3 +539,73 @@ causal steering become the load-bearing evidence**, not optional. Plan drafted:
 **Energy:** brutal infra day, but the science landed — a clean, useful negative
 result that correctly redirects the project from within-corpus probing to the
 semantic-generalization + steering evidence.
+
+## 2026-06-14 — Logit-lens C2 validation: the story vectors ARE emotion concepts
+
+**Did:**
+- Built `scripts/validate_logit_lens.py` (C2, paper §2): unembed each story
+  emotion vector through the final norm + `lm_head`, report top ±15 tokens.
+  Stimulus-free, so it cannot be a stimulus-lexis artifact.
+- Ran it on all three dev `-story` vector sets (Mac, CPU), deepest shared
+  layer per model. Reports in `results/vector_validation/<model>/logit_lens.md`.
+
+**Findings — strongly positive:**
+- **The vectors point at emotion-congruent vocabulary** across all three
+  models, i.e. they are concept directions, not lexis. This resolves the
+  open question the gate left: within-corpus probe AUC was the *wrong
+  instrument* (it measured story separability), not evidence the vectors
+  are junk.
+- **Llama 3.2 1B (L14): cleanest, all four crisp** — admiration→marvel/awe/
+  beauty/majestic; joy→joyful/delighted/exhilarated; loathing→disgusting/
+  miserable/humiliating; sadness→grief/mourning/loneliness/hollow. Every
+  bottom list is the clean opposite valence.
+- **Gemma 2 2B (L24): three strong, joy noisiest** — loathing (🤮, disgusting,
+  abomination, hatred) and sadness (💔, 😢, emptiness, mourned) excellent;
+  admiration good (remarkable, awe, marvels); joy skews relaxed/restored/
+  unexpected with code-token noise.
+- **Qwen 0.5B (L22): three good, admiration FAILS** — joy/loathing/sadness
+  coherent and *heavily multilingual* (愉快, 悲伤, 恶 …), which is bonus
+  evidence (English-only story lexis wouldn't produce cross-language emotion
+  tokens). admiration's top tokens are garbage (code fragments); only its
+  negative pole is coherent.
+
+**Reads:**
+- **Opposite-pair geometry validates** — admiration↔loathing and joy↔sadness
+  recur in each other's bottom-token lists (the cross-emotion centering
+  captured the two-Plutchik-pair design).
+- **Coherence tracks capability** (0.5B worst → 1B cleanest) — encouraging for
+  the 7-9B primaries.
+- **Watch-item: admiration** — weakest on small models and the most
+  surface-flagged in the gate audit. Check layer dependence (sweep mode added
+  to the script) before over-reading the 0.5B failure.
+
+**Caveats:** logit-lens is one of **three** C2 checks (implicit-emotion@colon
+and numerical-intensity still pending, both more rigorous); code/junk tokens
+are expected mid-layer logit-lens noise.
+
+**Verdict:** the cheapest C2 check passed decisively and rules out the main
+failure mode (noise vectors). **Green light** to take the story method to the
+primaries, after the remaining two validators are built and smoke-tested on dev.
+
+**Next:** (i) admiration layer-sweep; (ii) build `validate_implicit_scenarios.py`
++ `validate_intensity_semantic.py` (+ author/freeze their stimuli); (iii) primary
+pod run (≥50 GB) with the full C2 suite.
+
+**Update — layer sweep (same day):** ran `--sweep` on Qwen 0.5B and Gemma 2B.
+The admiration "failure" and the Gemma "joy noise" were both **deepest-layer
+artifacts**, not bad vectors. Qwen-0.5B admiration is clean at L17–L20
+(`impeccable`, `exemplary`, `excellence`, `meticulous`, `marvel`, 非凡/卓越,
+无私/匠心) and only garbles at the deepest shared layer L22; Gemma joy is clean
+at L13–L19 (`ecstatic`, `delighted`, `elated`, `overjoyed`) and drifts to
+"relaxed/calm" only at L22–L24. loathing/sadness are clean almost everywhere.
+**Conclusion:** the very last layers shift toward token-level read-out and lose
+the abstract-concept signal — exactly the paper's layer-progression story and
+why it uses ~2/3 depth ("mid-late"), not the deepest, as the analysis layer.
+**Fix:** `validate_logit_lens.py` default layer changed from deepest-shared to
+the shared layer nearest ~2/3 depth (uses `n_layers` from the model config).
+At that layer **all four emotions are coherent on all three dev models** — no
+emotion is a small-model failure. Methodological note for downstream layer
+selection (steering/probing): prefer ~2/3 depth; do not default to the deepest.
+
+**Energy:** the method works — the vectors are real, and cleanly so at the right
+depth. After a rough infra day, the science is now clearly moving.

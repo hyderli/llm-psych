@@ -68,18 +68,31 @@ def _discover_vectors(story_dir: Path) -> dict[str, dict[int, Path]]:
     return dict(out)
 
 
-def _pick_layer(vectors: dict[str, dict[int, Path]], requested: int | None) -> int:
-    """A layer present for every emotion; default = deepest shared layer."""
-    shared = set.intersection(*(set(layers) for layers in vectors.values()))
+def _pick_layer(
+    vectors: dict[str, dict[int, Path]], requested: int | None, n_layers: int | None = None
+) -> int:
+    """A layer present for every emotion.
+
+    Default = the shared layer nearest **~2/3 model depth** (the paper's
+    "mid-late" analysis layer), NOT the deepest. The sweep (2026-06-14)
+    showed the deepest layers drift toward token-level read-out and lose the
+    abstract-concept signal (admiration garbles at Qwen-0.5B L22; Gemma joy
+    drifts to "relaxed" at L24), while ~2/3 depth is clean for all four
+    emotions. Falls back to the deepest shared layer if n_layers is unknown.
+    """
+    shared = sorted(set.intersection(*(set(layers) for layers in vectors.values())))
     if not shared:
         raise SystemExit("no layer is shared across all emotions")
     if requested is not None:
         if requested not in shared:
             raise SystemExit(
-                f"layer {requested} not present for all emotions; shared = {sorted(shared)}"
+                f"layer {requested} not present for all emotions; shared = {shared}"
             )
         return requested
-    return max(shared)  # deepest = closest to the unembed space (best for logit lens)
+    if n_layers:
+        target = round(2 * n_layers / 3)
+        return min(shared, key=lambda layer: abs(layer - target))
+    return max(shared)
 
 
 def _final_norm(model) -> torch.nn.Module | None:
@@ -101,6 +114,9 @@ def main() -> int:
     ap.add_argument("--out-dir", default="results/vector_validation")
     ap.add_argument("--no-final-norm", action="store_true",
                     help="unembed the raw vector without applying the final norm")
+    ap.add_argument("--sweep", action="store_true",
+                    help="report top-k per emotion across ALL shared layers "
+                         "(diagnose layer dependence, e.g. admiration on 0.5B)")
     args = ap.parse_args()
 
     load_dotenv(_repo_root / ".env")  # HF_TOKEN for gated models (e.g. Gemma)
@@ -118,7 +134,13 @@ def main() -> int:
     vectors = _discover_vectors(story_dir)
     if not vectors:
         raise SystemExit(f"no <emotion>_layer<L>.npy files in {story_dir}")
-    layer = _pick_layer(vectors, args.layer)
+    shared = sorted(set.intersection(*(set(layers) for layers in vectors.values())))
+    if not shared:
+        raise SystemExit("no layer is shared across all emotions")
+    if args.sweep:
+        layers_to_run = shared
+    else:
+        layers_to_run = [_pick_layer(vectors, args.layer, n_layers=cfg.get("n_layers"))]
 
     dtype = getattr(torch, args.dtype)
     lm = load_model(
@@ -134,11 +156,21 @@ def main() -> int:
     norm = None if args.no_final_norm else _final_norm(model)
     norm_note = "final-norm + unembed" if norm is not None else "raw unembed (no final norm)"
 
+    def top_bottom(path: Path) -> tuple[list[str], list[str]]:
+        vt = torch.tensor(np.load(path), dtype=W.dtype, device=W.device)
+        h = norm(vt) if norm is not None else vt
+        logits = h @ W.T
+        dec = lambda idx: [repr(tok.decode([int(i)])) for i in idx]  # noqa: E731
+        return (dec(torch.topk(logits, args.top_k).indices),
+                dec(torch.topk(-logits, args.top_k).indices))
+
+    layer_desc = (f"sweep over shared layers {shared}" if args.sweep
+                  else f"**{layers_to_run[0]}** (~2/3 depth, paper convention; unless --layer given)")
     lines = [
-        f"# Logit-lens validation — {model_key}",
+        f"# Logit-lens validation — {model_key}" + (" (layer sweep)" if args.sweep else ""),
         "",
         f"- Vectors: `{story_dir.relative_to(_repo_root)}` (story method)",
-        f"- Layer: **{layer}**  (deepest shared layer unless --layer given)",
+        f"- Layer: {layer_desc}",
         f"- Read-out: {norm_note}; top ±{args.top_k} tokens",
         "",
         "Emotion-congruent top tokens (and opposite-valence bottom tokens) are "
@@ -146,29 +178,28 @@ def main() -> int:
         "",
     ]
 
-    def decode(idx_tensor: torch.Tensor) -> list[str]:
-        return [repr(tok.decode([int(i)])) for i in idx_tensor]
-
     with torch.no_grad():
         for emotion in sorted(vectors):
-            v = np.load(vectors[emotion][layer])
-            vt = torch.tensor(v, dtype=W.dtype, device=W.device)
-            h = norm(vt) if norm is not None else vt
-            logits = h @ W.T  # [vocab]
-            top = torch.topk(logits, args.top_k)
-            bot = torch.topk(-logits, args.top_k)
-            top_toks = decode(top.indices)
-            bot_toks = decode(bot.indices)
             lines.append(f"## {emotion}")
             lines.append("")
-            lines.append(f"- **top +{args.top_k}:** " + ", ".join(top_toks))
-            lines.append(f"- **bottom −{args.top_k}:** " + ", ".join(bot_toks))
-            lines.append("")
-            print(f"[{emotion}] top: {', '.join(top_toks[:8])}")
+            if args.sweep:
+                for L in layers_to_run:
+                    if L not in vectors[emotion]:
+                        continue
+                    top, _ = top_bottom(vectors[emotion][L])
+                    lines.append(f"- **L{L}:** " + ", ".join(top))
+                lines.append("")
+                print(f"[{emotion}] swept {len(layers_to_run)} layers")
+            else:
+                top, bot = top_bottom(vectors[emotion][layers_to_run[0]])
+                lines.append(f"- **top +{args.top_k}:** " + ", ".join(top))
+                lines.append(f"- **bottom −{args.top_k}:** " + ", ".join(bot))
+                lines.append("")
+                print(f"[{emotion}] top: {', '.join(top[:8])}")
 
     out_dir = _repo_root / args.out_dir / model_key
     out_dir.mkdir(parents=True, exist_ok=True)
-    report = out_dir / "logit_lens.md"
+    report = out_dir / ("logit_lens_sweep.md" if args.sweep else "logit_lens.md")
     report.write_text("\n".join(lines))
     print(f"\nWrote {report.relative_to(_repo_root)}")
     return 0
