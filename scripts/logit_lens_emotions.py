@@ -99,6 +99,26 @@ def load_emotion_vectors(
 # Step 1: extract W_U and norm weight from model
 # ---------------------------------------------------------------------------
 
+def _get_attr(obj, dotted_path: str):
+    """Traverse dotted attribute path, return None if any step is missing."""
+    for attr in dotted_path.split("."):
+        obj = getattr(obj, attr, None)
+        if obj is None:
+            return None
+    return obj
+
+
+def _find_first(model, paths: list[str]):
+    """Return the first attribute path that resolves to a non-None value."""
+    for path in paths:
+        result = _get_attr(model, path)
+        if result is not None:
+            print(f"  Found at: model.{path}")
+            return result
+    tried = ", ".join(f"model.{p}" for p in paths)
+    raise AttributeError(f"Could not locate module. Tried: {tried}")
+
+
 def extract_and_save_wu(save_path: Path) -> None:
     """Load the Gemma 3 4B model, extract W_U and RMSNorm weight, save to disk."""
     from transformers import AutoModelForCausalLM, BitsAndBytesConfig
@@ -114,9 +134,24 @@ def extract_and_save_wu(save_path: Path) -> None:
     )
     model.eval()
 
-    # lm_head is not quantized by bitsandbytes — safe to extract as float
-    wu = model.lm_head.weight.detach().cpu().float()  # [vocab_size, hidden_dim]
-    norm_weight = model.model.norm.weight.detach().cpu().float()  # [hidden_dim]
+    # Gemma 3 4B IT is a multimodal model — text components may be nested under
+    # language_model. Try both the flat path (Gemma 2 / Llama style) and the
+    # nested path (Gemma 3 multimodal style).
+    print("Locating lm_head ...")
+    lm_head = _find_first(model, [
+        "lm_head",
+        "language_model.lm_head",
+    ])
+
+    print("Locating final RMSNorm ...")
+    norm = _find_first(model, [
+        "model.norm",                       # Gemma 2, Llama
+        "language_model.model.norm",        # Gemma 3 multimodal
+        "model.language_model.model.norm",  # alternative nesting
+    ])
+
+    wu = lm_head.weight.detach().cpu().float()          # [vocab_size, hidden_dim]
+    norm_weight = norm.weight.detach().cpu().float()    # [hidden_dim]
 
     save_path.parent.mkdir(parents=True, exist_ok=True)
     torch.save({"wu": wu, "norm_weight": norm_weight}, save_path)
