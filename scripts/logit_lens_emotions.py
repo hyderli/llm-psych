@@ -123,8 +123,9 @@ def _find_final_norm(model):
     """Find the final layer norm, searching known paths then falling back to
     scanning model.model for any module with a 'norm' name and a weight."""
     known_paths = [
-        "model.norm",
-        "language_model.model.norm",
+        "language_model.norm",          # Gemma 3 4B IT (multimodal wrapper)
+        "model.norm",                   # Gemma 2, Llama, plain causal LMs
+        "language_model.model.norm",    # nested causal LM
         "model.language_model.model.norm",
         "model.final_norm",
         "model.model.norm",
@@ -145,13 +146,19 @@ def _find_final_norm(model):
                     print(f"  Found via scan at: model.model.{name}")
                     return candidate
 
-    # Last resort: scan all named modules for the final norm by shape
+    # Last resort: scan all named modules for the final norm by shape.
+    # Collect ALL candidates and pick the last one — the final norm comes after
+    # all transformer layers, so it appears last in named_modules() order.
     lm_head_dim = model.lm_head.weight.shape[1] if hasattr(model, "lm_head") else None
+    candidates = []
     for name, mod in model.named_modules():
         if "norm" in name.lower() and hasattr(mod, "weight"):
             if lm_head_dim is None or mod.weight.shape == (lm_head_dim,):
-                print(f"  Found via named_modules scan at: {name}")
-                return mod
+                candidates.append((name, mod))
+    if candidates:
+        name, mod = candidates[-1]
+        print(f"  Found via named_modules scan (last candidate) at: {name}")
+        return mod
 
     raise AttributeError(
         "Could not find final RMSNorm. Run: "
