@@ -119,6 +119,46 @@ def _find_first(model, paths: list[str]):
     raise AttributeError(f"Could not locate module. Tried: {tried}")
 
 
+def _find_final_norm(model):
+    """Find the final layer norm, searching known paths then falling back to
+    scanning model.model for any module with a 'norm' name and a weight."""
+    known_paths = [
+        "model.norm",
+        "language_model.model.norm",
+        "model.language_model.model.norm",
+        "model.final_norm",
+        "model.model.norm",
+    ]
+    for path in known_paths:
+        result = _get_attr(model, path)
+        if result is not None:
+            print(f"  Found at: model.{path}")
+            return result
+
+    # Fall back: scan direct children of model.model for anything norm-like
+    inner = getattr(model, "model", None)
+    if inner is not None:
+        for name in dir(inner):
+            if "norm" in name.lower() and not name.startswith("_"):
+                candidate = getattr(inner, name, None)
+                if candidate is not None and hasattr(candidate, "weight"):
+                    print(f"  Found via scan at: model.model.{name}")
+                    return candidate
+
+    # Last resort: scan all named modules for the final norm by shape
+    lm_head_dim = model.lm_head.weight.shape[1] if hasattr(model, "lm_head") else None
+    for name, mod in model.named_modules():
+        if "norm" in name.lower() and hasattr(mod, "weight"):
+            if lm_head_dim is None or mod.weight.shape == (lm_head_dim,):
+                print(f"  Found via named_modules scan at: {name}")
+                return mod
+
+    raise AttributeError(
+        "Could not find final RMSNorm. Run: "
+        "[print(n) for n, _ in model.named_modules() if 'norm' in n.lower()]"
+    )
+
+
 def extract_and_save_wu(save_path: Path) -> None:
     """Load the Gemma 3 4B model, extract W_U and RMSNorm weight, save to disk."""
     from transformers import AutoModelForCausalLM, BitsAndBytesConfig
@@ -144,11 +184,7 @@ def extract_and_save_wu(save_path: Path) -> None:
     ])
 
     print("Locating final RMSNorm ...")
-    norm = _find_first(model, [
-        "model.norm",                       # Gemma 2, Llama
-        "language_model.model.norm",        # Gemma 3 multimodal
-        "model.language_model.model.norm",  # alternative nesting
-    ])
+    norm = _find_final_norm(model)
 
     wu = lm_head.weight.detach().cpu().float()          # [vocab_size, hidden_dim]
     norm_weight = norm.weight.detach().cpu().float()    # [hidden_dim]
