@@ -198,9 +198,11 @@ def get_last_token_activation(
     np.ndarray of shape (hidden_dim,)
     """
     messages = [{"role": "user", "content": prompt}]
-    input_ids = tokenizer.apply_chat_template(
+    encoded = tokenizer.apply_chat_template(
         messages, add_generation_prompt=True, return_tensors="pt"
-    ).to(model.device)
+    )
+    # Newer transformers returns BatchEncoding; older returns a raw tensor.
+    input_ids = (encoded["input_ids"] if hasattr(encoded, "keys") else encoded).to(model.device)
 
     with torch.no_grad():
         out = model(input_ids=input_ids, output_hidden_states=True)
