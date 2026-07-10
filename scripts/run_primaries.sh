@@ -42,6 +42,21 @@ done
 
 log() { printf '\033[1;35m[primaries]\033[0m %s\n' "$*" >&2; }
 
+# Guaranteed shutdown: registered on EXIT so the pod stops (when --shutdown)
+# even if a stage aborts the script — an unattended overnight failure must
+# not leave the pod billing until someone notices.
+shutdown_pod() {
+    if [[ "$DO_SHUTDOWN" -eq 1 ]]; then
+        if [[ -n "${RUNPOD_POD_ID:-}" ]] && command -v runpodctl >/dev/null 2>&1; then
+            log "stopping pod $RUNPOD_POD_ID"
+            runpodctl stop pod "$RUNPOD_POD_ID" || log "runpodctl stop failed; stop manually."
+        else
+            log "shutdown requested but runpodctl/RUNPOD_POD_ID unavailable; stop the pod manually."
+        fi
+    fi
+}
+trap shutdown_pod EXIT
+
 run_validators() {
     local m="$1"
     # diagnostics — never abort the whole run if one fails
@@ -65,10 +80,19 @@ free_model_cache() {
     fi
 }
 
+FAILED_MODELS=()
+
 for m in $MODELS; do
     log "================  $m  ================"
     log "story pipeline (generate -> extract -> derive -> probes -> push)"
-    bash scripts/run_story_pipeline.sh --model "$m" --push
+    # Failure isolation: one model failing must not kill the remaining
+    # primaries (each is an independent multi-hour investment).
+    if ! bash scripts/run_story_pipeline.sh --model "$m" --push; then
+        log "ERROR: story pipeline failed for $m — skipping its validators, continuing with remaining models"
+        FAILED_MODELS+=("$m")
+        free_model_cache "$m"   # partial cache would starve the next model of disk
+        continue
+    fi
     log "C2 validation suite"
     run_validators "$m"
     free_model_cache "$m"
@@ -85,12 +109,9 @@ upload_folder(repo_id="${DATASET}", repo_type="dataset",
 print("pushed vector_validation/")
 PY
 
-log "ALL PRIMARIES COMPLETE"
-if [[ "$DO_SHUTDOWN" -eq 1 ]]; then
-    if [[ -n "${RUNPOD_POD_ID:-}" ]] && command -v runpodctl >/dev/null 2>&1; then
-        log "stopping pod $RUNPOD_POD_ID"
-        runpodctl stop pod "$RUNPOD_POD_ID" || log "runpodctl stop failed; stop manually."
-    else
-        log "shutdown requested but runpodctl/RUNPOD_POD_ID unavailable; stop the pod manually."
-    fi
+if [[ ${#FAILED_MODELS[@]} -gt 0 ]]; then
+    log "COMPLETE WITH FAILURES: ${FAILED_MODELS[*]} — their artefacts are NOT on HF; rerun with --models \"${FAILED_MODELS[*]}\""
+    exit 1   # EXIT trap still stops the pod if --shutdown was given
 fi
+log "ALL PRIMARIES COMPLETE"
+# (shutdown handled by the EXIT trap)
