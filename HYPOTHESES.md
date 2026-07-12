@@ -799,3 +799,70 @@ was harness validation), so no result is affected. New MD5
 built deterministically by `scripts/build_intensity_templates.py`. Hand-
 authored, no emotion-label words. This refines the validation stimulus set
 adopted above; the H1 metric/falsifier are unchanged.
+
+### 2026-07-12 — Per-emotion layer selection for C2 concept validation (H1)
+
+**Justification:** The C2 layer sweeps on the three primaries (run
+2026-07-11/12) show the uniform ~2/3-depth convention (Llama L21, Qwen
+L19, Gemma L28) mis-scores three of four emotions: sadness recovers
+strongly at non-conventional layers on all three models, joy recovers
+on Llama and Qwen, and admiration fails the intensity inverse-family
+test at *every* swept layer on all three models (Gemma anti-semantic at
+all 20). A uniform layer thus over-rejects layer-sensitive concept
+vectors and cannot distinguish them from construction failures. See
+`plans/layer-selection-amendment.md` for the full analysis; this block
+supersedes that draft where they differ.
+
+**Timing disclosure (post-hoc with respect to the sweeps):** both the
+implicit-scenario and intensity sweeps for the primaries were run and
+inspected before this rule was written. The rule is deterministic and
+locked here, but the already-observed sweep numbers are
+**retrospective/descriptive only**. Confirmatory status attaches
+exclusively to the fresh-stimulus confirmation defined below, which has
+not been authored or run as of this amendment.
+
+**Selection rule (deterministic, applied per model × emotion):**
+
+1. Compute implicit-scenario argmax accuracy (frozen scenario set;
+   n=10 per emotion, so granularity is 0.1) at every layer in the
+   model's sweep grid.
+2. Smooth with a 3-layer moving average and select the layer with the
+   maximum smoothed accuracy; break exact ties toward the shallower
+   layer (weak regularization against late-layer noise).
+3. If the maximum *unsmoothed* accuracy is < 0.60 (chance 0.25): report
+   "no recoverable layer" — vector-quality failure; do not force a
+   selection.
+4. **Vector-quality clause:** independently of steps 1–3, if no layer
+   in the already-run intensity sweep reaches inverse-family mean
+   ρ(rank) ≥ 0.6, the emotion is reported as a **vector-quality
+   failure** (construction confounded; the admiration pattern) and is
+   routed to the residualization experiment rather than to layer
+   confirmation. (Note: implicit accuracy alone cannot catch this case
+   — admiration scores ~1.00 on implicit at nearly all layers while
+   anti-tracking semantic intensity.)
+5. Selected layers are locked in `configs/vector_validation/layers.yaml`
+   before the confirmation stimuli are authored.
+
+**Held-out confirmation (the confirmatory test):** ≥3 **new**
+hand-authored inverse families per emotion, same constraints as the
+2026-06-14 set (no emotion-label words; deterministic build; MD5 frozen
+in `configs/stimuli_hashes.yaml` **before any model run**). Evaluated
+at the locked layer only. Pass: inverse-family mean ρ(rank) ≥ 0.6 →
+concept-validated at that layer. Fail: reported as "layer-sensitive but
+not robustly concept-validated." Logit-lens token congruence at the
+selected layer is reported as descriptive, not gating.
+
+**Consequences:**
+
+- Emotions not concept-validated under this rule are **excluded from
+  confirmatory H2/H3/H7 steering claims** unless a construction fix
+  (e.g., residualization, separate pre-registered experiment) recovers
+  them under the same validation standard.
+- The H1 probe metric and probe-layer selection (held-out AUC on story
+  activations) are **unchanged**; the C2 concept layer may differ from
+  the probe layer and both are reported.
+- Loathing passed all three C2 tests at the uniform convention layer on
+  all three primaries and is grandfathered — no re-selection
+  (descriptive convenience, not a hypothesis test).
+- Steering vectors for H2/H3/H7 use the C2-validated per-emotion layer
+  as the injection layer, reported per model × emotion.
