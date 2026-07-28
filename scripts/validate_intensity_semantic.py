@@ -20,7 +20,7 @@ import argparse
 import hashlib
 import json
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 
 import numpy as np
@@ -100,11 +100,33 @@ def main() -> int:
     ap.add_argument("--sweep", action="store_true",
                     help="report per-emotion inverse-family ρ(rank) across ALL shared layers "
                          "(layer-robustness curve) instead of the full table at ~2/3 depth")
+    ap.add_argument("--stimuli", default=None,
+                    help="alternate stimulus JSONL under data/public/ (default: the "
+                         "2026-06-14 set). Use intensity_confirmation.jsonl for the "
+                         "held-out confirmatory run at locked layers. The emotion list "
+                         "and report filename are derived from the file, so the two runs "
+                         "cannot overwrite each other.")
     args = ap.parse_args()
+    global EMOTIONS
 
     load_dotenv(_repo_root / ".env")
-    _check_hash(STIMULI)
-    rows = [json.loads(line) for line in STIMULI.read_text().splitlines() if line.strip()]
+    stimuli = STIMULI if args.stimuli is None else _repo_root / "data" / "public" / args.stimuli
+    if not stimuli.exists():
+        raise SystemExit(f"stimulus file not found: {stimuli}")
+    _check_hash(stimuli)
+    rows = [json.loads(line) for line in stimuli.read_text().splitlines() if line.strip()]
+
+    # Emotions come from the stimulus file rather than a fixed list: the
+    # confirmation set covers only {joy, loathing, sadness} (admiration has no
+    # locked layer to confirm at). For the 2026-06-14 set this reproduces the
+    # previous hard-coded list exactly, so existing reports are unchanged.
+    EMOTIONS = sorted({r["emotion"] for r in rows} - {"neutral"})
+    if not EMOTIONS:
+        raise SystemExit(f"no emotion rows in {stimuli.name}")
+    # Reports are named after the stimulus file so a confirmatory run can never
+    # silently overwrite the descriptive June run.
+    report_stem = ("intensity_semantic" if args.stimuli is None
+                   else f"intensity_{stimuli.stem.replace('intensity_', '')}")
 
     cfg = _read_model_cfg(args.model_config)
     hf_model_id = cfg["hf_model_id"]
@@ -120,6 +142,16 @@ def main() -> int:
         layers_to_run = shared
     else:
         layers_to_run = [_pick_layer(vectors, args.layer, cfg.get("n_layers"))]
+    missing = [e for e in EMOTIONS if e not in vectors]
+    if missing:
+        raise SystemExit(
+            f"{stimuli.name} contains emotions with no derived vector in "
+            f"{story_dir.name}: {missing}"
+        )
+    # Smallest family size, for the honest caveat on max|ρ| (June set: 6;
+    # confirmation set: 12).
+    _fam_counts = Counter((r["emotion"], r["family"]) for r in rows)
+    _family_n = min(_fam_counts.values())
     vec = {L: {e: np.load(vectors[e][L]).astype(np.float64) for e in EMOTIONS}
            for L in layers_to_run}
 
@@ -204,7 +236,7 @@ def main() -> int:
             cells = " | ".join(f"{_mean(per_inv[e]):+.2f}" for e in EMOTIONS)
             nz = np.nanmean(neutral_rho) if neutral_rho else float("nan")
             lines.append(f"| {L} | {cells} | {nz:.2f} |")
-        report = out_dir / "intensity_semantic_sweep.md"
+        report = out_dir / f"{report_stem}_sweep.md"
         report.write_text("\n".join(lines))
         print(f"swept {len(layers_to_run)} layers")
         print(f"Wrote {report.relative_to(_repo_root)}")
@@ -254,7 +286,7 @@ def main() -> int:
             "## Neutral control (number confound)",
             "",
             f"- mean |ρ(proj, x)| over neutral families × vectors: {np.nanmean(neutral_rho):.2f}  (want low)",
-            f"- max |ρ(proj, x)|: {np.nanmax(neutral_rho):.2f}  (inflated by n=6; mean is the honest read)",
+            f"- max |ρ(proj, x)|: {np.nanmax(neutral_rho):.2f}  (inflated by n={_family_n}; mean is the honest read)",
         ]
     lines += [
         "",
@@ -265,7 +297,7 @@ def main() -> int:
         "a surface/digit account predicts ρ(x); only a semantic account predicts ρ(rank). "
         "That gap is the decisive concept-vs-surface evidence (`plans/numerical-intensity-control.md`).",
     ]
-    report = out_dir / "intensity_semantic.md"
+    report = out_dir / f"{report_stem}.md"
     report.write_text("\n".join(lines))
     for e in EMOTIONS:
         m = _mean(per_emo_inv[e])

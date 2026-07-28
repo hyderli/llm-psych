@@ -15,8 +15,19 @@ emotion_prompts.parquet: ffd067e6346cd597dbc91e791415d115   # CAA seed set (4 em
 story_topics.txt: 3efbfc2e0227f1b357b7fc749a2867f7          # shared topic list for the story method
 
 # --- C2 vector-validation stimuli (2026-06-14; Sofroniew et al. §2) ---
+# SPENT: these were run and inspected before the 2026-07-12 layer-selection
+# rule was written, so under that amendment their numbers are
+# retrospective/descriptive only. Do not use for confirmatory claims.
 implicit_emotion_scenarios.jsonl: f93fd7d608449291f38d0a4e3131ce8e   # 50 rows (10/emotion + 10 neutral)
 intensity_templates.jsonl: 4e7c59c92398adf6e4e2c7ada9c2c82e          # 156 rows, 3 inverse families/emotion; built by scripts/build_intensity_templates.py
+
+# --- C2 HELD-OUT confirmation stimuli (2026-07-28; the confirmatory test) ---
+# Frozen before any model run, per the 2026-07-12 amendment. 144 rows = 12
+# families x 12 x-values: 3 INVERSE families each for joy/loathing/sadness
+# plus 3 flat neutral controls. Admiration excluded (vector-quality failure,
+# no locked layer). Built by scripts/build_confirmation_intensity.py; guarded
+# by tests/test_confirmation_stimuli.py.
+intensity_confirmation.jsonl: 36be3dc00256bad9d30976cbc9a61fda
 
 # --- Behavioral-task stimuli ---
 blackmail_scenarios.jsonl: 6b0e604522b63275413b1927758fc531       # H2 primary
