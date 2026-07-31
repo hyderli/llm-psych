@@ -32,7 +32,11 @@ Outputs
 * ``emotion_label`` — emotion name, or ``"neutral"`` for the baseline.
 * ``topic`` — topic string from ``data/public/story_topics.txt``.
 * ``n_tokens`` — length of the generated story in target-model tokens.
-* ``gen_seed`` — sampling seed for the generation call.
+* ``gen_seed`` — sampling seed for the generation call. Stories are
+  generated in per-topic batches (all ``stories_per_topic`` stories for a
+  topic share one prompt and are sampled in a single batched
+  ``model.generate(..., num_return_sequences=k)`` call), so ``gen_seed``
+  is shared by every story from the same batch, not unique per row.
 * ``model_id`` / ``model_sha`` — for provenance.
 
 Stories shorter than ``derivation.generator.min_story_tokens`` are
@@ -126,18 +130,28 @@ def _build_prompt(emotion: str, topic: str) -> str:
     return EMOTION_PROMPT_TEMPLATE.format(topic=topic, emotion=emotion)
 
 
-def _generate_one(
+def _generate_batch(
     *,
     model,
     tokenizer,
     prompt: str,
+    num_sequences: int,
     max_new_tokens: int,
     temperature: float,
     do_sample: bool,
     seed: int,
     device: str,
-) -> tuple[str, int]:
-    """Generate a single story and return (text, n_tokens).
+) -> tuple[list[str], list[int]]:
+    """Generate ``num_sequences`` independent stories from one prompt in a
+    single batched forward pass; return (texts, n_tokens_per_story).
+
+    All stories for a topic share one prompt (only sampling differs), so
+    they're generated together via ``num_return_sequences`` instead of one
+    ``model.generate()`` call per story — batch size 1 badly underuses a
+    GPU this size. One seed covers the whole batch (see ``gen_seed`` in the
+    output schema); rows still sample independently because HF's sampler
+    draws from one shared RNG stream advanced per row, not a replayed
+    single draw.
 
     Uses the standard generation-prompt pattern: a single user turn with
     ``add_generation_prompt=True`` so the model writes a fresh assistant
@@ -160,6 +174,9 @@ def _generate_one(
         return_dict=True,
     ).to(device)
 
+    eos_id = tokenizer.eos_token_id
+    pad_id = tokenizer.pad_token_id or eos_id
+
     torch.manual_seed(seed)
     with torch.no_grad():
         gen_ids = model.generate(
@@ -167,11 +184,23 @@ def _generate_one(
             max_new_tokens=max_new_tokens,
             temperature=temperature,
             do_sample=do_sample,
-            pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
+            num_return_sequences=num_sequences,
+            pad_token_id=pad_id,
         )
-    new_token_ids = gen_ids[0, inputs["input_ids"].shape[-1]:]
-    story_text = tokenizer.decode(new_token_ids, skip_special_tokens=True).strip()
-    return story_text, int(new_token_ids.shape[0])
+    input_len = inputs["input_ids"].shape[-1]
+    texts: list[str] = []
+    n_tokens: list[int] = []
+    for row in gen_ids:
+        new_token_ids = row[input_len:]
+        # Sequences that finish before the batch's longest one are
+        # right-padded with pad_id to a uniform tensor width — trim at the
+        # first EOS so text/n_tokens reflect real content, not padding.
+        eos_positions = (new_token_ids == eos_id).nonzero(as_tuple=True)[0]
+        if len(eos_positions) > 0:
+            new_token_ids = new_token_ids[: int(eos_positions[0]) + 1]
+        texts.append(tokenizer.decode(new_token_ids, skip_special_tokens=True).strip())
+        n_tokens.append(int(new_token_ids.shape[0]))
+    return texts, n_tokens
 
 
 # --------------------------------------------------------------------------
@@ -235,16 +264,19 @@ def main(cfg: DictConfig) -> None:
     for topic_idx, topic in enumerate(topics):
         prompt = _build_prompt(emotion_name, topic)
         accepted = 0
-        attempts = 0
-        # Bounded per-topic retries so short/empty generations can never spin
-        # forever — fail loudly for this topic and move on.
-        max_attempts = stories_per_topic * 10 + 10
-        while accepted < stories_per_topic and attempts < max_attempts:
-            attempts += 1
-            story_text, n_tokens = _generate_one(
+        rounds = 0
+        # Bounded per-topic retry rounds so short/empty generations can never
+        # spin forever — fail loudly for this topic and move on. Each round
+        # batches all still-needed stories into one generate() call.
+        max_rounds = 10
+        while accepted < stories_per_topic and rounds < max_rounds:
+            rounds += 1
+            remaining = stories_per_topic - accepted
+            story_texts, token_counts = _generate_batch(
                 model=lm.model,
                 tokenizer=lm.tokenizer,
                 prompt=prompt,
+                num_sequences=remaining,
                 max_new_tokens=int(gen_cfg.max_new_tokens),
                 temperature=float(gen_cfg.temperature),
                 do_sample=bool(gen_cfg.do_sample),
@@ -252,27 +284,28 @@ def main(cfg: DictConfig) -> None:
                 device=device,
             )
             seed_counter += 1
-            if n_tokens < min_story_tokens:
-                dropped += 1
-                continue
-            rows.append({
-                "id": f"{emotion_name}_{topic_idx}_{accepted}",
-                "story_text": story_text,
-                "emotion_label": emotion_name,
-                "topic": topic,
-                "n_tokens": n_tokens,
-                "gen_seed": seed_counter - 1,
-                "model_id": lm.cfg.hf_model_id,
-                "model_sha": lm.cfg.hf_revision or "",
-            })
-            accepted += 1
-            pbar.update(1)
+            for story_text, n_tokens in zip(story_texts, token_counts):
+                if n_tokens < min_story_tokens:
+                    dropped += 1
+                    continue
+                rows.append({
+                    "id": f"{emotion_name}_{topic_idx}_{accepted}",
+                    "story_text": story_text,
+                    "emotion_label": emotion_name,
+                    "topic": topic,
+                    "n_tokens": n_tokens,
+                    "gen_seed": seed_counter - 1,
+                    "model_id": lm.cfg.hf_model_id,
+                    "model_sha": lm.cfg.hf_revision or "",
+                })
+                accepted += 1
+                pbar.update(1)
         if accepted < stories_per_topic:
             log.warning(
-                "topic %r (emotion=%s): only %d/%d stories after %d attempts "
+                "topic %r (emotion=%s): only %d/%d stories after %d rounds "
                 "(short generations dropped). Raise max_new_tokens or lower "
                 "min_story_tokens.",
-                topic, emotion_name, accepted, stories_per_topic, attempts,
+                topic, emotion_name, accepted, stories_per_topic, rounds,
             )
     pbar.close()
 
