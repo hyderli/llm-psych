@@ -66,6 +66,23 @@ required before any extraction run. See HYPOTHESES.md amendment dated
 | 19    | loathing   | Plutchik  | admiration  |
 | 20    | admiration | Plutchik  | loathing    |
 
+## Story-method exploratory additions (added 2026-07-31)
+
+New emotions added for exploratory story-method generation, alongside
+the existing `anger`/`fear` legacy configs (reused as-is, see above).
+Story generation only needs `name:` (the generation target / banned
+word); `label:` is reserved for future CAA probe-array use — no
+`emotion_prompts.parquet` rows exist yet for these labels, so CAA/probe
+use is blocked until stimuli are authored. Not part of the confirmatory
+primary set; any downstream use requires a HYPOTHESES.md amendment,
+same rule as the other former-primary-9 / exploratory emotions above.
+
+| label | emotion | note |
+|-------|---------|------|
+| 21    | nervous | new, story-method only |
+| 22    | anxious | new, story-method only |
+| 23    | loving  | new, story-method only; paper's warmth pole referenced in the H7 note (loving/calm vs desperate/afraid/anger), not previously configured |
+
 ## Neutral baseline
 
 Neutral prompts are not assigned an integer label — they are handled as
