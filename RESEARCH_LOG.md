@@ -677,3 +677,91 @@ model's HF cache (disk-full lesson) → push `vector_validation/` reports →
 optional `--shutdown`.
 
 **Energy:** C2 harness complete and de-confounded; the primaries are the payoff.
+
+## 2026-07-31 — desperate/calm + 5 more emotions on gemma-2-9b-it; pod/pipeline fixes
+
+**Context:** working the `add-desperate-calm-vectors.md` TODO (local-only
+note, not committed) on a fresh RunPod pod, then extended to 5 more
+emotions at the PI's direction.
+
+**Pod/pipeline fixes (blocking, found and fixed in order):**
+- **Torch/CUDA:** this pod's GPU is a Blackwell RTX PRO 6000 (sm_120), not
+  the RTX 4090 (sm_86) the repo's `cu124` torch pin assumed. `cu124` wheels
+  only ship kernels up to sm_90 — `torch.cuda.is_available()` reported
+  `True` but any real op failed with "no kernel image is available for
+  execution on the device." Repinned `pyproject.toml` to the `cu128` index,
+  `torch>=2.7.0`, `uv lock`; verified with a real CUDA matmul. cu128 should
+  stay backward-compatible with 4090 pods (untested there).
+- **Missing `.env` load:** `generate_emotion_stories.py` and
+  `extract_story_activations.py` both call `load_model()` (needs
+  `HF_TOKEN` for gated repos — Gemma, Llama) but neither loaded `.env`,
+  unlike every other pipeline script. Caused a `GatedRepoError` 401 on
+  `google/gemma-2-2b-it` even with `HF_TOKEN` set in `.env`. Added the
+  same `load_dotenv(_repo_root / ".env")` pattern used elsewhere.
+- **Batch-size-1 generation:** `generate_emotion_stories.py` generated one
+  story per `model.generate()` call, sequentially. Since all
+  `stories_per_topic` stories for a topic share one prompt (only sampling
+  differs), switched to one batched call per topic via
+  `num_return_sequences`. Result: `gemma2_9b` (644 stories, 2 emotions)
+  ran in **13m50s** batched vs `gemma2_2b`'s **1h44m16s** unbatched for the
+  same 644-story shape — ~7.5x faster despite gemma2_9b having ~3.5x more
+  params. Trade-off: `gen_seed` is now shared per topic-batch, not unique
+  per story (documented in the script's docstring). Verified correctness
+  with a synthetic-tensor test of the new EOS-padding-trim logic and a
+  live 5-sequence smoke test before running on real data.
+- Both fixes committed locally only (not pushed to `origin/main`).
+
+**Emotion configs added:** `desperate`/`calm` already existed (former
+primary-9 labels 7/6, reused as-is). Added three new configs for
+`nervous` (21), `anxious` (22), `loving` (23) — `anger` (1) and `fear` (2)
+already existed. `EMOTION_LABELS.md` updated. All exploratory, not part of
+the confirmatory primary set (per the file's existing amendment-required
+rule).
+
+**Story generation (topic-matched, 46 topics × 7/topic = 322 stories,
+`max_new_tokens=200`, same config as the existing primary corpus):**
+- `desperate` + `calm` on `gemma2_2b` (dev) and `gemma2_9b`.
+- `anger`, `fear`, `nervous`, `anxious`, `loving` on `gemma2_9b` only.
+- 0 stories dropped below `min_story_tokens` anywhere.
+
+**Literal-word leakage check (banned word appearing verbatim in its own
+story, should be ~0 per the prompt's own constraint):** `desperate` is the
+outlier — **24.5%** on `gemma2_2b`, dropping to **8.4%** on `gemma2_9b`
+(bigger model helps but doesn't fully fix it). `calm` and the primary
+four (`admiration`/`joy`/`loathing`/`sadness`) sit in a 0–4.3% band on
+both models; `anger`/`fear`/`nervous`/`anxious`/`loving` on `gemma2_9b`
+also land in that same low band (0–2.8%). **Not yet addressed** — flagged
+to the PI, left as-is for now pending a decision (filter vs. reprompt).
+
+**Activations + steering vectors (gemma2_9b only):** extracted pooled
+story activations (layers 21–40, token ≥50) for all 11 new/legacy
+emotions plus pulled+re-extracted `admiration`/`joy`/`loathing`/`sadness`/
+`neutral` locally (previously only on HF), giving 12 `.npz` files
+(11 emotions + neutral) in one directory. Ran
+`derive_story_steering_vectors.py` once over all of them →
+**220 vectors** (11 emotions × 20 layers) + `manifest.yaml`.
+
+**Re-derivation moved the primary four, confirmed not just asserted:**
+since `v_e = mean_e - grand_mean` and `grand_mean` is the mean over
+*all* emotion means present, going from 4→11 emotions shifted
+`admiration`/`joy`/`loathing`/`sadness` too, with no change to their own
+story corpora. Verified concretely via HF commit history: fetched the
+pre-existing `admiration_layer30.npy` from the commit before today's
+push and compared to the new one — cosine similarity **0.955** (not
+1.0), norm 37.7 → 47.7. Any prior confirmatory result on `gemma-2-9b-it`
+using the old 4-emotion vectors is now stale. **Not tagged as a separate
+milestone snapshot** (PI decision) — the old 4-emotion vectors are only
+recoverable via HF git history now, not a named revision.
+
+**Pushed to HF (`llm-psych/llm-psych-activations`):** all 7 new story
+corpora (both models), all 12 `gemma-2-9b-it` story activations, and all
+220 steering vectors + manifest. Confirmed via a fresh remote listing
+that HF now matches local exactly.
+
+**Next:** `llama31_8b` and `qwen25_7b` still need the same 7 emotions
+(desperate/calm/anger/fear/nervous/anxious/loving) — only `gemma2_9b` is
+done among the primaries. Geometry re-run (D1, `opposite_pair_cosine`
+etc.) not yet done on the expanded set. `desperate`'s elevated
+literal-word leakage is still open. 4 local commits on this pod
+(`f18d9a6` cu128, `050039a` dotenv fix, `32f0df0` batching,
+`0f89e38` new emotion configs) are **not pushed to `origin/main`** yet.
