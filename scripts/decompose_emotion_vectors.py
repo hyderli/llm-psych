@@ -11,7 +11,7 @@ Two lens sources are supported:
 
 * ``neuronpedia`` — pre-fitted Jacobian lenses released by Neuronpedia on the
   HF Hub (``neuronpedia/jacobian-lens``).
-* ``logit`` — J_l is the identity, so the decomposition uses the raw unembedding
+* ``logit`` — j_l is the identity, so the decomposition uses the raw unembedding
   rows. This is the cheap fallback and is what the paper calls the logit-lens
   approximation; it captures much of the workspace-like structure but with
   lower reliability in early/mid layers.
@@ -80,7 +80,6 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import os
 import re
 import sys
 from pathlib import Path
@@ -158,7 +157,7 @@ def _parse_args() -> argparse.Namespace:
         default="neuronpedia",
         help=(
             "Lens to use: 'neuronpedia' loads a pre-fitted J-lens from the HF Hub; "
-            "'logit' uses the unembedding rows directly (J_l = identity)."
+            "'logit' uses the unembedding rows directly (j_l = identity)."
         ),
     )
     parser.add_argument(
@@ -202,12 +201,21 @@ def _parse_args() -> argparse.Namespace:
         help="Subset of layer indices to decompose (default: all discovered).",
     )
     parser.add_argument(
+        "--full-model",
+        action="store_true",
+        help=(
+            "Load the full model instead of using the weights-light shard loader. "
+            "Useful on a pod where the full checkpoint is cached or network is fast. "
+            "Without this flag, only the unembedding/norm shard(s) are downloaded."
+        ),
+    )
+    parser.add_argument(
         "--device",
         type=str,
         default=None,
         help=(
-            "Override the model config's device_map when using the full-model "
-            "fallback (e.g. 'mps', 'cpu', 'auto')."
+            "Override the model config's device_map when using --full-model "
+            "(e.g. 'mps', 'cpu', 'auto'). Ignored when loading only shards."
         ),
     )
     parser.add_argument(
@@ -264,11 +272,11 @@ def _load_unembed_and_norm_shards(
     hf_model_id: str,
     revision: str | None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Download only the safetensors shard(s) holding W_U and final norm.
+    """Download only the safetensors shard(s) holding w_u and final norm.
 
     Returns
     -------
-    W_U : [vocab, d]
+    w_u : [vocab, d]
         LM head or tied embedding weight.
     g : [d]
         Final RMSNorm scale (with Gemma offset applied).
@@ -334,25 +342,25 @@ def _load_unembed_and_norm_shards(
         )
 
     # Read only the needed tensors.
-    W_U: torch.Tensor | None = None
+    w_u: torch.Tensor | None = None
     g: torch.Tensor | None = None
     for shard_path in shard_paths.values():
         with safe_open(shard_path, framework="pt", device="cpu") as f:
             keys = set(f.keys())
             for key in unembed_keys:
-                if W_U is None and key in keys:
-                    W_U = f.get_tensor(key)
+                if w_u is None and key in keys:
+                    w_u = f.get_tensor(key)
             for key in norm_keys:
                 if g is None and key in keys:
                     g = f.get_tensor(key)
 
-    if W_U is None:
+    if w_u is None:
         raise RuntimeError(f"Could not find unembedding weight for {hf_model_id}")
     if g is None:
         raise RuntimeError(f"Could not find final norm weight for {hf_model_id}")
 
     g = _norm_scale_from_weight(g.float(), hf_model_id)
-    return W_U.float(), g
+    return w_u.float(), g
 
 
 def _extract_unembed_and_norm(
@@ -360,7 +368,7 @@ def _extract_unembed_and_norm(
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Extract final unembedding weights and final RMSNorm scale from a loaded model."""
     if hasattr(model, "lm_head"):
-        W_U = model.lm_head.weight.detach().float().to(device)
+        w_u = model.lm_head.weight.detach().float().to(device)
     else:
         raise RuntimeError("Model has no lm_head attribute")
 
@@ -374,9 +382,9 @@ def _extract_unembed_and_norm(
     if hasattr(norm, "weight") and norm.weight is not None:
         g = _norm_scale_from_weight(norm.weight.detach().float().to(device), hf_model_id)
     else:
-        g = torch.ones(W_U.shape[1], device=device, dtype=torch.float32)
+        g = torch.ones(w_u.shape[1], device=device, dtype=torch.float32)
 
-    return W_U, g
+    return w_u, g
 
 
 def _resolve_lens_filename(hf_model_id: str) -> str:
@@ -427,16 +435,15 @@ def _load_jlens(
     provenance : dict[str, Any] | None
         Metadata for the manifest, or None for logit-lens fallback.
     """
-    if source == "logit":
-        log.info("Using logit-lens fallback (J_l = identity)")
-        return None, None
-
-    if source != "neuronpedia":
-        raise ValueError(f"Unknown lens source: {source}")
-
+    # A local lens file always wins, regardless of --lens-source.
     if lens_path is not None:
         filename = str(lens_path)
         local = str(lens_path.resolve())
+    elif source == "logit":
+        log.info("Using logit-lens fallback (j_l = identity)")
+        return None, None
+    elif source != "neuronpedia":
+        raise ValueError(f"Unknown lens source: {source}")
     else:
         filename = _resolve_lens_filename(hf_model_id)
         local = hf_hub_download(
@@ -446,7 +453,7 @@ def _load_jlens(
         )
 
     state = torch.load(local, map_location="cpu", weights_only=False)
-    J: dict[int, torch.Tensor] = state["J"]
+    j: dict[int, torch.Tensor] = state["J"]
     provenance = {
         "repo_id": "neuronpedia/jacobian-lens",
         "filename": filename,
@@ -461,17 +468,17 @@ def _load_jlens(
         provenance["source_layers"],
         provenance["d_model"],
     )
-    return J, provenance
+    return j, provenance
 
 
-def _nnls_active(A: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+def _nnls_active(active: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
     """Exact nonnegative least-squares on the active atom set.
 
     Parameters
     ----------
-    A : [d, m]
+    active : [d, m]
         Column vectors for the active atoms.
-    b : [d]
+    target : [d]
         Target vector.
 
     Returns
@@ -479,15 +486,15 @@ def _nnls_active(A: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     coefs : [m]
         Nonnegative coefficients.
     """
-    sol, _ = nnls(A.numpy(), b.numpy())
+    sol, _ = nnls(active.numpy(), target.numpy())
     return torch.from_numpy(sol).float()
 
 
 def _decompose_vector(
     v: np.ndarray,
     sign: int,
-    J_l: torch.Tensor | None,
-    W_U: torch.Tensor,
+    j_l: torch.Tensor | None,
+    w_u: torch.Tensor,
     g: torch.Tensor,
     tokenizer: PreTrainedTokenizerBase,
     k: int,
@@ -501,9 +508,9 @@ def _decompose_vector(
         Steering vector, shape ``(d,)``.
     sign
         ``+1`` or ``-1``.
-    J_l
+    j_l
         J-lens transport matrix for this layer, or ``None`` for logit-lens.
-    W_U, g
+    w_u, g
         Unembedding matrix and final norm scale.
     tokenizer
         Tokenizer for decoding candidate token ids.
@@ -517,41 +524,40 @@ def _decompose_vector(
         and ``metrics`` is a JSON-serialisable dict.
     """
     h = sign * torch.from_numpy(v).float().cpu()
-    d = h.shape[0]
 
     # Transport to final-layer basis and compute lens logits.
-    z = h @ J_l.T if J_l is not None else h
-    logits = (z * g) @ W_U.T  # [vocab]
+    z = h @ j_l.T if j_l is not None else h
+    logits = (z * g) @ w_u.T  # [vocab]
 
     # Candidate atoms: top tokens by lens logit.
     cand = logits.topk(n_candidates).indices  # [n_candidates]
 
-    # Build candidate J-lens vectors in source space: rows of W_U diag(g) J_l.
-    w_cand = W_U[cand]  # [n_candidates, d]
-    if J_l is not None:
-        V = (w_cand * g) @ J_l  # [n_candidates, d]
+    # Build candidate J-lens vectors in source space: rows of w_u diag(g) j_l.
+    w_cand = w_u[cand]  # [n_candidates, d]
+    if j_l is not None:
+        atoms = (w_cand * g) @ j_l  # [n_candidates, d]
     else:
-        V = w_cand
+        atoms = w_cand
 
     # Unit-normalise atoms; coefficients absorb scale.
-    norms = V.norm(dim=1, keepdim=True)
-    Vn = V / torch.clamp(norms, min=1e-12)
+    norms = atoms.norm(dim=1, keepdim=True)
+    atoms_norm = atoms / torch.clamp(norms, min=1e-12)
 
     picked: list[int] = []
     resid = h.clone()
     coefs = torch.zeros(0, dtype=torch.float32)
 
     for _ in range(k):
-        corr = Vn @ resid  # [n_candidates]
+        corr = atoms_norm @ resid  # [n_candidates]
         corr[picked] = -float("inf")
         i = int(corr.argmax())
         if corr[i] <= 0:
             break
         picked.append(i)
-        A = Vn[picked].T  # [d, m]
+        active = atoms_norm[picked].T  # [d, m]
         # Exact nonnegative least-squares on the active set.
-        coefs = _nnls_active(A, h)
-        resid = h - A @ coefs
+        coefs = _nnls_active(active, h)
+        resid = h - active @ coefs
 
     component = h - resid
     token_ids = cand[picked].tolist()
@@ -668,16 +674,9 @@ def main() -> None:
     )
 
     # Load only the unembedding + final-norm shard(s). This is the default path
-    # and avoids pulling the full checkpoint. Pass --device to force the full
-    # model fallback (e.g. on a pod where you want the standard load path).
-    if args.device is None:
-        W_U, g = _load_unembed_and_norm_shards(hf_model_id, revision)
-        log.info(
-            "Weights-light loader: W_U [%d, %d], norm scale [%d]",
-            W_U.shape[0], W_U.shape[1], g.shape[0],
-        )
-        weights_source = "shards"
-    else:
+    # and avoids pulling the full checkpoint. Use --full-model to load the
+    # standard HF wrapper instead.
+    if args.full_model:
         device_map = args.device or model_cfg.get("device_map", "auto")
         log.info("Loading full model %s with device_map=%s ...", hf_model_id, device_map)
         loaded = load_model(
@@ -687,23 +686,30 @@ def main() -> None:
             device_map=device_map,
             trust_remote_code=model_cfg.get("trust_remote_code", False),
         )
-        W_U, g = _extract_unembed_and_norm(loaded.model, hf_model_id, device="cpu")
+        w_u, g = _extract_unembed_and_norm(loaded.model, hf_model_id, device="cpu")
         del loaded.model
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
         log.info(
-            "Full-model path: W_U [%d, %d], norm scale [%d]",
-            W_U.shape[0], W_U.shape[1], g.shape[0],
+            "Full-model path: w_u [%d, %d], norm scale [%d]",
+            w_u.shape[0], w_u.shape[1], g.shape[0],
         )
         weights_source = "full_model"
+    else:
+        w_u, g = _load_unembed_and_norm_shards(hf_model_id, revision)
+        log.info(
+            "Weights-light loader: w_u [%d, %d], norm scale [%d]",
+            w_u.shape[0], w_u.shape[1], g.shape[0],
+        )
+        weights_source = "shards"
 
     # Load J-lens if requested.
-    J, lens_provenance = _load_jlens(args.lens_source, hf_model_id, args.lens_path)
+    j, lens_provenance = _load_jlens(args.lens_source, hf_model_id, args.lens_path)
 
-    available_layers: set[int] | None = set(J.keys()) if J is not None else None
+    available_layers: set[int] | None = set(j.keys()) if j is not None else None
     layer_map: dict[int, int | None] = {}
     skipped_layers: set[int] = set()
-    for emotion, layers in vectors.items():
+    for _emotion, layers in vectors.items():
         for lyr in layers:
             if lyr not in layer_map:
                 mapped = _map_layer(lyr, available_layers, args.lens_layer_policy)
@@ -730,8 +736,8 @@ def main() -> None:
         "lens_layer_policy": args.lens_layer_policy,
         "k": args.k,
         "n_candidates": args.n_candidates,
-        "vocab_size": int(W_U.shape[0]),
-        "d_model": int(W_U.shape[1]),
+        "vocab_size": int(w_u.shape[0]),
+        "d_model": int(w_u.shape[1]),
         "vectors": {},
     }
 
@@ -748,18 +754,18 @@ def main() -> None:
 
             log.info("Decomposing %s layer %d (lens layer %d)", emotion, layer, mapped_layer)
             v = np.load(path).astype(np.float32)
-            if v.shape != (W_U.shape[1],):
+            if v.shape != (w_u.shape[1],):
                 raise ValueError(
-                    f"Shape mismatch for {path}: {v.shape} vs expected ({W_U.shape[1]},)"
+                    f"Shape mismatch for {path}: {v.shape} vs expected ({w_u.shape[1]},)"
                 )
 
-            J_l = J[mapped_layer] if J is not None else None
+            j_l = j[mapped_layer] if j is not None else None
 
             comp_pos, resid_pos, metrics_pos = _decompose_vector(
-                v, +1, J_l, W_U, g, tokenizer, args.k, args.n_candidates
+                v, +1, j_l, w_u, g, tokenizer, args.k, args.n_candidates
             )
             comp_neg, resid_neg, metrics_neg = _decompose_vector(
-                v, -1, J_l, W_U, g, tokenizer, args.k, args.n_candidates
+                v, -1, j_l, w_u, g, tokenizer, args.k, args.n_candidates
             )
 
             base = output_dir / f"{emotion}_layer{layer}"
