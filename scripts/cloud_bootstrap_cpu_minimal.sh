@@ -82,7 +82,7 @@ log "Repo at $(git rev-parse --short HEAD) on branch $(git rev-parse --abbrev-re
 # --------------------------------------------------------------------------
 
 log "Creating CPU venv at $VENV_DIR…"
-uv venv "$VENV_DIR" --python "$PYTHON_VERSION" || fail "venv creation failed" 3
+uv venv --clear "$VENV_DIR" --python "$PYTHON_VERSION" || fail "venv creation failed" 3
 PYTHON="$VENV_DIR/bin/python"
 
 log "Installing CPU-only torch + runtime deps…"
