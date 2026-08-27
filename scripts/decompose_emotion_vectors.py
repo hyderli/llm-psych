@@ -80,15 +80,20 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import re
+import struct
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
+import httpx
 import numpy as np
 import torch
 import yaml
 from huggingface_hub import HfApi, hf_hub_download
+from huggingface_hub.file_download import get_hf_file_metadata, hf_hub_url
 from scipy.optimize import nnls
 from transformers import AutoTokenizer, PreTrainedTokenizerBase
 
@@ -268,33 +273,135 @@ def _load_tokenizer(
     return tokenizer
 
 
+def _hf_token() -> str | None:
+    """Return an HF token from the environment, or None if absent."""
+    return os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
+
+
+_SF_DTYPE_TO_TORCH: dict[str, torch.dtype] = {
+    "F64": torch.float64,
+    "F32": torch.float32,
+    "F16": torch.float16,
+    "BF16": torch.bfloat16,
+    "I64": torch.int64,
+    "I32": torch.int32,
+    "I16": torch.int16,
+    "I8": torch.int8,
+    "U8": torch.uint8,
+    "BOOL": torch.bool,
+}
+
+
+def _fetch_range(client: httpx.Client, url: str, start: int, end: int) -> bytes:
+    """Download the half-open byte range [start, end) via HTTP Range."""
+    headers = {"Range": f"bytes={start}-{end - 1}"}
+    data = bytearray()
+    with client.stream("GET", url, headers=headers) as r:
+        r.raise_for_status()
+        if r.status_code != 206:
+            raise RuntimeError(
+                f"Range request ignored by server (status {r.status_code}); "
+                f"downloading the full shard would defeat the weights-light loader."
+            )
+        for chunk in r.iter_bytes(chunk_size=16 * 1024 * 1024):
+            data.extend(chunk)
+    return bytes(data)
+
+
+def _load_tensors_from_remote_shard(
+    hf_model_id: str,
+    revision: str | None,
+    shard_name: str,
+    tensor_names: list[str],
+    token: str | None = None,
+) -> dict[str, torch.Tensor]:
+    """Load only the requested tensors from a safetensors shard.
+
+    Uses the safetensors header to locate byte ranges and fetches each
+    tensor with an HTTP Range request, so the full checkpoint shard is
+    never written to disk. This is what makes the 5 GB RunPod CPU pods
+    usable for the primary models.
+    """
+    url = hf_hub_url(
+        hf_model_id, filename=shard_name, revision=revision, repo_type="model"
+    )
+    meta = get_hf_file_metadata(url, token=token)
+    location = meta.location
+    if not location:
+        raise RuntimeError(f"Could not resolve download URL for {shard_name}")
+
+    timeout = httpx.Timeout(connect=30.0, read=1200.0, write=30.0, pool=30.0)
+    with httpx.Client(timeout=timeout, follow_redirects=True) as client:
+        # Safetensors header starts with a uint64 little-endian length.
+        r = client.get(location, headers={"Range": "bytes=0-7"})
+        r.raise_for_status()
+        if r.status_code != 206:
+            raise RuntimeError(f"Range requests not supported for {shard_name}")
+        header_len = struct.unpack("<Q", r.content)[0]
+
+        header_end = 7 + header_len
+        r2 = client.get(location, headers={"Range": f"bytes=0-{header_end}"})
+        r2.raise_for_status()
+        header = json.loads(r2.content[8 : 8 + header_len])
+
+        data_start = 8 + header_len
+        tensors: dict[str, torch.Tensor] = {}
+        for name in tensor_names:
+            info = header.get(name)
+            if info is None:
+                continue
+            start = data_start + info["data_offsets"][0]
+            end = data_start + info["data_offsets"][1]
+            tensor_bytes = _fetch_range(client, location, start, end)
+            dtype = _SF_DTYPE_TO_TORCH.get(info["dtype"])
+            if dtype is None:
+                raise ValueError(f"Unsupported safetensors dtype {info['dtype']!r}")
+            t = torch.frombuffer(
+                bytearray(tensor_bytes), dtype=dtype
+            ).reshape(info["shape"])
+            tensors[name] = t
+
+    return tensors
+
+
+def _load_tensors_from_local_shard(
+    shard_path: Path,
+    tensor_names: list[str],
+) -> dict[str, torch.Tensor]:
+    """Read a list of tensors from a cached safetensors shard."""
+    from safetensors import safe_open
+
+    tensors: dict[str, torch.Tensor] = {}
+    with safe_open(shard_path, framework="pt", device="cpu") as f:
+        for name in tensor_names:
+            if name in f.keys():
+                tensors[name] = f.get_tensor(name)
+    return tensors
+
+
 def _load_unembed_and_norm_shards(
     hf_model_id: str,
     revision: str | None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Download only the safetensors shard(s) holding w_u and final norm.
+    """Load only the tensors needed for the decomposition: w_u and final norm.
 
-    Returns
-    -------
-    w_u : [vocab, d]
-        LM head or tied embedding weight.
-    g : [d]
-        Final RMSNorm scale (with Gemma offset applied).
+    First tries the local HF cache. If a shard is not cached, it falls back
+    to HTTP-range requests that fetch only the relevant tensor slices, so the
+    full model checkpoint is never written to disk.
     """
-    try:
-        from safetensors import safe_open
-    except ImportError as exc:
-        raise RuntimeError("safetensors is required for the weights-light loader") from exc
-
-    # Keys we need.
-    unembed_keys = ["lm_head.weight"]
-    if _is_gemma(hf_model_id):
-        # Gemma ties embeddings and has no lm_head.weight in the checkpoint.
-        unembed_keys.append("model.embed_tokens.weight")
+    # Some checkpoints store the unembedding as a separate lm_head, while
+    # others (Gemma and the smaller Qwen checkpoints) only store the tied
+    # input embeddings.
+    unembed_keys = [
+        "lm_head.weight",
+        "model.embed_tokens.weight",
+        "embed_tokens.weight",
+    ]
     norm_keys = ["model.norm.weight", "norm.weight"]
+    token = _hf_token()
 
     # Download the shard index (small) first to locate the right shards.
-    index_path: Path | None = None
+    weight_map: dict[str, str] | None = None
     try:
         index_path = Path(
             hf_hub_download(
@@ -304,55 +411,58 @@ def _load_unembed_and_norm_shards(
                 repo_type="model",
             )
         )
-    except Exception:  # noqa: BLE001
-        pass
-
-    shard_paths: dict[str, Path] = {}
-    if index_path is not None and index_path.exists():
         with index_path.open("r") as fh:
             weight_map = json.load(fh)["weight_map"]
+    except Exception:  # noqa: BLE001
+        weight_map = None
 
-        needed_keys: set[str] = set()
-        for key in {*unembed_keys, *norm_keys}:
-            if key in weight_map:
-                needed_keys.add(key)
-        if not needed_keys:
-            raise RuntimeError(
-                f"Could not locate lm_head/embed_tokens or norm weights in {hf_model_id} index"
-            )
-
-        for shard_name in {weight_map[k] for k in needed_keys}:
-            shard_paths[shard_name] = Path(
-                hf_hub_download(
-                    hf_model_id,
-                    filename=shard_name,
-                    revision=revision,
-                    repo_type="model",
-                )
-            )
+    # Map each candidate key to its shard. For single-shard models the shard
+    # name is the standard filename and we discover the key by inspection.
+    if weight_map is not None:
+        key_to_shard = {
+            key: weight_map[key]
+            for key in [*unembed_keys, *norm_keys]
+            if key in weight_map
+        }
     else:
-        # Single-shard model: download it and inspect keys below.
-        shard_paths["model.safetensors"] = Path(
-            hf_hub_download(
-                hf_model_id,
-                filename="model.safetensors",
-                revision=revision,
-                repo_type="model",
-            )
+        key_to_shard = {
+            key: "model.safetensors" for key in [*unembed_keys, *norm_keys]
+        }
+
+    if not key_to_shard:
+        raise RuntimeError(
+            f"Could not locate lm_head/embed_tokens or norm weights for {hf_model_id}"
         )
 
-    # Read only the needed tensors.
-    w_u: torch.Tensor | None = None
-    g: torch.Tensor | None = None
-    for shard_path in shard_paths.values():
-        with safe_open(shard_path, framework="pt", device="cpu") as f:
-            keys = set(f.keys())
-            for key in unembed_keys:
-                if w_u is None and key in keys:
-                    w_u = f.get_tensor(key)
-            for key in norm_keys:
-                if g is None and key in keys:
-                    g = f.get_tensor(key)
+    shard_to_keys: dict[str, list[str]] = {}
+    for key, shard in key_to_shard.items():
+        shard_to_keys.setdefault(shard, []).append(key)
+
+    tensors: dict[str, torch.Tensor] = {}
+    for shard_name, names in shard_to_keys.items():
+        # Prefer the local cache when it exists (e.g. on the Mac).
+        try:
+            local_shard = hf_hub_download(
+                hf_model_id,
+                filename=shard_name,
+                revision=revision,
+                repo_type="model",
+                local_files_only=True,
+            )
+            tensors.update(_load_tensors_from_local_shard(Path(local_shard), names))
+            continue
+        except Exception:  # noqa: BLE001
+            pass
+
+        # Otherwise fetch only the needed tensor slices from the remote shard.
+        log.info("Fetching tensor slices from %s", shard_name)
+        remote_tensors = _load_tensors_from_remote_shard(
+            hf_model_id, revision, shard_name, names, token=token
+        )
+        tensors.update(remote_tensors)
+
+    w_u = next((tensors[k] for k in unembed_keys if k in tensors), None)
+    g = next((tensors[k] for k in norm_keys if k in tensors), None)
 
     if w_u is None:
         raise RuntimeError(f"Could not find unembedding weight for {hf_model_id}")
@@ -423,37 +533,11 @@ def _snapshot_sha_from_path(local_path: Path) -> str | None:
     return None
 
 
-def _load_jlens(
-    source: str, hf_model_id: str, lens_path: Path | None
-) -> tuple[dict[int, torch.Tensor] | None, dict[str, Any] | None]:
-    """Load a J-lens and return provenance metadata.
-
-    Returns
-    -------
-    J : dict[int, torch.Tensor] | None
-        Layer -> [d, d] transport matrices, or None for logit-lens fallback.
-    provenance : dict[str, Any] | None
-        Metadata for the manifest, or None for logit-lens fallback.
-    """
-    # A local lens file always wins, regardless of --lens-source.
-    if lens_path is not None:
-        filename = str(lens_path)
-        local = str(lens_path.resolve())
-    elif source == "logit":
-        log.info("Using logit-lens fallback (j_l = identity)")
-        return None, None
-    elif source != "neuronpedia":
-        raise ValueError(f"Unknown lens source: {source}")
-    else:
-        filename = _resolve_lens_filename(hf_model_id)
-        local = hf_hub_download(
-            repo_id="neuronpedia/jacobian-lens",
-            filename=filename,
-            repo_type="model",
-        )
-
+def _parse_jlens_state(local: str) -> tuple[dict[int, torch.Tensor], dict[str, Any], str]:
+    """Load a J-lens .pt file and return (state_dict, provenance, filename_or_path)."""
     state = torch.load(local, map_location="cpu", weights_only=False)
     j: dict[int, torch.Tensor] = state["J"]
+    filename = local.split("/snapshots/")[-1] if "/snapshots/" in local else local
     provenance = {
         "repo_id": "neuronpedia/jacobian-lens",
         "filename": filename,
@@ -462,6 +546,53 @@ def _load_jlens(
         "source_layers": [int(x) for x in state.get("source_layers", [])],
         "d_model": int(state.get("d_model", 0)),
     }
+    return j, provenance, filename
+
+
+def _load_jlens(
+    source: str, hf_model_id: str, lens_path: Path | None
+) -> tuple[dict[int, torch.Tensor] | None, dict[str, Any] | None]:
+    """Load a J-lens and return provenance metadata.
+
+    Returns
+    -------
+    j : dict[int, torch.Tensor] | None
+        Layer -> [d, d] transport matrices, or None for logit-lens fallback.
+    provenance : dict[str, Any] | None
+        Metadata for the manifest, or None for logit-lens fallback.
+    """
+    # A local lens file always wins, regardless of --lens-source.
+    if lens_path is not None:
+        local = str(lens_path.resolve())
+        j, provenance, _ = _parse_jlens_state(local)
+        provenance["filename"] = str(lens_path)
+    elif source == "logit":
+        log.info("Using logit-lens fallback (j_l = identity)")
+        return None, None
+    elif source != "neuronpedia":
+        raise ValueError(f"Unknown lens source: {source}")
+    else:
+        filename = _resolve_lens_filename(hf_model_id)
+        # Prefer a cached copy; otherwise download to a temp dir so small
+        # pods don't fill their disk with multi-gigabyte lens files.
+        try:
+            local = hf_hub_download(
+                repo_id="neuronpedia/jacobian-lens",
+                filename=filename,
+                repo_type="model",
+                local_files_only=True,
+            )
+            j, provenance, _ = _parse_jlens_state(local)
+        except FileNotFoundError:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                local = hf_hub_download(
+                    repo_id="neuronpedia/jacobian-lens",
+                    filename=filename,
+                    repo_type="model",
+                    cache_dir=tmpdir,
+                )
+                j, provenance, _ = _parse_jlens_state(local)
+
     log.info(
         "Loaded J-lens: n_prompts=%d source_layers=%s d_model=%d",
         provenance["n_prompts"],
