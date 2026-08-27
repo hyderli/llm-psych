@@ -78,13 +78,13 @@ References
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import logging
 import os
 import re
 import struct
 import sys
-import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -356,9 +356,7 @@ def _load_tensors_from_remote_shard(
             dtype = _SF_DTYPE_TO_TORCH.get(info["dtype"])
             if dtype is None:
                 raise ValueError(f"Unsupported safetensors dtype {info['dtype']!r}")
-            t = torch.frombuffer(
-                bytearray(tensor_bytes), dtype=dtype
-            ).reshape(info["shape"])
+            t = torch.frombuffer(tensor_bytes, dtype=dtype).reshape(info["shape"])
             tensors[name] = t
 
     return tensors
@@ -533,8 +531,53 @@ def _snapshot_sha_from_path(local_path: Path) -> str | None:
     return None
 
 
+def _load_jlens_from_memory(
+    filename: str, token: str | None = None
+) -> tuple[dict[int, torch.Tensor], dict[str, Any]]:
+    """Stream a Neuronpedia J-lens .pt file directly into RAM.
+
+    Avoids writing the multi-gigabyte lens file to disk, which is essential
+    for 5 GB RunPod CPU pods.
+    """
+    url = hf_hub_url("neuronpedia/jacobian-lens", filename, repo_type="model")
+    meta = get_hf_file_metadata(url, token=token)
+    location = meta.location
+    if not location:
+        raise RuntimeError(f"Could not resolve URL for {filename}")
+
+    timeout = httpx.Timeout(connect=30.0, read=1200.0, write=30.0, pool=30.0)
+    data = bytearray()
+    with httpx.Client(timeout=timeout, follow_redirects=True) as client:
+        with client.stream("GET", location) as r:
+            r.raise_for_status()
+            for chunk in r.iter_bytes(chunk_size=16 * 1024 * 1024):
+                data.extend(chunk)
+
+    state = torch.load(io.BytesIO(bytes(data)), map_location="cpu", weights_only=False)
+    j: dict[int, torch.Tensor] = state["J"]
+
+    # Record the current repo SHA for provenance.
+    try:
+        repo_info = HfApi().repo_info(
+            repo_id="neuronpedia/jacobian-lens", repo_type="model"
+        )
+        revision = repo_info.sha
+    except Exception:  # noqa: BLE001
+        revision = None
+
+    provenance = {
+        "repo_id": "neuronpedia/jacobian-lens",
+        "filename": filename,
+        "revision": revision,
+        "n_prompts": int(state.get("n_prompts", 0)),
+        "source_layers": [int(x) for x in state.get("source_layers", [])],
+        "d_model": int(state.get("d_model", 0)),
+    }
+    return j, provenance
+
+
 def _parse_jlens_state(local: str) -> tuple[dict[int, torch.Tensor], dict[str, Any], str]:
-    """Load a J-lens .pt file and return (state_dict, provenance, filename_or_path)."""
+    """Load a cached J-lens .pt file and return (state_dict, provenance, filename_or_path)."""
     state = torch.load(local, map_location="cpu", weights_only=False)
     j: dict[int, torch.Tensor] = state["J"]
     filename = local.split("/snapshots/")[-1] if "/snapshots/" in local else local
@@ -573,8 +616,8 @@ def _load_jlens(
         raise ValueError(f"Unknown lens source: {source}")
     else:
         filename = _resolve_lens_filename(hf_model_id)
-        # Prefer a cached copy; otherwise download to a temp dir so small
-        # pods don't fill their disk with multi-gigabyte lens files.
+        # Prefer a cached copy; otherwise stream the lens file into RAM so
+        # small pods don't fill their disk with multi-gigabyte lens files.
         try:
             local = hf_hub_download(
                 repo_id="neuronpedia/jacobian-lens",
@@ -584,14 +627,7 @@ def _load_jlens(
             )
             j, provenance, _ = _parse_jlens_state(local)
         except FileNotFoundError:
-            with tempfile.TemporaryDirectory() as tmpdir:
-                local = hf_hub_download(
-                    repo_id="neuronpedia/jacobian-lens",
-                    filename=filename,
-                    repo_type="model",
-                    cache_dir=tmpdir,
-                )
-                j, provenance, _ = _parse_jlens_state(local)
+            j, provenance = _load_jlens_from_memory(filename, token=_hf_token())
 
     log.info(
         "Loaded J-lens: n_prompts=%d source_layers=%s d_model=%d",
