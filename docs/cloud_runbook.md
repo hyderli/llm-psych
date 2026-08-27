@@ -171,6 +171,50 @@ preemption costs at most one emotion of re-extraction. Re-running the
 same command after a preemption simply overwrites partially-written
 files; the pipeline is idempotent at the (model, emotion) granularity.
 
+### 3b. J-space decomposition (CPU pod, no GPU)
+
+The phase-1 workspace decomposition (`plans/j-space-decomposition.md`)
+needs only fast HF egress, not a GPU — a cheap CPU instance is plenty.
+After the usual bootstrap:
+
+```bash
+cd /workspace/llm-psych
+
+# All three primaries, canonical parameters, stop the pod when done:
+bash scripts/cloud_decompose.sh --shutdown
+
+# One model only:
+bash scripts/cloud_decompose.sh --models "llama31_8b"
+```
+
+Per model, the wrapper pulls that model's story steering vectors from
+the HF dataset, downloads only the safetensors shard(s) holding
+`lm_head.weight` / `model.norm.weight` (weights-light loader) plus the
+pre-fitted Neuronpedia J-lens, decomposes every vector into J-space +
+residual (`+v` and `-v`), and pushes
+`results/workspace_decomposition/<model_key>-story/` (decomposed `.npy`
+files + `manifest.yaml`) to the dataset before the next model starts —
+so a preemption costs at most one model. A failing model does not block
+the others; the script exits 3 if any failed.
+
+Before trusting the primary results, do the layer-index sanity check
+from the PR #13 test plan: read the lens at a swept layer on one real
+stored activation and compare the top tokens against the Neuronpedia UI
+for the same model and layer (an off-by-one in layer indexing would
+still produce plausible-looking tokens on steering vectors alone).
+
+Pull the results on the Mac with:
+
+```bash
+uv run python - <<'EOF'
+from huggingface_hub import snapshot_download
+snapshot_download(
+    "llm-psych/llm-psych-activations", repo_type="dataset",
+    allow_patterns="results/workspace_decomposition/*", local_dir=".",
+)
+EOF
+```
+
 ### 4. Verify on the Mac
 
 After the pod is done, on your laptop:
