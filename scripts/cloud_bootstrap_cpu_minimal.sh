@@ -123,14 +123,18 @@ import os
 import sys
 from pathlib import Path
 from dotenv import load_dotenv
+from huggingface_hub import HfApi
 
 load_dotenv(Path(".env"))
 
-sys.path.insert(0, str(Path.cwd() / "src"))
-from llm_psych.hf_sync import DEFAULT_DATASET_REPO_ID, list_remote
-
-files = list_remote(repo_id=DEFAULT_DATASET_REPO_ID)
-print(f"HF dataset {DEFAULT_DATASET_REPO_ID}: {len(files)} files visible")
+repo_id = "llm-psych/llm-psych-activations"
+api = HfApi()
+try:
+    files = api.list_repo_tree(repo_id=repo_id, repo_type="dataset")
+    print(f"HF dataset {repo_id}: accessible")
+except Exception as exc:
+    print(f"HF dataset {repo_id} not accessible: {exc}", file=sys.stderr)
+    raise SystemExit(1)
 PY
 
 # --------------------------------------------------------------------------

@@ -35,6 +35,14 @@
 
 set -euo pipefail
 
+# Load .env if present so a fresh tmux pane inherits HF_TOKEN.
+if [[ -f .env ]]; then
+    # shellcheck disable=SC1091
+    set -a
+    source .env
+    set +a
+fi
+
 # --------------------------------------------------------------------------
 # Python interpreter: prefer the minimal CPU venv created by
 # cloud_bootstrap_cpu_minimal.sh, fall back to uv's venv, then to uv run.
@@ -58,6 +66,7 @@ K=16
 N_CANDIDATES=512
 DO_SHUTDOWN=0
 LOG_DIR="outputs"
+DATASET_REPO="llm-psych/llm-psych-activations"
 
 usage() {
     cat <<'EOF' >&2
@@ -130,6 +139,22 @@ done
 
 FAILED=""
 
+pull_vectors() {
+    # Download steering_vectors/<model_key>-story from the private dataset.
+    local model_key="$1"
+    $PYTHON_CMD - "$model_key" <<'PY'
+import sys
+from pathlib import Path
+from huggingface_hub import snapshot_download
+
+model_key = sys.argv[1]
+repo_id = "llm-psych/llm-psych-activations"
+pattern = f"steering_vectors/{model_key}-story/*"
+snapshot_download(repo_id=repo_id, repo_type="dataset", allow_patterns=[pattern], local_dir=str(Path.cwd()))
+print(f"pulled steering_vectors/{model_key}-story from {repo_id}")
+PY
+}
+
 push_results() {
     # Upload results/workspace_decomposition/<model_key>-story to the
     # private dataset, mirroring the on-disk layout (methods.md convention).
@@ -137,28 +162,20 @@ push_results() {
     $PYTHON_CMD - "$model_key" <<'PY'
 import sys
 from pathlib import Path
-
-sys.path.insert(0, str(Path.cwd() / "src"))
-from dotenv import load_dotenv
-
-load_dotenv(Path.cwd() / ".env")
-
 from huggingface_hub import HfApi
-
-from llm_psych.hf_sync import DEFAULT_DATASET_REPO_ID
 
 model_key = sys.argv[1]
 folder = Path.cwd() / "results" / "workspace_decomposition" / f"{model_key}-story"
 if not folder.is_dir():
     raise SystemExit(f"missing results folder: {folder}")
 HfApi().upload_folder(
-    repo_id=DEFAULT_DATASET_REPO_ID,
+    repo_id="llm-psych/llm-psych-activations",
     repo_type="dataset",
     folder_path=str(folder),
     path_in_repo=f"results/workspace_decomposition/{model_key}-story",
     commit_message=f"cloud_decompose: {model_key} J-space decomposition",
 )
-print(f"pushed {folder} -> {DEFAULT_DATASET_REPO_ID}")
+print(f"pushed {folder} -> llm-psych/llm-psych-activations")
 PY
 }
 
@@ -171,7 +188,7 @@ for model in $MODELS; do
         set -euo pipefail
 
         section "pull steering_vectors (${model_key})"
-        $PYTHON_CMD scripts/sync_hf.py pull steering_vectors --model "${model_key}" 2>&1 | tee -a "$LOG"
+        pull_vectors "$model_key" 2>&1 | tee -a "$LOG"
 
         section "decompose (${model_key})"
         # shellcheck disable=SC2086
