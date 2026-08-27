@@ -105,8 +105,6 @@ from dotenv import load_dotenv  # noqa: E402
 
 load_dotenv(_repo_root / ".env")
 
-from llm_psych.models import load_model  # noqa: E402
-
 log = logging.getLogger(__name__)
 
 # Map HF model ids to the corresponding paths inside the Neuronpedia
@@ -691,6 +689,8 @@ def _decompose_vector(
         and ``metrics`` is a JSON-serialisable dict.
     """
     h = sign * torch.from_numpy(v).float().cpu()
+    if j_l is not None:
+        j_l = j_l.float().cpu()
 
     # Transport to final-layer basis and compute lens logits.
     z = h @ j_l.T if j_l is not None else h
@@ -844,6 +844,8 @@ def main() -> None:
     # and avoids pulling the full checkpoint. Use --full-model to load the
     # standard HF wrapper instead.
     if args.full_model:
+        from llm_psych.models import load_model  # noqa: E402
+
         device_map = args.device or model_cfg.get("device_map", "auto")
         log.info("Loading full model %s with device_map=%s ...", hf_model_id, device_map)
         loaded = load_model(
