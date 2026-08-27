@@ -8,12 +8,14 @@ and Spearman correlations between J-space loading and validation outcomes.
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 import pandas as pd
 import yaml
 from scipy import stats
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from select_c2_layers import parse_sweep_table
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
