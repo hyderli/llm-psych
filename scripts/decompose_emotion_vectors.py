@@ -227,6 +227,14 @@ def _parse_args() -> argparse.Namespace:
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         help="Logging verbosity.",
     )
+    parser.add_argument(
+        "--digit-projection",
+        action="store_true",
+        help=(
+            "Also compute the squared-norm fraction of each vector and its residual "
+            "that lies in the span of J-lens atoms whose top token is a digit or number word."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -757,6 +765,69 @@ def _decompose_vector(
     return component_np, residual_np, metrics
 
 
+def _digit_token_ids(tokenizer: Any) -> set[int]:
+    """Return token ids for digits 0–9 and common number words."""
+    from transformers import PreTrainedTokenizerBase
+
+    if not isinstance(tokenizer, PreTrainedTokenizerBase):
+        return set()
+
+    ids: set[int] = set()
+    for text in (str(i) for i in range(10)):
+        ids.update(tokenizer.encode(text, add_special_tokens=False))
+    number_words = [
+        "zero", "one", "two", "three", "four",
+        "five", "six", "seven", "eight", "nine",
+        "ten", "hundred", "thousand",
+    ]
+    for word in number_words:
+        ids.update(tokenizer.encode(word, add_special_tokens=False))
+    return ids
+
+
+def _digit_projection_fractions(
+    v: np.ndarray,
+    residual: np.ndarray,
+    j_l: torch.Tensor | None,
+    w_u: torch.Tensor,
+    tokenizer: Any,
+) -> dict[str, float]:
+    """Project a vector and its residual onto the digit-atom subspace of the J-lens.
+
+    Returns the squared-norm fraction of each that lies in the span of J-lens
+    atoms whose top output token is a digit or number word.
+    """
+    if j_l is None:
+        return {"v_fraction": 0.0, "residual_fraction": 0.0, "n_digit_atoms": 0}
+
+    digit_ids = _digit_token_ids(tokenizer)
+    if not digit_ids:
+        return {"v_fraction": 0.0, "residual_fraction": 0.0, "n_digit_atoms": 0}
+
+    # Top token for each J-lens atom: argmax of atom @ w_u.T.
+    logits = j_l @ w_u.T  # [n_atoms, vocab]
+    top_ids = torch.argmax(logits, dim=-1).tolist()
+    mask = torch.tensor([tid in digit_ids for tid in top_ids], dtype=torch.bool)
+    n_digit_atoms = int(mask.sum().item())
+    if n_digit_atoms == 0:
+        return {"v_fraction": 0.0, "residual_fraction": 0.0, "n_digit_atoms": 0}
+
+    digit_atoms = j_l[mask].T  # [d_model, n_digit_atoms]
+    out: dict[str, float] = {}
+    for name, arr in (("v", v), ("residual", residual)):
+        vt = torch.from_numpy(arr).float()
+        # Least-squares fit of digit_atoms c = vt, i.e. project vt onto col(digit_atoms).
+        try:
+            c = torch.linalg.lstsq(digit_atoms, vt, rcond=None).solution
+        except RuntimeError:
+            c = torch.zeros(digit_atoms.shape[1], dtype=torch.float32)
+        proj = digit_atoms @ c
+        frac = float((proj.norm() ** 2) / (vt.norm() ** 2 + 1e-12))
+        out[f"{name}_fraction"] = frac
+    out["n_digit_atoms"] = n_digit_atoms
+    return out
+
+
 def _discover_vectors(vectors_dir: Path) -> dict[str, dict[int, Path]]:
     """Discover emotion vectors: {emotion: {layer: path}}."""
     if not vectors_dir.is_dir():
@@ -936,6 +1007,11 @@ def main() -> None:
             comp_neg, resid_neg, metrics_neg = _decompose_vector(
                 v, -1, j_l, w_u, g, tokenizer, args.k, args.n_candidates
             )
+
+            if args.digit_projection and j_l is not None:
+                dp = _digit_projection_fractions(v, resid_pos, j_l, w_u, tokenizer)
+                metrics_pos["digit_projection"] = dp
+                metrics_neg["digit_projection"] = dp
 
             base = output_dir / f"{emotion}_layer{layer}"
             np.save(f"{base}_jspace.npy", comp_pos)
