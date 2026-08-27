@@ -36,6 +36,18 @@
 set -euo pipefail
 
 # --------------------------------------------------------------------------
+# Python interpreter: prefer the minimal CPU venv created by
+# cloud_bootstrap_cpu_minimal.sh, fall back to uv's venv, then to uv run.
+# --------------------------------------------------------------------------
+
+PYTHON_CMD="uv run python"
+if [[ -x ".venv-cpu/bin/python" ]]; then
+    PYTHON_CMD=".venv-cpu/bin/python"
+elif [[ -x ".venv/bin/python" ]]; then
+    PYTHON_CMD=".venv/bin/python"
+fi
+
+# --------------------------------------------------------------------------
 # Defaults (canonical phase-1 parameters — keep in sync with
 # plans/j-space-decomposition.md and the PR #13 test plan)
 # --------------------------------------------------------------------------
@@ -122,7 +134,7 @@ push_results() {
     # Upload results/workspace_decomposition/<model_key>-story to the
     # private dataset, mirroring the on-disk layout (methods.md convention).
     local model_key="$1"
-    uv run python - "$model_key" <<'PY'
+    $PYTHON_CMD - "$model_key" <<'PY'
 import sys
 from pathlib import Path
 
@@ -159,11 +171,11 @@ for model in $MODELS; do
         set -euo pipefail
 
         section "pull steering_vectors (${model_key})"
-        uv run python scripts/sync_hf.py pull steering_vectors --model "${model_key}" 2>&1 | tee -a "$LOG"
+        $PYTHON_CMD scripts/sync_hf.py pull steering_vectors --model "${model_key}" 2>&1 | tee -a "$LOG"
 
         section "decompose (${model_key})"
         # shellcheck disable=SC2086
-        uv run python scripts/decompose_emotion_vectors.py \
+        $PYTHON_CMD scripts/decompose_emotion_vectors.py \
             --model-config "configs/model/${model}.yaml" \
             --lens-source neuronpedia \
             --emotions $EMOTIONS \

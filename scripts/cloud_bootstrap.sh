@@ -15,9 +15,13 @@
 #
 #     bash scripts/cloud_bootstrap.sh
 #
-# For CPU-only pods (e.g. the J-space decomposition), pass ``--cpu``::
+# For CPU-only pods with >=20 GB disk, pass ``--cpu``::
 #
 #     bash scripts/cloud_bootstrap.sh --cpu
+#
+# For 5 GB RunPod CPU pods (J-space decomposition), use
+# ``scripts/cloud_bootstrap_cpu_minimal.sh`` instead; it installs a
+# CPU-only torch and fits on a small disk.
 #
 # What this does
 # --------------

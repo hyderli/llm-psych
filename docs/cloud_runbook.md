@@ -175,10 +175,11 @@ files; the pipeline is idempotent at the (model, emotion) granularity.
 
 The phase-1 workspace decomposition (`plans/j-space-decomposition.md`)
 needs only fast HF egress, not a GPU — a cheap CPU instance is plenty.
-After the usual bootstrap:
+After the CPU-only bootstrap (small disk safe):
 
 ```bash
 cd /workspace/llm-psych
+bash scripts/cloud_bootstrap_cpu_minimal.sh
 
 # All three primaries, canonical parameters, stop the pod when done:
 bash scripts/cloud_decompose.sh --shutdown
@@ -186,6 +187,9 @@ bash scripts/cloud_decompose.sh --shutdown
 # One model only:
 bash scripts/cloud_decompose.sh --models "llama31_8b"
 ```
+
+If your CPU pod has ≥20 GB disk, you can also use
+`bash scripts/cloud_bootstrap.sh --cpu`.
 
 **Pod specs:** any RunPod CPU template with ≥4 vCPU, ≥8 GB RAM, and ≥5 GB
 disk works. 8 vCPU / 32 GB RAM / 5 GB disk is comfortable. No GPU and no
