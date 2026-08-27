@@ -36,16 +36,17 @@ log "log: $LOG"
 pull_validation() {
     # Download C2 sweep tables needed for the correlation readout.
     $PYTHON - <<'PY' | tee -a "$LOG"
+from pathlib import Path
 from huggingface_hub import snapshot_download
 
 repo_id = "llm-psych/llm-psych-activations"
-for pattern in ["results/vector_validation/*", "vector_validation/*"]:
-    try:
-        snapshot_download(repo_id, repo_type="dataset", allow_patterns=pattern, local_dir=".")
-        print(f"pulled {pattern}")
-        break
-    except Exception as exc:
-        print(f"{pattern} failed: {exc}")
+# The private dataset stores these at the root, not under results/.
+snapshot_download(repo_id, repo_type="dataset", allow_patterns="vector_validation/*", local_dir=".")
+# Verify we actually got the tables.
+for model in ["Llama-3.1-8B-Instruct", "Qwen2.5-7B-Instruct", "gemma-2-9b-it"]:
+    assert Path(f"vector_validation/{model}/implicit_scenarios_sweep.md").exists(), f"missing {model} implicit table"
+    assert Path(f"vector_validation/{model}/intensity_semantic_sweep.md").exists(), f"missing {model} intensity table"
+print("pulled vector_validation/*")
 PY
 }
 
