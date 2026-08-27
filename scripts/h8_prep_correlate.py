@@ -21,6 +21,14 @@ from select_c2_layers import parse_sweep_table
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
+def find_validation_dir(root: Path) -> Path:
+    for name in ("results/vector_validation", "vector_validation"):
+        p = root / name
+        if p.is_dir():
+            return p
+    return root / "results" / "vector_validation"
+
+
 def load_manifest(decomp_dir: Path, model_key: str) -> dict:
     path = decomp_dir / f"{model_key}-story" / "manifest.yaml"
     return yaml.safe_load(path.read_text())
@@ -39,7 +47,7 @@ def main() -> None:
     parser.add_argument(
         "--validation-dir",
         type=Path,
-        default=REPO_ROOT / "results" / "vector_validation",
+        default=find_validation_dir(REPO_ROOT),
         help="Directory containing per-model sweep tables.",
     )
     args = parser.parse_args()
