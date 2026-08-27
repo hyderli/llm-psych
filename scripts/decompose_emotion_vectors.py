@@ -354,7 +354,7 @@ def _load_tensors_from_remote_shard(
             dtype = _SF_DTYPE_TO_TORCH.get(info["dtype"])
             if dtype is None:
                 raise ValueError(f"Unsupported safetensors dtype {info['dtype']!r}")
-            t = torch.frombuffer(tensor_bytes, dtype=dtype).reshape(info["shape"])
+            t = torch.frombuffer(tensor_bytes, dtype=dtype).reshape(info["shape"]).clone()
             tensors[name] = t
 
     return tensors
