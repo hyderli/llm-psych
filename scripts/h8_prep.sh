@@ -130,6 +130,9 @@ done
 # --------------------------------------------------------------------------
 # Correlate J-space fraction with C2 metrics
 # --------------------------------------------------------------------------
+section "ensure pandas is installed"
+uv pip install --python "$PYTHON" pandas 2>&1 | tee -a "$LOG" || true
+
 section "correlate J-space fraction with C2 metrics"
 $PYTHON scripts/h8_prep_correlate.py --decomp-dir "$DECOMP_DIR" 2>&1 | tee -a "$LOG"
 

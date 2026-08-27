@@ -97,6 +97,7 @@ uv pip install --python "$PYTHON" \
     huggingface_hub \
     scipy \
     numpy \
+    pandas \
     python-dotenv \
     pyyaml \
     httpx \
