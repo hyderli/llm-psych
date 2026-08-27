@@ -37,13 +37,32 @@ pull_validation() {
     # Download C2 sweep tables needed for the correlation readout.
     $PYTHON - <<'PY' | tee -a "$LOG"
 from huggingface_hub import snapshot_download
+
+repo_id = "llm-psych/llm-psych-activations"
+for pattern in ["results/vector_validation/*", "vector_validation/*"]:
+    try:
+        snapshot_download(repo_id, repo_type="dataset", allow_patterns=pattern, local_dir=".")
+        print(f"pulled {pattern}")
+        break
+    except Exception as exc:
+        print(f"{pattern} failed: {exc}")
+PY
+}
+
+pull_steering_vectors() {
+    local model_key="$1"
+    $PYTHON - "$model_key" <<'PY' | tee -a "$LOG"
+import sys
+from huggingface_hub import snapshot_download
+
+model_key = sys.argv[1]
 snapshot_download(
     "llm-psych/llm-psych-activations",
     repo_type="dataset",
-    allow_patterns="results/vector_validation/*",
+    allow_patterns=f"steering_vectors/{model_key}-story/*",
     local_dir=".",
 )
-print("pulled results/vector_validation")
+print(f"pulled steering_vectors/{model_key}-story")
 PY
 }
 
@@ -78,6 +97,9 @@ run_model() {
     local model_key
     model_key=$(awk '/^hf_model_id:/{print $2}' "configs/model/${model}.yaml")
     model_key="${model_key##*/}"
+
+    section "pull steering vectors (${model_key})"
+    pull_steering_vectors "$model_key"
 
     section "decompose k=64 + digit projection (${model_key})"
     $PYTHON scripts/decompose_emotion_vectors.py \
