@@ -187,11 +187,18 @@ bash scripts/cloud_decompose.sh --shutdown
 bash scripts/cloud_decompose.sh --models "llama31_8b"
 ```
 
+**Pod specs:** any RunPod CPU template with ≥4 vCPU, ≥8 GB RAM, and ≥5 GB
+disk works. 8 vCPU / 32 GB RAM / 5 GB disk is comfortable. No GPU and no
+Network Volume are needed.
+
 Per model, the wrapper pulls that model's story steering vectors from
-the HF dataset, downloads only the safetensors shard(s) holding
-`lm_head.weight` / `model.norm.weight` (weights-light loader) plus the
-pre-fitted Neuronpedia J-lens, decomposes every vector into J-space +
-residual (`+v` and `-v`), and pushes
+the HF dataset, then uses the weights-light loader to fetch only the
+`lm_head.weight` / `model.embed_tokens.weight` and `model.norm.weight`
+tensor slices from the remote safetensors shards (via HTTP Range) and
+streams the pre-fitted Neuronpedia J-lens directly into RAM. Full model
+checkpoints are never written to disk, so a 5 GB RunPod CPU pod is
+sufficient and no Network Volume is needed. The wrapper decomposes every
+vector into J-space + residual (`+v` and `-v`) and pushes
 `results/workspace_decomposition/<model_key>-story/` (decomposed `.npy`
 files + `manifest.yaml`) to the dataset before the next model starts —
 so a preemption costs at most one model. A failing model does not block
