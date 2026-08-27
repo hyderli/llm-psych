@@ -168,6 +168,10 @@ model_key = sys.argv[1]
 folder = Path.cwd() / "results" / "workspace_decomposition" / f"{model_key}-story"
 if not folder.is_dir():
     raise SystemExit(f"missing results folder: {folder}")
+files = [p for p in folder.rglob("*") if p.is_file()]
+if not files:
+    raise SystemExit(f"no files to push in {folder}")
+print(f"pushing {len(files)} file(s) from {folder}")
 HfApi().upload_folder(
     repo_id="llm-psych/llm-psych-activations",
     repo_type="dataset",
