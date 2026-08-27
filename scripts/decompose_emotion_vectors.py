@@ -881,7 +881,7 @@ def main() -> None:
     revision: str | None = model_cfg.get("hf_revision")
 
     vectors_dir = args.vectors_dir or (_repo_root / "steering_vectors" / f"{model_key}-story")
-    output_dir = args.output_dir / f"{model_key}-story"
+    output_dir = Path(args.output_dir).resolve() / f"{model_key}-story"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     log.info("Model: %s (%s)", model_key, hf_model_id)
