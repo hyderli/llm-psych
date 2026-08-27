@@ -800,6 +800,9 @@ def _digit_projection_fractions(
     if j_l is None:
         return {"v_fraction": 0.0, "residual_fraction": 0.0, "n_digit_atoms": 0}
 
+    j_l = j_l.float()
+    w_u = w_u.float()
+
     digit_ids = _digit_token_ids(tokenizer)
     if not digit_ids:
         return {"v_fraction": 0.0, "residual_fraction": 0.0, "n_digit_atoms": 0}
