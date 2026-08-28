@@ -25,7 +25,8 @@ To cover all primary emotions + neutral in one shot:
 
 Outputs
 -------
-``data/derived/stories/<model_key>/<emotion>.parquet`` with columns:
+``data/derived/stories/<model_key>[/<track>]/<emotion>.parquet`` with
+columns:
 
 * ``id`` — ``<emotion>_<topic_idx>_<sample_idx>`` string identifier.
 * ``story_text`` — generated story (no special tokens).
@@ -65,6 +66,7 @@ from omegaconf import DictConfig
 from tqdm import tqdm
 
 from llm_psych.models import load_model
+from llm_psych.paths import story_dir
 
 log = logging.getLogger(__name__)
 
@@ -194,7 +196,8 @@ def main(cfg: DictConfig) -> None:
     gen_cfg = cfg.derivation.generator
     min_story_tokens = int(gen_cfg.min_story_tokens)
 
-    out_dir = _repo_root / "data" / "derived" / "stories" / model_key
+    track: str = str(cfg.track)
+    out_dir = story_dir(_repo_root, model_key, track)
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{emotion_name}.parquet"
 

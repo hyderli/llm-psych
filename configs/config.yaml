@@ -4,6 +4,13 @@ defaults:
   - derivation: story            # story (primary, 2026-06-13) | caa (secondary baseline)
   - _self_
 
+# Story-method track. A track is an independent run over its own emotion
+# set; artefact paths carry it so two tracks that share an emotion name
+# cannot overwrite each other. `story` is the four-emotion track and
+# reproduces the pre-track layout exactly. The Plutchik-wheel extraction
+# uses `track=story-wheel32` (see plans/plutchik-wheel-expansion.md).
+track: story
+
 # Paths (relative to repo root; override per environment if needed)
 paths:
   data_dir: data/public

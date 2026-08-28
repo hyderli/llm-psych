@@ -17,9 +17,9 @@ Usage
 
 Outputs per ``(model, emotion)`` pair:
 
-* ``activations/<model_key>-story/<emotion>.npz`` — one array per
+* ``activations/<model_key>-<track>/<emotion>.npz`` — one array per
   candidate layer, each shaped ``(n_stories, hidden_dim)`` in float16.
-* ``activations/<model_key>-story/<emotion>.meta.parquet`` —
+* ``activations/<model_key>-<track>/<emotion>.meta.parquet`` —
   ``story_id`` row index aligning with the .npz rows.
 
 Pre-flight: requires a clean git tree and an existing story parquet
@@ -46,6 +46,11 @@ from omegaconf import DictConfig
 from tqdm import tqdm
 
 from llm_psych.hooks import ResidualStreamRecorder
+from llm_psych.paths import (
+    resolve_story_corpus,
+    story_corpus_path,
+    track_slug,
+)
 from llm_psych.models import load_model, probe_layer_range
 
 log = logging.getLogger(__name__)
@@ -135,14 +140,13 @@ def main(cfg: DictConfig) -> None:
     model_key = model_cfg_raw.hf_model_id.split("/")[-1]
     pool_start_token = int(cfg.derivation.pool_start_token)
 
-    stories_path = (
-        _repo_root / "data" / "derived" / "stories" / model_key
-        / f"{emotion_name}.parquet"
-    )
-    if not stories_path.exists():
+    track: str = str(cfg.track)
+    stories_path = resolve_story_corpus(_repo_root, model_key, track, emotion_name)
+    if stories_path is None:
+        expected = story_corpus_path(_repo_root, model_key, track, emotion_name)
         raise FileNotFoundError(
-            f"Story corpus not found: {stories_path}\n"
-            "Run scripts/generate_emotion_stories.py first."
+            f"Story corpus not found: {expected}\n"
+            f"Run scripts/generate_emotion_stories.py first (track={track})."
         )
     stories = pd.read_parquet(stories_path)
     log.info(
@@ -198,7 +202,7 @@ def main(cfg: DictConfig) -> None:
         )
 
     # --- save ---
-    out_dir = _repo_root / cfg.paths.activations_dir / f"{model_key}-story"
+    out_dir = _repo_root / cfg.paths.activations_dir / track_slug(model_key, track)
     out_dir.mkdir(parents=True, exist_ok=True)
     arrays = {
         f"layer_{lyr}": np.stack(per_layer_rows[lyr], axis=0).astype(np.float16)

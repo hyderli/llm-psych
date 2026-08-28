@@ -14,7 +14,7 @@ claim, that claim gets its own amendment at that time.
 
 ---
 
-## 1. The blocker: the pipeline will overwrite the locked four-emotion corpora
+## 1. The blocker: the pipeline would overwrite the locked four-emotion corpora — FIXED 2026-08-28
 
 `scripts/extract_story_activations.py:201` and
 `scripts/derive_story_steering_vectors.py:124,163` hardcode the track
@@ -57,10 +57,31 @@ Add a track component to the three path constructions:
   read-time fallback to the flat path so existing corpora still resolve.
 
 The wheel run then sets `track: story-wheel32` and cannot touch anything
-the four-emotion track owns. Add a test asserting that a non-default
-track never resolves to a path under the default track.
+the four-emotion track owns.
 
-**Until this lands, do not run any wheel cell whose name collides.**
+### Status: done
+
+- `src/llm_psych/paths.py` — `track_slug`, `story_dir`,
+  `story_corpus_path`, `resolve_story_corpus`. The default track
+  reproduces the pre-track layout byte-for-byte, so no existing artefact
+  moves.
+- `configs/config.yaml` — `track: story`.
+- The three pipeline scripts use the helpers; `derive` also records
+  `track` in `manifest.yaml`.
+- `tests/test_track_paths.py` — 6 tests. The load-bearing one is
+  `test_wheel_track_never_falls_back_to_another_tracks_corpus`: only the
+  default track falls back to the historical flat layout, so a missing
+  wheel corpus raises instead of silently reading four-emotion stories
+  and shifting every wheel vector through the grand mean.
+
+**Still hardcoded elsewhere** (out of scope for extraction, but they will
+need the track before they can be pointed at wheel artefacts):
+`run_story_pipeline.sh:129`, `validate_logit_lens.py:128`,
+`validate_intensity_semantic.py:134`, `train_probes.py:205`,
+`decompose_emotion_vectors.py:886`, `plot_intensity_projection.py:63`,
+`h8_prep.sh`, `cloud_decompose.sh`. `run_wheel.sh` (step 3) passes
+`track=story-wheel32` straight to the three pipeline scripts and does not
+depend on any of them.
 
 ---
 
@@ -205,9 +226,9 @@ booking the full run.
 
 ## 6. Order
 
-1. §1 path namespacing + test. **Blocking, and destructive if skipped.**
-2. `configs/wheel.yaml` + `scripts/build_wheel_configs.py` + tests -> 33
-   configs.
+1. ~~§1 path namespacing + test~~ — **done 2026-08-28.**
+2. ~~`configs/wheel.yaml` + `scripts/build_wheel_configs.py` + tests -> 33
+   configs~~ — **done 2026-08-28** (commit 50dd487).
 3. `scripts/run_wheel.sh` — the three scripts per cell, the 33-file
    assertion, HF push, free cache between models.
 4. Smoke test: 2 cells on Qwen 2.5 0.5B on the Mac, `max_topics=3`.
