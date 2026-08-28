@@ -14,7 +14,7 @@ classifiers = [
 
 dependencies = [
     # ML core
-    "torch>=2.5.0",
+    "torch>=2.7.0",
     "transformers>=4.46.0",
     "accelerate>=1.1.0",
     "safetensors>=0.4.5",
@@ -61,18 +61,22 @@ dev = [
 
 # ---- uv: pin torch to a CUDA 12.x wheel on Linux ---------------------------
 # Default PyPI torch on Linux now resolves to a cu13 build, which needs a very
-# new NVIDIA driver; RunPod / most cloud 4090 hosts ship CUDA 12.6 drivers, so
-# torch then reports no CUDA device. Pin Linux torch to the cu124 index (runs
-# on any >=12.4 driver). macOS is left on default PyPI (MPS/CPU build) via the
-# platform marker, so the Mac dev fleet is unaffected. After editing this,
-# regenerate the lock:  uv lock
+# new NVIDIA driver and lacks kernels for some GPUs seen on cloud pods (4090
+# hosts on CUDA 12.6 drivers report no CUDA device on cu13). Previously pinned
+# to cu124, but cu124 wheels only ship kernels up to sm_90 — RunPod Blackwell
+# pods (RTX PRO 6000, sm_120) hit "no kernel image is available for execution
+# on the device" on any real op even though torch.cuda.is_available() is True.
+# cu128 (torch>=2.7.0) ships sm_100/sm_120 kernels and remains compatible with
+# older Ampere/Ada (4090) pods. macOS is left on default PyPI (MPS/CPU build)
+# via the platform marker, so the Mac dev fleet is unaffected. After editing
+# this, regenerate the lock:  uv lock
 [[tool.uv.index]]
-name = "pytorch-cu124"
-url = "https://download.pytorch.org/whl/cu124"
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
 explicit = true
 
 [tool.uv.sources]
-torch = [{ index = "pytorch-cu124", marker = "sys_platform == 'linux'" }]
+torch = [{ index = "pytorch-cu128", marker = "sys_platform == 'linux'" }]
 
 [build-system]
 requires = ["hatchling"]

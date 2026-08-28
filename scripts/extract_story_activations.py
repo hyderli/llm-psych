@@ -45,6 +45,8 @@ import torch
 from omegaconf import DictConfig
 from tqdm import tqdm
 
+from dotenv import load_dotenv  # noqa: E402
+
 from llm_psych.hooks import ResidualStreamRecorder
 from llm_psych.models import load_model, probe_layer_range
 
@@ -122,6 +124,8 @@ def _extract_pooled(
 
 @hydra.main(config_path="../configs", config_name="config", version_base="1.3")
 def main(cfg: DictConfig) -> None:
+    load_dotenv(_repo_root / ".env")  # HF_TOKEN for gated models (e.g. Gemma, Llama)
+
     if cfg.derivation.method != "story":
         raise ValueError(
             "extract_story_activations.py requires derivation=story; "
