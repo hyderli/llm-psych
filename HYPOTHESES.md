@@ -7,7 +7,7 @@ synthetic prompts (≤ 30 examples per condition) is permitted before
 this lock and is not subject to amendment rules.
 
 **Locked at git SHA:** f58547fab9cb6416110f9f55a4c52525da7e2e43
-**Last amended:** 2026-06-14
+**Last amended:** 2026-07-28
 
 ---
 
@@ -866,3 +866,99 @@ selected layer is reported as descriptive, not gating.
   (descriptive convenience, not a hypothesis test).
 - Steering vectors for H2/H3/H7 use the C2-validated per-emotion layer
   as the injection layer, reported per model × emotion.
+
+### 2026-07-28 — Held-out confirmation stimuli authored and frozen (C2 confirmatory test)
+
+**Type:** Stimulus lock + two disclosed deviations. This block does not
+change any hypothesis, threshold, or selection rule. It discharges the
+"held-out confirmation" requirement created by the 2026-07-12
+amendment, which stated that the fresh set "has not been authored or
+run as of this amendment."
+
+**What is frozen.** `data/public/intensity_confirmation.jsonl`,
+MD5 `36be3dc00256bad9d30976cbc9a61fda`, registered in
+`configs/stimuli_hashes.yaml`. 144 rows = 12 families × 12 x-values:
+
+| emotion | families (all INVERSE) |
+|---|---|
+| joy | `stops_away`, `signatures_left`, `pages_left` |
+| loathing | `beds_kept_open`, `workers_rehired`, `hours_notice` |
+| sadness | `letters_survived`, `minutes_allowed`, `names_recalled` |
+| neutral | `shelf_books`, `parking_level`, `stamps_needed` (flat controls) |
+
+Built deterministically by `scripts/build_confirmation_intensity.py`;
+constraints enforced by `tests/test_confirmation_stimuli.py`, which
+fails the build if any emotion-label word appears, if any emotion
+family is non-inverse, if fewer than 3 families per emotion, if any
+family name, sentence, or digit-stripped template is recycled from the
+2026-06-14 set, or if the on-disk file drifts from its frozen MD5.
+**Frozen before any model run**, as required.
+
+**Deviation 1 — provenance (LLM-drafted, human-audited).** The
+2026-07-12 amendment says "hand-authored." The family templates here
+were drafted by an LLM (Claude, 2026-07-28) against the frozen
+constraints and then audited line-by-line by the PI before freezing;
+two families were rewritten during that audit (see below). This is
+disclosed rather than silently absorbed. It matches the provenance
+procedure already prescribed for the expanded set in
+`plans/emotion-set-expansion-design.md` ("LLM-generate candidate
+scenarios and inverse families against the frozen constraints;
+human-audit... MD5-freeze before any model run"). Justification: the
+constraint that matters for validity is that the stimuli are *held
+out* — authored after, and independent of, the layer-selection data —
+not that a human typed them. Authorship does not enter the estimator.
+
+**Deviation 2 — n = 12 x-values per family (June set: 6).** The
+confirmatory statistic is a per-family Spearman ρ over the family's
+rows; at n=6 a single mis-ordered row moves ρ by ≈0.14, and
+`plans/emotion-set-expansion-design.md` already identifies "the n=6
+Spearman noise" as "the weakest link... already at 4 emotions."
+Doubling n halves that noise at zero authoring cost (a longer x-list,
+same sentence). The pass threshold is **unchanged** at inverse-family
+mean ρ(rank) ≥ 0.6. Consequence for reporting: confirmation ρ values
+are not numerically comparable to the June sweep values, which are
+descriptive only in any case; both n's are stated wherever a ρ appears.
+
+**Coverage — joy, loathing, sadness; admiration excluded.** Admiration
+is a vector-quality failure at every swept layer on all three primaries
+under clause 2 of the 2026-07-12 rule, so it has no locked layer at
+which to run a confirmatory test. It re-enters only through
+`plans/residualization-admiration.md`, and if it does, it must clear
+this same frozen set at the layer chosen by the standard rule.
+Loathing is included even though its layer is grandfathered: its
+grandfathered pass was measured on the now-spent June stimuli, so
+confirming it costs three families and removes an obvious objection.
+
+**Audit trail (PI review of the drafted templates).** Two defects were
+found and corrected before freezing, both of which would have put an
+artifact at the *most intense* end of an inverse family:
+1. `x = 1` produced ungrammatical rows ("1 stops", "1 hours of
+   notice"). Affected x-lists now start at 2. A guard
+   (`_plural_after_x`) rejects any template with a plural noun within
+   two words of the `{x}` slot if 1 is in its x-list. **Note: the
+   2026-06-14 set has this defect** (e.g. "She crossed the finish line
+   1 minutes ahead of the world record"); it is left untouched because
+   it is frozen and now descriptive-only, but it is a caveat on the
+   June numbers and is recorded here.
+2. `beds_kept_open` was self-contradictory at its low-intensity end
+   ("closed the shelter... kept just 200 of its 200 beds open") and was
+   reworded.
+
+**How the confirmatory run is executed.**
+`scripts/validate_intensity_semantic.py` gained a `--stimuli` flag; the
+emotion list and the output report name are both derived from the
+stimulus file, so a confirmatory run cannot overwrite the descriptive
+June report and cannot silently be scored against the wrong emotion
+set. Run at the locked layers only (`configs/vector_validation/layers.yaml`),
+no sweep:
+
+```
+uv run python scripts/validate_intensity_semantic.py \
+    --model <cfg> --layer <locked> --device cuda \
+    --stimuli intensity_confirmation.jsonl
+```
+
+**Pass/fail is unchanged** from the 2026-07-12 block: inverse-family
+mean ρ(rank) ≥ 0.6 at the locked layer → concept-validated; otherwise
+reported as "layer-sensitive but not robustly concept-validated," and
+excluded from confirmatory H2/H3/H7 steering claims.

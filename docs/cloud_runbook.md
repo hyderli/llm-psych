@@ -171,6 +171,61 @@ preemption costs at most one emotion of re-extraction. Re-running the
 same command after a preemption simply overwrites partially-written
 files; the pipeline is idempotent at the (model, emotion) granularity.
 
+### 3b. J-space decomposition (CPU pod, no GPU)
+
+The phase-1 workspace decomposition (`plans/j-space-decomposition.md`)
+needs only fast HF egress, not a GPU — a cheap CPU instance is plenty.
+After the CPU-only bootstrap (small disk safe):
+
+```bash
+cd /workspace/llm-psych
+bash scripts/cloud_bootstrap_cpu_minimal.sh
+
+# All three primaries, canonical parameters, stop the pod when done:
+bash scripts/cloud_decompose.sh --shutdown
+
+# One model only:
+bash scripts/cloud_decompose.sh --models "llama31_8b"
+```
+
+If your CPU pod has ≥20 GB disk, you can also use
+`bash scripts/cloud_bootstrap.sh --cpu`.
+
+**Pod specs:** any RunPod CPU template with ≥4 vCPU, ≥8 GB RAM, and ≥5 GB
+disk works. 8 vCPU / 32 GB RAM / 5 GB disk is comfortable. No GPU and no
+Network Volume are needed.
+
+Per model, the wrapper pulls that model's story steering vectors from
+the HF dataset, then uses the weights-light loader to fetch only the
+`lm_head.weight` / `model.embed_tokens.weight` and `model.norm.weight`
+tensor slices from the remote safetensors shards (via HTTP Range) and
+streams the pre-fitted Neuronpedia J-lens directly into RAM. Full model
+checkpoints are never written to disk, so a 5 GB RunPod CPU pod is
+sufficient and no Network Volume is needed. The wrapper decomposes every
+vector into J-space + residual (`+v` and `-v`) and pushes
+`results/workspace_decomposition/<model_key>-story/` (decomposed `.npy`
+files + `manifest.yaml`) to the dataset before the next model starts —
+so a preemption costs at most one model. A failing model does not block
+the others; the script exits 3 if any failed.
+
+Before trusting the primary results, do the layer-index sanity check
+from the PR #13 test plan: read the lens at a swept layer on one real
+stored activation and compare the top tokens against the Neuronpedia UI
+for the same model and layer (an off-by-one in layer indexing would
+still produce plausible-looking tokens on steering vectors alone).
+
+Pull the results on the Mac with:
+
+```bash
+uv run python - <<'EOF'
+from huggingface_hub import snapshot_download
+snapshot_download(
+    "llm-psych/llm-psych-activations", repo_type="dataset",
+    allow_patterns="results/workspace_decomposition/*", local_dir=".",
+)
+EOF
+```
+
 ### 4. Verify on the Mac
 
 After the pod is done, on your laptop:

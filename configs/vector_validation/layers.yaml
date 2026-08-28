@@ -1,0 +1,66 @@
+_locked: Per-emotion C2 validation layers, selected once by scripts/select_c2_layers.py
+  per the HYPOTHESES.md 2026-07-12 amendment. Do not edit by hand; do not re-run
+  after the confirmation stimuli exist.
+rule: HYPOTHESES.md 2026-07-12 amendment (per-emotion C2 layer selection)
+models:
+  Llama-3.1-8B-Instruct:
+    convention_layer: 21
+    emotions:
+      admiration:
+        status: vector_quality_failure
+        layer: null
+        note: no layer reaches intensity inverse-family rho >= 0.6 (max +0.58);
+          routed to residualization
+      joy:
+        status: selected
+        layer: 26
+        smoothed_acc: 0.9
+      loathing:
+        status: grandfathered
+        layer: 21
+        note: passed all C2 tests at the convention layer (2026-07-12 amendment)
+      sadness:
+        status: selected
+        layer: 30
+        smoothed_acc: 0.7
+  Qwen2.5-7B-Instruct:
+    convention_layer: 19
+    emotions:
+      admiration:
+        status: vector_quality_failure
+        layer: null
+        note: no layer reaches intensity inverse-family rho >= 0.6 (max +0.16);
+          routed to residualization
+      joy:
+        status: selected
+        layer: 26
+        smoothed_acc: 0.85
+      loathing:
+        status: grandfathered
+        layer: 19
+        note: passed all C2 tests at the convention layer (2026-07-12 amendment)
+      sadness:
+        status: selected
+        layer: 14
+        smoothed_acc: 0.8
+  gemma-2-9b-it:
+    convention_layer: 28
+    emotions:
+      admiration:
+        status: vector_quality_failure
+        layer: null
+        note: no layer reaches intensity inverse-family rho >= 0.6 (max -0.54);
+          routed to residualization
+      joy:
+        status: vector_quality_failure
+        layer: null
+        note: no layer reaches intensity inverse-family rho >= 0.6 (max +0.56);
+          routed to residualization
+      loathing:
+        status: grandfathered
+        layer: 28
+        note: passed all C2 tests at the convention layer (2026-07-12 amendment)
+      sadness:
+        status: selected
+        layer: 21
+        smoothed_acc: 1.0
