@@ -7,7 +7,8 @@ HYPOTHESES.md amendment block (§13) — **not yet merged, no wheel data may
 be collected until it is.**
 **Decision inputs:** PI decision 2026-08-28 — expand to the full wheel,
 24 derived cells plus a dyad arm, and proceed without waiting on the
-four-emotion confirmation run or the admiration residualization result.
+three-emotion confirmation run (joy/loathing/sadness) or the admiration
+residualization result.
 §11 records the risk that decision accepts and the mitigations that make
 it survivable.
 
@@ -64,7 +65,7 @@ The locked four are not on one ring: **admiration and loathing are
 high-ring cells; joy and sadness are middle-ring.** So the existing
 opposite-pair comparison confounds axis with intensity ring. The wheel
 design removes that confound, and the four reappear as 4 of the 24 cells
-(with different vectors — see §5).
+(with different vectors — see §3).
 
 ---
 
@@ -90,10 +91,15 @@ emotions changes it, so *every* vector changes — including joy, sadness,
 admiration and loathing. Three consequences:
 
 1. The wheel vectors go to a **new namespace**,
-   `steering_vectors/<model>-story-wheel32/`, and a new HF dataset path.
-   `<model>-story/` is never touched (project rule: primary-model
-   steering vectors are never regenerated — stochastic story generation
-   would invalidate C2 validation and the locked layers).
+   `steering_vectors/<model>-story-wheel32-{xc,nr,resid}/` (see §6.2 for
+   the three centering parameterizations; `xc` is primary), and a new HF
+   dataset path.
+   `<model>-story/` is never touched. The written constraints this
+   rests on: `configs/vector_validation/layers.yaml` `_locked:` ("do not
+   re-run after the confirmation stimuli exist") and
+   `results/story_screening/report.md` (re-deriving a corpus requires a
+   dated HYPOTHESES.md amendment). Story generation is stochastic, so a
+   re-run would invalidate the C2 numbers and the locked layers.
 2. Locked layers from the 2026-07-12 rule **do not transfer**. The wheel
    track selects its own layers under the rule in §7.
 3. `cos(v_wheel_joy, v_four_joy)` and the same for sadness / admiration /
@@ -110,11 +116,14 @@ Neutral-PC projection is refit on the expanded neutral corpus
 ## 4. Label scheme and configs
 
 Integer labels 1-20 are taken (`configs/emotion/EMOTION_LABELS.md`), and
-nine wheel cell names collide with existing config files (`joy`,
-`sadness`, `admiration`, `loathing`, `fear`, `anger`, `disgust`,
-`surprise`, `contempt`). The legacy configs are a mixed Ekman / Wilcox /
-primary-9 set with different stimuli — reusing them would silently mix
-frameworks.
+**ten of the 33 generated config names collide** with existing files in
+`configs/emotion/`: the nine cell names `joy`, `sadness`, `admiration`,
+`loathing`, `fear`, `anger`, `disgust`, `surprise`, `contempt`, **plus
+`neutral`**. The legacy configs are a mixed Ekman / Wilcox / primary-9
+set with different stimuli — reusing them would silently mix frameworks.
+The neutral collision matters most: neutral is the reference corpus and
+the source of the PC projection, so the wheel track needs its own
+neutral config and its own neutral corpus, not the legacy file.
 
 **Therefore:**
 
@@ -151,9 +160,17 @@ Per cell (32 cells + neutral):
 Rules, carried from the 2026-07-12 design note and unchanged:
 
 - **LLM-generated against the frozen constraints** in
-  `docs/methods.md` (no emotion-label words, deterministic build),
+  `plans/emotion-set-expansion-design.md` §Stimuli and the 2026-07-28
+  HYPOTHESES.md amendment (no emotion-label words, deterministic build;
+  mechanically enforced by `tests/test_confirmation_stimuli.py`),
   **human-audited** on a random sample per cell, **MD5-frozen** in
   `configs/stimuli_hashes.yaml` before any model run.
+- **This is a documented deviation and the amendment must own it.**
+  `docs/methods.md` states that all new stimulus files are
+  *hand-authored*, frozen and MD5-locked. Authoring ~2,700 rows by hand
+  across 33 cells is not feasible, so the wheel track substitutes
+  LLM generation + human audit. Say so explicitly rather than letting
+  the two documents silently disagree.
 - Generation provenance logged: generator model + SHA, prompt verbatim,
   temperature, seed.
 - Intensity families are **inverse only** for the headline metric — the
@@ -166,34 +183,108 @@ Rules, carried from the 2026-07-12 design note and unchanged:
   the audit rubric records, per cell, whether a human rater can assign
   the intended ring. Cells that fail human ring-assignment are reported
   as such rather than quietly dropped.
-- Story corpora reuse the existing frozen `story_topics.txt` (56 topics,
-  7 stories/topic = 392 stories/cell) so topic distribution is identical
-  across all 33 corpora and cannot separate them.
+- Story corpora reuse the existing frozen `story_topics.txt` (**46**
+  topics after comment/blank lines; 7 stories/topic = **322 stories/cell**,
+  10,626 stories/model across 33 corpora) so topic distribution is
+  identical across all 33 corpora and cannot separate them.
 
-**Free gate closure:** run the already-frozen 144-row four-emotion
-confirmation set (`intensity_confirmation.jsonl`, MD5
-`36be3dc0...`) on the four-emotion vectors in the same pod session. It
-costs minutes, and it closes the outstanding 2026-07-28 confirmatory
-test that the wheel decision otherwise leaves dangling.
+**Free gate closure:** run the already-frozen 144-row confirmation set
+(`intensity_confirmation.jsonl`, MD5 `36be3dc0...`) on the four-emotion
+vectors in the same pod session. Note its actual coverage: **joy,
+loathing, sadness + neutral only, 36 rows each — admiration is excluded**
+(vector-quality failure, no locked layer), so it closes the 2026-07-28
+confirmatory test for three of the four on Llama and Qwen. On Gemma it
+closes two: joy is also a vector-quality failure there (max +0.56, no
+locked layer, per `configs/vector_validation/layers.yaml`). It costs
+minutes and the gate otherwise stays dangling.
 
 ---
 
-## 6. Derivation arms
+## 6. Derivation arms and centering parameterizations
 
-Two arms from the **same** stored activations — residualization is a
-linear post-hoc operation, so the second arm costs no extra generation:
+### 6.1 Everything after extraction is free
 
-- `<model>-story-wheel32/` — standard construction.
-- `<model>-story-wheel32-resid/` — text-residualized per
-  `plans/residualization-admiration.md` (per-layer OLS against pooled
-  story text embedding; store beta and R^2).
+`activations/<model>-story-wheel32/<cell>.npz` stores one pooled vector
+per story per layer. Every downstream choice — how to centre, whether to
+residualize, which reference to use — is a linear operation on that
+stored array, computed on the Mac at zero GPU cost. **No centering
+decision belongs on the pod.** The pod's only job is generation and
+extraction, which are parameterization-agnostic.
 
-This is the mitigation for proceeding before the admiration
-residualization verdict is in: whatever that verdict turns out to be, the
-wheel run already contains both arms and the comparison is available
-without a second GPU campaign. Pre-specify that the **standard arm is
-primary**; the residualized arm is a pre-registered secondary reported
-side-by-side.
+Corollary, and a footgun: `_discover_emotions` in
+`scripts/derive_story_steering_vectors.py` globs `*.npz` and excludes
+`neutral.npz`, so **the emotion set — and therefore the grand mean — is
+whatever files are in the activation directory.** Deleting or adding one
+cell's `.npz` silently changes every other vector. Rule for this track:
+the wheel activation directory contains exactly the 33 corpora, always;
+failed cells are excluded at *analysis* time by name, never by removing
+the file. `scripts/run_wheel.sh` asserts the directory holds exactly 33
+`.npz` files before calling derive.
+
+### 6.2 Three centering parameterizations, all derived offline
+
+| tag | vector | role |
+|---|---|---|
+| `xc` | `v_e = project_out(mean_e − grand_mean_over_emotions, neutral_PCs)` | **PRIMARY** |
+| `nr` | `v_e = project_out(mean_e − mean_neutral, neutral_PCs)` | secondary |
+| `resid` | `xc` recomputed on text-residualized activations | secondary |
+
+**`xc` (cross-emotion centering) is pre-registered as primary.** It is
+the paper's construction, it is what the four-emotion track used, and it
+is the only choice that keeps `cos(v_wheel_joy, v_four_joy)` (§3)
+interpretable as a construction-stability check rather than a comparison
+of two different operations.
+
+`nr` (neutral-referenced) exists because it is required to interpret H9
+— see §6.3 — and because neutral is excluded from the grand mean anyway,
+so `mean_neutral` is already computed and sitting in the same directory.
+
+`resid` (text-residualized per `plans/residualization-admiration.md`:
+per-layer OLS against the pooled story text embedding, storing beta and
+R^2) is the mitigation for proceeding before the admiration
+residualization verdict is in. Whatever that verdict turns out to be, the
+wheel data already contains the arm and the comparison needs no second
+GPU campaign.
+
+Output namespaces: `steering_vectors/<model>-story-wheel32-{xc,nr,resid}/`.
+All three are derived in the same offline pass and all three are pushed;
+storage is small (vectors, not activations).
+
+### 6.3 Which parameterization each hypothesis is tested in
+
+This is not a robustness detail. Cross-emotion centering subtracts a
+grand mean that absorbs whatever the 32 cells share — including the
+generic "this text is emotional" component — so it is **not neutral with
+respect to the geometry claims**:
+
+- **H9 (ring magnitude) is not invariant under `xc`.** The norm ordering
+  `||v_high|| > ||v_middle|| > ||v_low||` is measured against a moving
+  reference: the grand mean already contains the shared axis content, so
+  centering can compress or invert the ring ordering it is supposed to
+  detect. **H9 is therefore pre-registered in `nr`**, where the reference
+  is a fixed neutral corpus and the norm has a stable meaning, with `xc`
+  reported alongside. The collinearity half of H9,
+  `cos(v_high, v_low) >= 0.7`, is direction-only and is reported in both.
+- **H10 (antipodality) is direction-only and reported in `xc`** (primary),
+  `nr` alongside. Note that `xc` mechanically pushes vectors apart —
+  subtracting a common mean from a set of similar vectors increases their
+  mutual angles — so the pre-registered comparison is against **matched
+  non-opposite pairs at the same ring**, not against zero. An absolute
+  negative cosine under `xc` is not by itself evidence of antipodality.
+- **H11 (dyad composition) is invariant under `xc` only in the average
+  form.** With `v = m − g`, the centred average is exactly the average of
+  the centred components:
+  `(m_a + m_b)/2 − g = ((m_a − g) + (m_b − g))/2`. The centred *sum* is
+  not: `m_a + m_b − 2g` carries a second copy of the grand mean.
+  Since the test is a cosine, `normalize()` removes the factor of 2 and
+  the average and sum forms coincide — **but only if the underlying
+  relation is the average.** H11 is therefore stated in the average form,
+  tested in `xc` (primary), and reported in `nr` as the check that the
+  result is not an artifact of the centering algebra.
+
+Every reported geometry number states its parameterization tag. A claim
+that holds in `xc` but not `nr` (or vice versa) is reported as such and
+is a finding about the construction, not a number to choose between.
 
 ---
 
@@ -218,14 +309,21 @@ The 2026-07-12 per-emotion rule does not scale (free max-selection over
 - Vector-quality clause retained: a cell reaching the intensity target at
   no layer in the sweep is a **construction failure**, reported as such,
   not rescued by layer choice.
+- **Layer selection runs on the primary parameterization (`xc`) only.**
+  Selecting layers separately per parameterization would make the three
+  incomparable and would triple the selection space. `nr` and `resid` are
+  read at the layers `xc` selects.
 
 ---
 
 ## 8. Statistics
 
-- Confirmation family: 32 cells x 3 models = 96 tests. **BH-FDR across
-  the 32 tests within each model**, models reported separately (project
-  convention: BH-FDR for many contrasts).
+- Confirmation family: 32 cells x 3 models = 96 tests. **BH-FDR at
+  q = 0.10 across the 32 tests within each model**, models reported
+  separately. Note the project convention is "BH-FDR for many models,
+  Bonferroni for few primary contrasts" (CLAUDE.md); 32 cells within a
+  model is a many-contrasts family, so BH-FDR is the right instrument
+  here, and q = 0.10 matches every other FDR family in HYPOTHESES.md.
 - Effect size + 95% bootstrap CI (n=10,000) per cell, not pass/fail.
 - Geometry tests (§9) are their own FDR family, declared separately.
 - Pilot-vs-scale discipline unchanged: no steering claim from the wheel
@@ -236,27 +334,35 @@ The 2026-07-12 per-emotion rule does not scale (free max-selection over
 ## 9. What the wheel actually buys — the pre-registered geometry claims
 
 These are the reason to do 24 rather than 8, and they are the publishable
-core. All are evaluated at the **shared reference layer**.
+core. All are evaluated at the **shared reference layer** (§7), and each
+names its centering parameterization (§6.3).
 
-**H9 — Ring structure is magnitude, not direction.**
+**H9 — Ring structure is magnitude, not direction.** *(norms in `nr`;
+collinearity in both `xc` and `nr`)*
 Within an axis, the three ring vectors are near-collinear and ordered by
-norm: `cos(v_high, v_low)` is high (pre-register >= 0.7 as the
-"supported" threshold), and `||v_high|| > ||v_middle|| > ||v_low||`.
-Falsified if ring cells are near-orthogonal — which would say the model
-represents serenity and ecstasy as different concepts, not different
-intensities, and is an equally interesting result.
+norm: `cos(v_high, v_low) >= 0.7` (pre-registered threshold), and
+`||v_high|| > ||v_middle|| > ||v_low||`. The norm claim is tested in the
+neutral-referenced parameterization because it is not invariant under
+cross-emotion centering (§6.3). Falsified if ring cells are
+near-orthogonal — which would say the model represents serenity and
+ecstasy as different concepts, not different intensities, and is an
+equally interesting result.
 
-**H10 — Opposite axes are antipodal.**
+**H10 — Opposite axes are antipodal.** *(`xc` primary, `nr` alongside)*
 For the four opposite pairs (joy/sadness, trust/disgust, fear/anger,
 surprise/anticipation), `cos(v_axis, v_opposite)` is more negative than
-for matched non-opposite pairs at the same ring. Tested at the middle
-ring to avoid the ring confound noted in §1.
+for **matched non-opposite pairs at the same ring**. Tested at the middle
+ring to avoid the ring confound noted in §1. The matched-pair comparison
+is load-bearing: cross-emotion centering mechanically inflates mutual
+angles, so an absolute negative cosine proves nothing on its own.
 
-**H11 — Dyads compose.**
+**H11 — Dyads compose.** *(`xc` primary, `nr` as centering-algebra check)*
 For each of the 8 dyads, the independently derived `v_dyad` is closer to
-`normalize(v_a + v_b)` than to `normalize(v_a + v_c)` for the 7
-non-component axes c. This is the strongest available claim: the wheel
-makes a compositional prediction and it has not been tested in an LLM.
+`normalize((v_a + v_b)/2)` — the **average** form, which is the one that
+survives cross-emotion centering (§6.3) — than to `normalize((v_a +
+v_c)/2)` for each of the 6 non-component axes c. This is the strongest
+available claim: the wheel makes a compositional prediction and it has
+not been tested in an LLM.
 
 Supporting, non-confirmatory: cross-model Procrustes alignment of the
 32-vector configuration (is the wheel geometry model-invariant?), and the
@@ -306,9 +412,10 @@ inherit it.
 
 Mitigations, all cheap, all built into this plan:
 
-1. **Both derivation arms from the start** (§6) — the residualization
-   comparison arrives with the wheel data instead of requiring a second
-   campaign.
+1. **All three parameterizations from the start** (§6.2) — the
+   residualized arm arrives with the wheel data instead of requiring a
+   second campaign, and costs no GPU time because centering and
+   residualization are offline linear operations on stored activations.
 2. **Stop-check after model 1.** Run Llama 3.1 8B first, complete. If
    more than 8 of 24 cells fail the intensity criterion at every layer,
    **halt** before models 2 and 3 and reconvene on construction. Written
@@ -317,15 +424,15 @@ Mitigations, all cheap, all built into this plan:
 3. **Ring-stratified failure report** — report failures broken down by
    ring, so "high-ring cells fail" is visible immediately rather than
    averaged away.
-4. The free four-emotion confirmation run (§5) rides along in the same
+4. The free three-emotion confirmation run (§5) rides along in the same
    session, so that gate closes anyway.
 
 ---
 
 ## 12. Cost and authoring estimate
 
-**Compute is not the constraint.** Per model: 33 corpora x 392 stories x
-200 max_new_tokens ~ 2.6M generated tokens, plus extraction forward
+**Compute is not the constraint.** Per model: 33 corpora x 322 stories x
+200 max_new_tokens ~ 2.1M generated tokens, plus extraction forward
 passes and the C2 sweeps (which scale with *stimulus* count, ~2,700 rows
 x ~20 layers, not with vector count).
 
@@ -343,7 +450,7 @@ covers the old CAA prompt path, ~700 prompts / 5 min). Instrument the
 first cell of the Llama run and revise this table before booking the full
 campaign.
 
-**Storage is the real infrastructure constraint.** ~8x the current
+**Storage is the real infrastructure constraint.** ~6.6x the current
 activation volume per model. Pod disk >= 100 GB, and keep the existing
 free-the-HF-cache-between-models step from `run_primaries.sh` (the
 disk-full lesson of 2026-06-14).
@@ -379,8 +486,8 @@ which is not re-run, re-fit, or overwritten. Because the story-method
 construction centres on the cross-emotion grand mean, the wheel vectors
 are numerically different objects from the four-emotion vectors,
 including for joy, sadness, admiration and loathing; they live in
-`steering_vectors/<model>-story-wheel32/` and carry their own layer
-selection. No claim in this track substitutes for a four-emotion claim.
+`steering_vectors/<model>-story-wheel32-{xc,nr,resid}/` and carry their
+own layer selection. No claim in this track substitutes for a four-emotion claim.
 
 **Emotion set.** Axes joy, trust, fear, surprise, sadness, disgust,
 anger, anticipation; rings high/middle/low per Plutchik; dyads love,
@@ -392,10 +499,14 @@ dyad is a distinct construct from the legacy Ekman `contempt` config
 
 **Stimuli.** 10 implicit scenarios and 3 inverse intensity families
 (12 rows each) per cell, plus 3 fresh held-out inverse families per cell
-for confirmation. LLM-generated against the frozen constraints in
-docs/methods.md, human-audited on a per-cell random sample with an
-explicit ring-discriminability check, and MD5-frozen in
-configs/stimuli_hashes.yaml before any model run. Story corpora use the
+for confirmation. LLM-generated against the frozen constraints of
+plans/emotion-set-expansion-design.md and the 2026-07-28 amendment,
+human-audited on a per-cell random sample with an explicit
+ring-discriminability check, and MD5-frozen in
+configs/stimuli_hashes.yaml before any model run. This substitutes LLM
+generation plus human audit for the hand-authoring convention stated in
+docs/methods.md; the deviation is deliberate and is scoped to this
+track, on grounds of infeasibility at ~2,700 rows. Story corpora use the
 existing frozen topic list, 7 stories per topic per cell.
 
 **Layer selection.** Argmax implicit accuracy is replaced, for this
@@ -410,23 +521,45 @@ claim states which space it is in. The vector-quality clause of the
 target at no layer is a construction failure, not a layer-choice
 problem.
 
-**Derivation arms.** Two arms are derived from the same stored
-activations: the standard construction (PRIMARY) and a text-residualized
-construction (SECONDARY, per plans/residualization-admiration.md),
-reported side by side.
+**Derivation arms and centering.** Story generation and activation
+extraction are parameterization-agnostic; all centering choices are
+linear operations on the stored pooled activations and are computed
+offline. Three parameterizations are derived from the same activations
+and all three are reported:
+xc = project_out(mean_e - grand_mean_over_emotions, neutral_PCs), the
+paper construction, PRE-REGISTERED AS PRIMARY;
+nr = project_out(mean_e - mean_neutral, neutral_PCs), secondary;
+resid = xc recomputed on text-residualized activations (per-layer OLS
+against the pooled story text embedding), secondary, per
+plans/residualization-admiration.md.
+Every reported number states its parameterization. A result that holds
+under one parameterization and not another is reported as such.
 
 **H9 (ring structure).** Within an axis, ring vectors are near-collinear
-and norm-ordered: cos(v_high, v_low) >= 0.7 and
+and norm-ordered: cos(v_high, v_low) >= 0.7, and
 ||v_high|| > ||v_middle|| > ||v_low||, at the shared reference layer.
+The norm-ordering claim is tested in nr and reported in xc alongside,
+because norms are not invariant under cross-emotion centering: the grand
+mean absorbs the shared axis content and can compress or invert the
+ordering the hypothesis is about. The collinearity claim is
+direction-only and is tested in both.
 
 **H10 (opposite antipodality).** For the four opposite axis pairs,
 cos(v_axis, v_opposite) at the middle ring is more negative than for
-matched non-opposite pairs at the same ring.
+matched non-opposite pairs at the same ring. Tested in xc, reported in
+nr alongside. The matched-pair comparator is required: cross-emotion
+centering mechanically inflates mutual angles, so an absolute negative
+cosine is not evidence for this hypothesis.
 
 **H11 (dyad composition).** For each of the 8 dyads, the independently
-derived v_dyad has higher cosine to normalize(v_a + v_b), its Plutchik
-components, than to normalize(v_a + v_c) for any of the 7 non-component
-axes c.
+derived v_dyad has higher cosine to normalize((v_a + v_b)/2), the
+average of its Plutchik components, than to normalize((v_a + v_c)/2)
+for any of the 6 non-component axes c (8 axes minus the dyad's own two
+components). The average form is pre-registered rather than the sum
+because it is the form invariant under cross-emotion centering:
+(m_a + m_b)/2 - g equals the average of the centred components, whereas
+the centred sum carries a second copy of the grand mean. Tested in xc,
+reported in nr as a centering-algebra check.
 
 **Controls.** All three hypotheses are reported as residuals over a
 lexical-geometry null computed two ways: static embeddings of the 32
@@ -465,19 +598,24 @@ four-emotion confirmatory program and is reported as such.
    no-inheritance from legacy configs.
 2. Stimulus generation + human audit + MD5 freeze. Longest pole.
 3. `scripts/run_wheel.sh` — story pipeline -> extraction -> both
-   derivation arms -> one-vs-rest AUC layer selection -> C2 suite +
+   all three centering parameterizations (offline) -> one-vs-rest AUC
+   layer selection on `xc` -> C2 suite +
    sweeps -> push to HF under the wheel namespace. Includes the
-   model-1 stop-check gate and the ride-along four-emotion confirmation
-   run.
+   model-1 stop-check gate and the ride-along confirmation run for the
+   frozen joy/loathing/sadness set.
 4. Llama 3.1 8B, complete, stop-check, verdict written to
    `results/wheel32/model1_gate.md`.
 5. Qwen 2.5 7B, Gemma 2 9B.
 6. Discriminability matrix, lexical-geometry null, then H9-H11.
-7. Only afterwards: extend the J-space decomposition to the wheel — and
-   note that the null-calibration problem recorded in
-   `jspace-measurement-validity.md` applies to every new J-fraction
-   computed here. Do not report wheel J-fractions without an empirical
-   null.
+7. Only afterwards: extend the J-space decomposition to the wheel. The
+   J-fraction has no null as currently computed — candidate atoms are
+   selected by the vector's own lens logits and then greedily matched to
+   the running residual, so any vector scores non-trivially and the
+   procedural floor is unknown (this is recorded in the session project
+   memory, not in the repo; it should be written up in
+   `plans/j-space-decomposition.md`). Do not report a wheel J-fraction
+   without an empirical null from the identical pipeline on norm-matched
+   random and element-shuffled vectors.
 
 ---
 
@@ -493,8 +631,13 @@ four-emotion confirmatory program and is reported as such.
    budget conversation. Recommendation: geometry-only for now; steering
    restricted to cells that pass both validation and discriminability.
 3. **Third model.** Gemma 2 9B admiration already fails hard
-   (intensity_rho -0.66). If Gemma fails broadly at high ring, is the
-   wheel track reported on two models?
+   (headline inverse-family rho -0.60 at L28; max across the sweep
+   -0.54, per `configs/vector_validation/layers.yaml`), and joy fails
+   there too. If Gemma fails broadly at high ring, is the wheel track
+   reported on two models?
 4. **H8 interaction.** The workspace amendment must merge before any
    steering run; if the wheel stays geometry-only there is no conflict,
-   but a wheel J-space analysis inherits gates G1/G2.
+   but a wheel J-space analysis inherits the three unfilled prep-run
+   gates in `plans/h8-workspace-steering.md` §"Gates before PR"
+   (k=16 vs k=64 stability, digit-span projection, J-fraction x C2
+   correlation).
