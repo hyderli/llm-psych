@@ -37,8 +37,10 @@ data/derived/stories/Qwen2.5-7B-Instruct/...
 data/derived/stories/gemma-2-9b-it/...
 ```
 
-Five of the 33 wheel corpora share a name with an existing one: `joy`,
-`sadness`, `admiration`, `loathing`, `neutral`. **Running the wheel
+At least five of the 33 wheel corpora share a name with an existing one:
+`joy`, `sadness`, `admiration`, `loathing`, `neutral`. On Gemma,
+`anger` and `fear` are also present (extra corpora from an earlier run),
+making the collision set model-dependent. **Running the wheel
 pipeline as it stands regenerates `joy.parquet` in place and destroys the
 corpus behind the locked four-emotion vectors, the C2 validation numbers,
 and the locked layers.** Story generation is stochastic, so an
@@ -229,8 +231,11 @@ booking the full run.
 1. ~~§1 path namespacing + test~~ — **done 2026-08-28.**
 2. ~~`configs/wheel.yaml` + `scripts/build_wheel_configs.py` + tests -> 33
    configs~~ — **done 2026-08-28** (commit 50dd487).
-3. `scripts/run_wheel.sh` — the three scripts per cell, the 33-file
-   assertion, HF push, free cache between models.
-4. Smoke test: 2 cells on Qwen 2.5 0.5B on the Mac, `max_topics=3`.
+3. ~~`scripts/run_wheel.sh` — the three scripts per cell, the 33-file
+   assertion, HF push, free cache between models.~~ — **done 2026-08-28**
+   (commit 80faa62, amended with smoke-track and neutral auto-injection).
+4. Smoke test: 2 cells + neutral on Qwen 2.5 0.5B on the Mac,
+   `max_topics=3`. Subsets auto-use `track=story-wheel32-smoke` and
+   auto-inject `wheel_neutral`.
 5. Llama 3.1 8B full, then Qwen 2.5 7B, then Gemma 2 9B.
 6. Three centering parameterizations offline; logit-lens sanity pass.

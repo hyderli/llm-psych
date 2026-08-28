@@ -18,9 +18,14 @@
 #     # One model:
 #     bash scripts/run_wheel.sh --models "llama31_8b" --push
 #
-#     # Smoke test (2 cells, Mac):
+#     # Smoke test (2 cells + neutral, Mac):
 #     bash scripts/run_wheel.sh --models "qwen25_05b" --cells "wheel_ecstasy wheel_grief" \
 #         --max-topics 3 --device mps --dtype float16
+#
+#     When --cells is set, the track is automatically changed to
+#     story-wheel32-smoke so a partial run cannot write plausible-looking
+#     garbage into the real wheel namespace. wheel_neutral is injected
+#     automatically (derive needs neutral.npz for the PC projection).
 #
 # Required env::
 #
@@ -100,8 +105,26 @@ if [[ -z "$CELLS" ]]; then
     mapfile -t CELL_ARRAY < <(
         find configs/emotion -name 'wheel_*.yaml' -exec basename {} .yaml \; | sort
     )
+    IS_SUBSET=0
 else
     read -ra CELL_ARRAY <<< "$CELLS"
+    IS_SUBSET=1
+
+    # Auto-inject wheel_neutral: derive needs neutral.npz for the PC
+    # projection. Forgetting it is a silent FileNotFoundError.
+    has_neutral=0
+    for c in "${CELL_ARRAY[@]}"; do
+        [[ "$c" == "wheel_neutral" ]] && has_neutral=1
+    done
+    if [[ "$has_neutral" -eq 0 ]]; then
+        CELL_ARRAY+=("wheel_neutral")
+        log "auto-injected wheel_neutral (required by derive)"
+    fi
+
+    # Subset runs use a smoke track so partial vectors cannot masquerade
+    # as real wheel output in steering_vectors/<model>-story-wheel32/.
+    TRACK="story-wheel32-smoke"
+    log "subset mode: track overridden to ${TRACK}"
 fi
 
 EXPECTED_FULL=33
