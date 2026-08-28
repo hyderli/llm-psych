@@ -125,9 +125,11 @@ trap shutdown_pod EXIT
 
 if [[ -z "$CELLS" ]]; then
     # All 33 wheel configs (sorted for deterministic order).
-    mapfile -t CELL_ARRAY < <(
-        find configs/emotion -name 'wheel_*.yaml' -exec basename {} .yaml \; | sort
-    )
+    # Use a while-read loop instead of mapfile for Bash 3.2 (macOS).
+    CELL_ARRAY=()
+    while IFS= read -r f; do
+        CELL_ARRAY+=("$f")
+    done < <(find configs/emotion -name 'wheel_*.yaml' -exec basename {} .yaml \; | sort)
     IS_SUBSET=0
 else
     read -ra CELL_ARRAY <<< "$CELLS"
@@ -243,7 +245,10 @@ for model in $MODELS; do
     section "MODEL: ${model} (${model_key})"
     log "cells: ${N_CELLS}"
 
-    mapfile -t OVERRIDES < <(build_overrides "$model")
+    OVERRIDES=()
+    while IFS= read -r o; do
+        OVERRIDES+=("$o")
+    done < <(build_overrides "$model")
 
     # ------------------------------------------------------------------
     # Step 1: generate stories for each cell
