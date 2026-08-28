@@ -1,0 +1,68 @@
+# Plutchik-wheel cell specification.
+#
+# Single source of truth for the wheel extraction track. The 33 emotion
+# configs in configs/emotion/wheel_*.yaml are GENERATED from this file by
+# scripts/build_wheel_configs.py — do not hand-edit the generated files.
+#
+# Labels: 100 + 10*axis_index + ring  (ring 1=high, 2=middle, 3=low),
+# dyads 191-198. This namespace is disjoint from the legacy 1-20 labels
+# in configs/emotion/EMOTION_LABELS.md.
+#
+# See plans/plutchik-wheel-expansion.md.
+
+track: story-wheel32          # path component; keeps this track off the
+                              # four-emotion track's corpora (plan §1)
+
+axes:
+  - name: joy
+    index: 1
+    opposite: sadness
+    rings: {high: ecstasy, middle: joy, low: serenity}
+  - name: trust
+    index: 2
+    opposite: disgust
+    rings: {high: admiration, middle: trust, low: acceptance}
+  - name: fear
+    index: 3
+    opposite: anger
+    rings: {high: terror, middle: fear, low: apprehension}
+  - name: surprise
+    index: 4
+    opposite: anticipation
+    rings: {high: amazement, middle: surprise, low: distraction}
+  - name: sadness
+    index: 5
+    opposite: joy
+    rings: {high: grief, middle: sadness, low: pensiveness}
+  - name: disgust
+    index: 6
+    opposite: trust
+    rings: {high: loathing, middle: disgust, low: boredom}
+  - name: anger
+    index: 7
+    opposite: fear
+    rings: {high: rage, middle: anger, low: annoyance}
+  - name: anticipation
+    index: 8
+    opposite: surprise
+    rings: {high: vigilance, middle: anticipation, low: interest}
+
+# Primary dyads: adjacent axis pairs on the wheel. Derived on equal
+# footing with the 24 ring cells.
+dyads:
+  - {name: love,           label: 191, components: [joy, trust]}
+  - {name: submission,     label: 192, components: [trust, fear]}
+  - {name: awe,            label: 193, components: [fear, surprise]}
+  - {name: disapproval,    label: 194, components: [surprise, sadness]}
+  - {name: remorse,        label: 195, components: [sadness, disgust]}
+  - {name: contempt,       label: 196, components: [disgust, anger]}
+  - {name: aggressiveness, label: 197, components: [anger, anticipation]}
+  - {name: optimism,       label: 198, components: [anticipation, joy]}
+
+# Reference corpus. Not an emotion; used to fit the neutral PCs that are
+# projected out of every vector.
+neutral:
+  name: neutral
+  label: 0
+
+ring_order: [high, middle, low]
