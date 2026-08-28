@@ -97,6 +97,29 @@ while [[ $# -gt 0 ]]; do
 done
 
 # --------------------------------------------------------------------------
+# Logging / shutdown trap
+# --------------------------------------------------------------------------
+
+mkdir -p "$LOG_DIR"
+TS=$(date +%Y%m%d_%H%M%S)
+LOG="${LOG_DIR}/run_wheel_${TS}.log"
+
+log()     { printf '\033[1;36m[run_wheel]\033[0m %s\n' "$*" | tee -a "$LOG" >&2; }
+section() { printf '\n== %s ==\n' "$*" | tee -a "$LOG"; }
+
+shutdown_pod() {
+    if [[ "$DO_SHUTDOWN" -eq 1 ]]; then
+        if [[ -n "${RUNPOD_POD_ID:-}" ]] && command -v runpodctl >/dev/null 2>&1; then
+            log "stopping pod $RUNPOD_POD_ID"
+            runpodctl stop pod "$RUNPOD_POD_ID" || log "runpodctl stop failed; stop manually."
+        else
+            log "shutdown requested but runpodctl/RUNPOD_POD_ID unavailable; stop pod manually."
+        fi
+    fi
+}
+trap shutdown_pod EXIT
+
+# --------------------------------------------------------------------------
 # Resolve cells
 # --------------------------------------------------------------------------
 
@@ -135,28 +158,6 @@ if [[ "$N_CELLS" -eq 0 ]]; then
     exit 2
 fi
 
-# --------------------------------------------------------------------------
-# Logging / shutdown trap
-# --------------------------------------------------------------------------
-
-mkdir -p "$LOG_DIR"
-TS=$(date +%Y%m%d_%H%M%S)
-LOG="${LOG_DIR}/run_wheel_${TS}.log"
-
-log()     { printf '\033[1;36m[run_wheel]\033[0m %s\n' "$*" | tee -a "$LOG" >&2; }
-section() { printf '\n== %s ==\n' "$*" | tee -a "$LOG"; }
-
-shutdown_pod() {
-    if [[ "$DO_SHUTDOWN" -eq 1 ]]; then
-        if [[ -n "${RUNPOD_POD_ID:-}" ]] && command -v runpodctl >/dev/null 2>&1; then
-            log "stopping pod $RUNPOD_POD_ID"
-            runpodctl stop pod "$RUNPOD_POD_ID" || log "runpodctl stop failed; stop manually."
-        else
-            log "shutdown requested but runpodctl/RUNPOD_POD_ID unavailable; stop pod manually."
-        fi
-    fi
-}
-trap shutdown_pod EXIT
 
 log "track=${TRACK}  models=${MODELS}  cells=${N_CELLS}/${EXPECTED_FULL}"
 log "device=${DEVICE_MAP}  dtype=${DTYPE}  push=${DO_PUSH}  shutdown=${DO_SHUTDOWN}"
