@@ -48,6 +48,7 @@ sys.path.insert(0, str(_repo_root / "src"))
 from dotenv import load_dotenv  # noqa: E402
 
 from llm_psych.models import load_model  # noqa: E402
+from llm_psych.paths import DEFAULT_TRACK, track_slug  # noqa: E402
 
 
 def _read_model_cfg(model_config: str) -> dict:
@@ -113,6 +114,9 @@ def main() -> int:
                     help="bfloat16 (default; model-faithful). float32 for a CPU-only Mac run "
                          "if bf16 is unsupported; avoid float16 (overflow on Gemma's outliers).")
     ap.add_argument("--vectors-dir", default="steering_vectors")
+    ap.add_argument("--track", default=DEFAULT_TRACK,
+                    help="story-method track (default: story = the four-emotion "
+                         "set). Use story-wheel32 for the Plutchik-wheel vectors.")
     ap.add_argument("--out-dir", default="results/vector_validation")
     ap.add_argument("--no-final-norm", action="store_true",
                     help="unembed the raw vector without applying the final norm")
@@ -125,12 +129,13 @@ def main() -> int:
     cfg = _read_model_cfg(args.model_config)
     hf_model_id = cfg["hf_model_id"]
     model_key = hf_model_id.split("/")[-1]
-    story_dir = _repo_root / args.vectors_dir / f"{model_key}-story"
+    slug = track_slug(model_key, args.track)
+    story_dir = _repo_root / args.vectors_dir / slug
     if not story_dir.exists():
         raise SystemExit(
             f"no story vectors at {story_dir}. Pull them first:\n"
             f"  uv run python scripts/sync_hf.py pull steering_vectors "
-            f"--model {model_key}-story"
+            f"--model {slug}"
         )
 
     vectors = _discover_vectors(story_dir)
@@ -171,7 +176,8 @@ def main() -> int:
     lines = [
         f"# Logit-lens validation — {model_key}" + (" (layer sweep)" if args.sweep else ""),
         "",
-        f"- Vectors: `{story_dir.relative_to(_repo_root)}` (story method)",
+        f"- Vectors: `{story_dir.relative_to(_repo_root)}` "
+        f"(story method, track={args.track})",
         f"- Layer: {layer_desc}",
         f"- Read-out: {norm_note}; top ±{args.top_k} tokens",
         "",
@@ -199,7 +205,9 @@ def main() -> int:
                 lines.append("")
                 print(f"[{emotion}] top: {', '.join(top[:8])}")
 
-    out_dir = _repo_root / args.out_dir / model_key
+    out_dir = _repo_root / args.out_dir / (
+        model_key if args.track == DEFAULT_TRACK else slug
+    )
     out_dir.mkdir(parents=True, exist_ok=True)
     report = out_dir / ("logit_lens_sweep.md" if args.sweep else "logit_lens.md")
     report.write_text("\n".join(lines))
