@@ -7,8 +7,9 @@
 # derive to protect against a partial set corrupting the grand mean.
 #
 # Designed for a single-GPU pod (>= 100 GB disk). Frees the HF model cache
-# between models to stay within disk budget. Pushes activations and vectors
-# to HF after each model completes.
+# between models to stay within disk budget. After each model completes,
+# pushes activations, steering vectors, story corpora and (if already
+# generated) logit-lens validation reports to HF.
 #
 # Usage::
 #
@@ -41,6 +42,14 @@
 
 set -euo pipefail
 export PYTORCH_ENABLE_MPS_FALLBACK=1
+
+# Load .env if present so a fresh tmux pane or nohup'd shell inherits HF_TOKEN.
+if [[ -f .env ]]; then
+    # shellcheck disable=SC1091
+    set -a
+    source .env
+    set +a
+fi
 
 # --------------------------------------------------------------------------
 # Defaults
@@ -203,26 +212,54 @@ push_artefacts() {
     local model_key="$1"
     local slug="${model_key}-${TRACK}"
     section "push ${slug}"
-    uv run python - "$slug" <<'PY' || log "WARN: push failed for $slug"
+    uv run python - "$model_key" "$TRACK" "$DATASET" <<'PY' || log "WARN: push failed for $slug"
 import sys
 from pathlib import Path
-from huggingface_hub import HfApi
 
-slug = sys.argv[1]
+from dotenv import load_dotenv
+
+load_dotenv(Path(".env"))
+
+from huggingface_hub import HfApi  # noqa: E402
+
+model_key, track, repo = sys.argv[1], sys.argv[2], sys.argv[3]
+slug = f"{model_key}-{track}"
 api = HfApi()
-repo = "llm-psych/llm-psych-activations"
 
-for kind in ("activations", "steering_vectors"):
-    folder = Path(kind) / slug
+# (local dir, path on the dataset). Stories are the irreplaceable artefact:
+# generation is seeded *sampling*, so a corpus lost with the pod cannot be
+# regenerated. Their repo path mirrors data/derived/ so pull_stories.py
+# resolves them. Validation reports go to vector_validation/<slug>, where
+# h8_prep.sh expects them.
+targets = [
+    (Path("activations") / slug, f"activations/{slug}"),
+    (Path("steering_vectors") / slug, f"steering_vectors/{slug}"),
+    (Path("data/derived/stories") / model_key / track, f"stories/{model_key}/{track}"),
+    (Path("results/vector_validation") / slug, f"vector_validation/{slug}"),
+]
+
+failed = []
+for folder, path_in_repo in targets:
     if not folder.is_dir():
         print(f"skip {folder} (not found)")
         continue
-    api.upload_folder(
-        repo_id=repo, repo_type="dataset",
-        folder_path=str(folder), path_in_repo=str(folder),
-        commit_message=f"run_wheel: {slug} {kind}",
-    )
-    print(f"pushed {folder}")
+    try:
+        api.upload_folder(
+            repo_id=repo,
+            repo_type="dataset",
+            folder_path=str(folder),
+            path_in_repo=path_in_repo,
+            commit_message=f"run_wheel: {slug} -> {path_in_repo}",
+        )
+    except Exception as exc:
+        print(f"FAILED {folder} -> {path_in_repo}: {exc}", file=sys.stderr)
+        failed.append(path_in_repo)
+        continue
+    print(f"pushed {folder} -> {path_in_repo}")
+
+if failed:
+    print(f"PUSH INCOMPLETE: {', '.join(failed)}", file=sys.stderr)
+    sys.exit(1)
 PY
 }
 
@@ -338,4 +375,5 @@ if [[ ${#FAILED_MODELS[@]} -gt 0 ]]; then
 fi
 
 log "ALL MODELS COMPLETE (${MODELS})"
-log "Artefacts: activations/<model>-${TRACK}/, steering_vectors/<model>-${TRACK}/"
+log "Artefacts: activations/<model>-${TRACK}/, steering_vectors/<model>-${TRACK}/,"
+log "           data/derived/stories/<model>/${TRACK}/, results/vector_validation/<model>-${TRACK}/"
