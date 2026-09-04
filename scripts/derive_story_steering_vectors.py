@@ -18,7 +18,7 @@ Run once per model after generation and extraction are complete:
         model=gemma3_4b derivation=story
 
 This script reads all emotions found at
-``activations/<model_key>-story/<emotion>.npz``. The neutral file
+``activations/<model_key>-<track>/<emotion>.npz``. The neutral file
 (``neutral.npz``) is required and is *not* included in the centered
 emotion set — it is used only to fit the projection-out basis.
 
@@ -26,10 +26,10 @@ Outputs
 -------
 For each candidate layer ``L`` and each non-neutral emotion ``e``:
 
-``steering_vectors/<model_key>-story/<emotion>_layer<L>.npy``
+``steering_vectors/<model_key>-<track>/<emotion>_layer<L>.npy``
     Float32 array of shape ``(hidden_dim,)``.
 
-``steering_vectors/<model_key>-story/manifest.yaml``
+``steering_vectors/<model_key>-<track>/manifest.yaml``
     Run-level metadata: model SHA, n_stories per emotion, var_threshold,
     pool_start_token, git SHA, layers, hidden_dim.
 """
@@ -51,6 +51,7 @@ import yaml
 from omegaconf import DictConfig
 
 from llm_psych.models import ModelConfig, probe_layer_range
+from llm_psych.paths import track_slug
 from llm_psych.steering import (
     derive_story_vectors,
     fit_neutral_pcs,
@@ -121,7 +122,8 @@ def main(cfg: DictConfig) -> None:
 
     model_cfg_raw = cfg.model
     model_key = model_cfg_raw.hf_model_id.split("/")[-1]
-    act_dir = _repo_root / cfg.paths.activations_dir / f"{model_key}-story"
+    track: str = str(cfg.track)
+    act_dir = _repo_root / cfg.paths.activations_dir / track_slug(model_key, track)
 
     emotions = _discover_emotions(act_dir)
     neutral_path = act_dir / "neutral.npz"
@@ -160,7 +162,7 @@ def main(cfg: DictConfig) -> None:
     neutral_npz = np.load(neutral_path)
 
     out_dir = (
-        _repo_root / cfg.paths.steering_vectors_dir / f"{model_key}-story"
+        _repo_root / cfg.paths.steering_vectors_dir / track_slug(model_key, track)
     )
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -199,6 +201,7 @@ def main(cfg: DictConfig) -> None:
     # --- manifest ---
     manifest = {
         "method": "story",
+        "track": track,
         "model_id": pseudo_cfg.hf_model_id,
         "model_sha": pseudo_cfg.hf_revision or "",
         "git_sha": _git_sha(),

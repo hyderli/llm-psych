@@ -29,6 +29,13 @@ multirun/
 .claude/settings.local.json
 CLAUDE.local.md
 
+# Devin
+.devin/
+
+# Session notes (not part of the project)
+Meeting_*.md
+STATUS_*.md
+
 # OS
 .DS_Store
 

@@ -25,7 +25,8 @@ To cover all primary emotions + neutral in one shot:
 
 Outputs
 -------
-``data/derived/stories/<model_key>/<emotion>.parquet`` with columns:
+``data/derived/stories/<model_key>[/<track>]/<emotion>.parquet`` with
+columns:
 
 * ``id`` — ``<emotion>_<topic_idx>_<sample_idx>`` string identifier.
 * ``story_text`` — generated story (no special tokens).
@@ -65,6 +66,7 @@ from omegaconf import DictConfig
 from tqdm import tqdm
 
 from llm_psych.models import load_model
+from llm_psych.paths import story_dir
 
 log = logging.getLogger(__name__)
 
@@ -124,18 +126,29 @@ def _build_prompt(emotion: str, topic: str) -> str:
     return EMOTION_PROMPT_TEMPLATE.format(topic=topic, emotion=emotion)
 
 
-def _generate_one(
+def _generate_batch(
     *,
     model,
     tokenizer,
     prompt: str,
+    n: int,
     max_new_tokens: int,
     temperature: float,
     do_sample: bool,
     seed: int,
     device: str,
-) -> tuple[str, int]:
-    """Generate a single story and return (text, n_tokens).
+) -> list[tuple[str, int]]:
+    """Generate ``n`` stories from one prompt; return [(text, n_tokens), ...].
+
+    The ``stories_per_topic`` samples for a topic are independent draws from
+    the *same* prompt, so they come from a single ``generate()`` call with
+    ``num_return_sequences=n`` rather than n sequential calls. Generation
+    dominates the pipeline's wall-clock (~5 s/story at batch 1), and batching
+    the draws is the single largest speedup available.
+
+    Because every sequence shares one prompt, ``num_return_sequences``
+    expands it internally — no left-padding, and no attention-mask handling
+    beyond what the single-prompt encoding already provides.
 
     Uses the standard generation-prompt pattern: a single user turn with
     ``add_generation_prompt=True`` so the model writes a fresh assistant
@@ -147,6 +160,11 @@ def _generate_one(
     then fails the min_story_tokens gate and, in the caller's retry loop,
     spins forever).
     """
+    # Greedy decoding cannot produce distinct samples, so batching it would
+    # return n identical stories. Fall back to one draw per call.
+    if not do_sample:
+        n = 1
+
     messages = [{"role": "user", "content": prompt}]
     # return_dict=True yields a BatchEncoding ({input_ids, attention_mask});
     # unpack it into generate(). Passing the BatchEncoding positionally
@@ -165,11 +183,21 @@ def _generate_one(
             max_new_tokens=max_new_tokens,
             temperature=temperature,
             do_sample=do_sample,
+            num_return_sequences=n,
             pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
         )
-    new_token_ids = gen_ids[0, inputs["input_ids"].shape[-1]:]
-    story_text = tokenizer.decode(new_token_ids, skip_special_tokens=True).strip()
-    return story_text, int(new_token_ids.shape[0])
+
+    prompt_len = inputs["input_ids"].shape[-1]
+    out: list[tuple[str, int]] = []
+    pad_id = tokenizer.pad_token_id or tokenizer.eos_token_id
+    for row in gen_ids:
+        new_token_ids = row[prompt_len:]
+        # Sequences that finish early are right-padded to the longest in the
+        # batch; padding must not count toward min_story_tokens.
+        n_tokens = int((new_token_ids != pad_id).sum())
+        text = tokenizer.decode(new_token_ids, skip_special_tokens=True).strip()
+        out.append((text, n_tokens))
+    return out
 
 
 # --------------------------------------------------------------------------
@@ -194,7 +222,8 @@ def main(cfg: DictConfig) -> None:
     gen_cfg = cfg.derivation.generator
     min_story_tokens = int(gen_cfg.min_story_tokens)
 
-    out_dir = _repo_root / "data" / "derived" / "stories" / model_key
+    track: str = str(cfg.track)
+    out_dir = story_dir(_repo_root, model_key, track)
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{emotion_name}.parquet"
 
@@ -236,33 +265,42 @@ def main(cfg: DictConfig) -> None:
         # forever — fail loudly for this topic and move on.
         max_attempts = stories_per_topic * 10 + 10
         while accepted < stories_per_topic and attempts < max_attempts:
-            attempts += 1
-            story_text, n_tokens = _generate_one(
+            # Ask for exactly what is still missing; short generations are
+            # dropped below and the next round tops the topic back up.
+            need = stories_per_topic - accepted
+            call_seed = seed_counter
+            seed_counter += 1
+            batch = _generate_batch(
                 model=lm.model,
                 tokenizer=lm.tokenizer,
                 prompt=prompt,
+                n=need,
                 max_new_tokens=int(gen_cfg.max_new_tokens),
                 temperature=float(gen_cfg.temperature),
                 do_sample=bool(gen_cfg.do_sample),
-                seed=seed_counter,
+                seed=call_seed,
                 device=device,
             )
-            seed_counter += 1
-            if n_tokens < min_story_tokens:
-                dropped += 1
-                continue
-            rows.append({
-                "id": f"{emotion_name}_{topic_idx}_{accepted}",
-                "story_text": story_text,
-                "emotion_label": emotion_name,
-                "topic": topic,
-                "n_tokens": n_tokens,
-                "gen_seed": seed_counter - 1,
-                "model_id": lm.cfg.hf_model_id,
-                "model_sha": lm.cfg.hf_revision or "",
-            })
-            accepted += 1
-            pbar.update(1)
+            attempts += len(batch)
+            for gen_index, (story_text, n_tokens) in enumerate(batch):
+                if n_tokens < min_story_tokens:
+                    dropped += 1
+                    continue
+                rows.append({
+                    "id": f"{emotion_name}_{topic_idx}_{accepted}",
+                    "story_text": story_text,
+                    "emotion_label": emotion_name,
+                    "topic": topic,
+                    "n_tokens": n_tokens,
+                    "gen_seed": call_seed,
+                    "gen_index": gen_index,
+                    "model_id": lm.cfg.hf_model_id,
+                    "model_sha": lm.cfg.hf_revision or "",
+                })
+                accepted += 1
+                pbar.update(1)
+                if accepted >= stories_per_topic:
+                    break
         if accepted < stories_per_topic:
             log.warning(
                 "topic %r (emotion=%s): only %d/%d stories after %d attempts "
@@ -292,6 +330,7 @@ def main(cfg: DictConfig) -> None:
         "stories_per_topic": stories_per_topic,
         "topic_matched": True,
         "generator": {
+            "batched": True,   # num_return_sequences per topic, not n calls
             "max_new_tokens": int(gen_cfg.max_new_tokens),
             "temperature": float(gen_cfg.temperature),
             "do_sample": bool(gen_cfg.do_sample),
