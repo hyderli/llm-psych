@@ -677,3 +677,427 @@ model's HF cache (disk-full lesson) → push `vector_validation/` reports →
 optional `--shutdown`.
 
 **Energy:** C2 harness complete and de-confounded; the primaries are the payoff.
+
+## 2026-09-04 — Plutchik-wheel extraction (32 emotions × 3 models), and what the discriminability matrix says
+
+This entry is written to be readable cold, without the surrounding
+conversation.
+
+### What we set out to do, and why
+
+Until now the project had emotion vectors for **four** emotions — joy,
+sadness, admiration, loathing — on each of the three primary models
+(Llama 3.1 8B, Qwen 2.5 7B, Gemma 2 9B). Four is enough to ask "does the
+model represent emotion at all", but not enough to ask anything about the
+*structure* of emotion: whether intensity is represented, whether related
+emotions sit near each other, whether blends behave like blends.
+
+So we extracted vectors for the whole of **Plutchik's wheel**. Plutchik's
+model organises emotion into eight *axes* (joy, trust, fear, surprise,
+sadness, disgust, anger, anticipation), each of which comes in three
+*intensities*, which we call **rings**:
+
+    axis "anger":  rage (high) → anger (middle) → annoyance (low)
+    axis "joy":    ecstasy    → joy            → serenity
+
+Eight axes × three rings = **24 ring cells**. Plutchik also names eight
+**dyads** — emotions formed by combining two adjacent axes, e.g.
+*love* = joy + trust, *awe* = fear + surprise. We treat those as 8 more
+cells, derived exactly like the other 24 rather than as anything special.
+Add a **neutral** corpus (not an emotion; it is the reference used to
+strip out generic story-writing directions) and you get **33 corpora and
+32 emotion vectors per model**.
+
+Scope note: this is **extraction only**. No hypothesis is attached to any
+of it, nothing is pre-registered, and nothing here makes a claim. If these
+vectors are later used in a confirmatory analysis, that analysis needs its
+own amendment at that time.
+
+### The blocker we found before spending any GPU time
+
+The pipeline names every artefact after `cfg.emotion.name` and nothing
+else. A corpus for "joy" was written to
+`data/derived/stories/<model>/joy.parquet` regardless of which experiment
+produced it.
+
+That is fine with one emotion set and catastrophic with two. Nine of the
+wheel cells share a name with an existing four-emotion corpus (joy,
+sadness, admiration, loathing, plus neutral — and more on Gemma). Running
+the wheel would have silently **overwritten the corpora behind the locked
+four-emotion vectors**. Story generation uses seeded *sampling*, so an
+overwritten corpus is not recoverable by re-running: you get different
+stories, and the C2 validation numbers and locked layers that were
+computed from the originals no longer refer to anything on disk.
+
+Fix: a **track** — a path component naming which experiment an artefact
+belongs to. `src/llm_psych/paths.py` now builds every story path as
+`data/derived/stories/<model>/<track>/<emotion>.parquet`, with the
+four-emotion track keeping its existing flat layout so nothing moved. The
+wheel runs under `track: story-wheel32`. There is a test asserting that a
+non-default track can never resolve to a path owned by the default track;
+that test is the actual guarantee, not the convention.
+
+### Making it affordable: batched generation
+
+`generate_emotion_stories.py` originally called `model.generate()` once
+per story. Since every story for a given (emotion, topic) shares the same
+prompt, this repeats the prompt's forward pass for each sample. Switching
+to `num_return_sequences=n` generates all of a topic's stories in one
+call.
+
+Measured on the same hardware: **181.3 s → 40.2 s for 35 stories, a 4.5×
+speedup.** That is what turned a projected ~46–55 hour campaign into
+~10.5 GPU-hours total. Two details mattered: greedy decoding is forced
+back to `n = 1`, because without sampling all sequences are identical; and
+the token count per story is computed with the padding mask, since batched
+outputs are right-padded and a naive length would count pad tokens.
+
+### The run, and the near-miss that followed
+
+Measured wall-clock per model: **Llama 3h14m, Qwen 2h36m, Gemma 4h46m**.
+The plan document's estimate of 3–5 GPU-hours per model was roughly right
+in aggregate but understated Gemma by an hour and a half; the cost table
+in `plans/plutchik-wheel-expansion.md` should be revised off the run logs
+(now on the dataset at `logs/story-wheel32/`) rather than off the
+estimate.
+
+Then the part worth recording properly. `run_wheel.sh`'s `push_artefacts`
+uploaded **activations and steering vectors** to the HF dataset after each
+model — but not the **story corpora** and not the validation reports. The
+corpora are the one artefact class that cannot be regenerated. Everything
+else can be recomputed from them; they can only be recomputed by sampling
+again, which produces different text.
+
+The gap was noticed while verifying it was safe to terminate the pod. A
+listing of the dataset showed `stories/<model>` holding 10 files per
+primary — the old four-emotion corpora — where the wheel needs 66 (33
+parquet + 33 manifest). Compounding it, an earlier verification in the
+same session had reported "198 story files are on HF", which was wrong:
+that was the activation count read twice. The check that mattered most had
+been retired without actually being performed.
+
+Recovery worked because `/workspace` on the pod is a **network volume**,
+which is a separate resource from the pod and survives both the GPU
+becoming unavailable and the pod being terminated. The GPU was in fact
+gone by then; a new pod attached to the same volume in the same datacenter
+had the files intact. All 99 corpora are now at
+`stories/<model>/story-wheel32/`.
+
+Lessons, in order of how much they cost: **verify preservation by listing
+the destination, not by trusting a previous verification**; **keep the
+irreplaceable artefact in the automated path**; and **put working data on
+a network volume**, which is what made this a scare instead of a loss.
+
+`push_artefacts` now pushes four things — activations, steering vectors,
+story corpora, and validation reports — with per-target error handling so
+one failure names itself instead of silently aborting the rest. It also
+loads `.env`, which fixes a real bug: the function used a bare `HfApi()`
+that never read the token, and a `nohup`'d shell with an empty `HF_TOKEN`
+had already caused one push to fail with a 401 after a 2.5-hour run.
+Still open: on a generation or extraction failure the main loop does
+`continue` and skips the push entirely, stranding whatever corpora were
+made. Moving the push above those `continue`s is two lines and should
+probably happen.
+
+### A storage bug that did not bite us this time
+
+`extract_story_activations.py` pools activations in float32 (line 119) and
+then stores them as **float16** (line 208). float16 cannot represent
+anything above 65504, so a pooled activation larger than that is written
+as `inf`.
+
+This is not hypothetical: the Qwen 0.5B smoke corpora contain 70 such
+entries, with pooled magnitudes topping out around 65000 — right against
+the ceiling. (That run used fp16 *compute* on MPS; the primaries used
+bfloat16, which has far more range, which is why they escaped.)
+
+The consequence would have been severe. `derive_story_steering_vectors.py`
+has no finiteness check. It casts float16 → float64, so `inf` survives
+into the class mean. The vector construction then subtracts a **grand mean
+taken over the whole emotion set**, so the `inf` spreads to every emotion;
+and `project_out` mixes all coordinates together, so a single infinite
+coordinate destroys every coordinate of every vector in the track. One
+overflowed story would have taken down all 32 vectors.
+
+**The three primaries are clean** — the discriminability script checks for
+this explicitly and reported nothing. But derive should get a finiteness
+guard regardless, and storing float32 (2× disk) or clipping at extraction
+time is worth considering.
+
+### The discriminability matrix
+
+**The question.** Two things were unresolved. First, *which layer* should
+downstream work use? The logit-lens pass had said the conventional
+"two-thirds of the way down the network" is wrong for this track, but
+could not say what is right, because the lens has a bias toward deeper
+layers that pulls against the thing we actually care about. Second, *are
+these 32 cells real*? Plutchik says `rage`, `anger` and `annoyance` are
+distinct; that is a claim about human emotion concepts, and the model is
+under no obligation to agree.
+
+**The method.** `scripts/wheel_discriminability.py`, run on the Mac — no
+GPU, no model weights, no authored stimuli, just arithmetic on the saved
+activations.
+
+For each candidate layer, and for each *pair* of cells, we ask: given a
+story's activation, can we tell which of the two emotions it came from?
+The rule is **nearest centroid**. Average all of emotion A's story
+vectors to get A's centroid — the typical point for that emotion — do the
+same for B, and assign a new story to whichever centroid it is closer to.
+Accuracy is the fraction placed correctly, so **0.50 is a coin flip** and
+1.00 is perfect.
+
+This particular rule was chosen because for a pair it is *algebraically
+identical* to projecting onto the difference of the two means and
+thresholding at the midpoint — and the difference of means is exactly the
+recipe the steering vectors are built from. So the number answers "how
+well does the construction we actually use separate these two emotions",
+rather than the accuracy of some unrelated probe that might succeed where
+our vectors fail.
+
+Accuracy is **cross-validated and grouped by topic**. All 33 corpora are
+generated from the same frozen list of 46 story topics, so topic cannot
+distinguish emotions by construction. But a classifier could still latch
+onto quirks of a particular topic, so we hold out whole topics rather than
+individual stories: five folds, each holding out about nine topics, and
+every number reported is measured on topics the classifier never saw. The
+topic index is read straight out of the story id
+(`<emotion>_<topic_idx>_<sample_idx>`), which is why no corpus file is
+needed.
+
+The whole thing is cheap because for a given fold, one matrix of distances
+from every test story to every centroid yields all 496 pairs at once.
+
+Two aggregate numbers matter throughout:
+
+- **within-axis** — the average over the 24 pairs that differ only in
+  intensity (rage vs anger, anger vs annoyance, rage vs annoyance, and the
+  same for the other seven axes). This is the hard case.
+- **between-axis** — pairs from different axes (anger vs joy). Easy case.
+
+### Result 1: the layer barely matters, and I predicted otherwise
+
+I expected within-axis accuracy to fall off with depth and thereby pick a
+layer. It does not. Across the entire candidate band:
+
+| model | within-axis range | span | shape |
+|---|---|---|---|
+| Llama 3.1 8B | 0.822 – 0.833 (L16–30) | 0.011 | flat |
+| Qwen 2.5 7B | 0.835 – 0.843 (L14–26) | 0.008 | flat |
+| Gemma 2 9B | 0.806 – 0.828 (L21–40) | 0.022 | slow decline with depth |
+
+To judge whether those spans are meaningful: each pair's accuracy is
+measured on 644 held-out stories, giving a standard error — roughly, how
+much the number would wobble if we reran with different stories — of about
+0.015. Averaged over 24 pairs that is about 0.004. So Llama's and Qwen's
+spans are two or three standard errors *with no peak structure*, which is
+what a flat line looks like. Only Gemma shows something systematic, and
+what it shows is "shallower is slightly better", not an optimum.
+
+**The honest conclusion is that the discriminability matrix does not pick
+a layer either.** But that is itself the useful answer: within this band,
+layer choice has almost no effect on how separable the emotions are, so it
+is not worth agonising over and should be decided on other grounds —
+availability of a pre-fitted J-lens layer, or consistency with the
+four-emotion locked layers. The claim in the generated report that
+"within-axis is the binding constraint" overstates what the data supports
+and should be softened.
+
+**This is not new, and the credit belongs elsewhere.** `docs/Layer Selection
+Information - Gemma 9B IT.pdf` (August, geometry track, 11-emotion CAA-style
+set, layers 21–39) reached the same place first and by a better route. A
+Procrustes analysis — which rotates, scales and shifts one configuration of
+points onto another and measures what mismatch is left over — compared the
+steering-vector configuration at each layer against layer 21 and found
+disparities below 0.006, where that write-up's own threshold for "high
+stability" is 0.1. In other words the emotion configuration barely changes
+shape with depth. The same document also found that the best-separating layer
+varies widely *per pair* (21 to 36 across its pair table) with no aggregate
+optimum — which is the shape of our flat curve, seen one pair at a time
+instead of averaged.
+
+Two independent measurements now agree: cosine geometry of the derived
+**vectors** (theirs) and classification accuracy of the underlying story
+**activations** (ours). Those are different objects — activations are what the
+vectors are computed from — so the agreement carries some weight. Ours should
+be read as corroboration of an existing result, not as a new one.
+
+### Result 2: the search was truncated, and two models want to go lower
+
+`probe_layer_range` is defined as ⌊L/2⌋ … L−2 — only the **top half** of
+the network is ever extracted. Where the best layer falls within that
+window is therefore informative:
+
+- Llama: best at L20, out of L16–30 — fifth of fifteen, comfortably inside.
+- Qwen: best at **L14, the lowest layer extracted**.
+- Gemma: best at L23, out of L21–40 — third of twenty, near the edge.
+
+For Qwen the maximum sits exactly on the boundary of the search, which
+means we do not know whether it is a maximum at all. This is worth
+closing, and it is cheap: the corpora already exist, so it needs
+extraction only — no generation, no new stories, one short pod session per
+model.
+
+### Result 3: intensity is real, but asymmetric — and this replicates 3/3
+
+This is the substantive finding. Averaging each model's per-axis table at
+its own best layer:
+
+| ring pair | Llama | Qwen | Gemma |
+|---|---|---|---|
+| high ↔ middle (rage vs anger) | 0.751 | 0.774 | 0.750 |
+| middle ↔ low (anger vs annoyance) | 0.842 | 0.851 | 0.842 |
+| high ↔ low (rage vs annoyance) | 0.906 | 0.906 | 0.893 |
+
+Read the third row first. The two rings that are furthest apart in
+intensity are the easiest to tell apart, in all three models. That is what
+you would expect if intensity is represented as a **single ordered
+dimension**, with the three rings sitting at three points along it. It is
+evidence that the wheel's radial structure is not just a convenient
+diagram — the model's activations carry it.
+
+Now read the first two rows. If the three rings were evenly spaced along
+that dimension, high↔middle and middle↔low would be about equally hard.
+They are not: separating the *high* ring from the *middle* is consistently
+about 0.09 harder than separating the *middle* from the *low*. The middle
+ring sits closer to the high ring than to the low one. `rage` crowds
+`anger`, while `annoyance` stands well apart.
+
+The agreement across three different architectures is unusually tight —
+0.751/0.774/0.750, then 0.842/0.851/0.842, then 0.906/0.906/0.893 — which
+argues this is a property of the concepts (or of the English that
+describes them) rather than of any one model.
+
+One plausible explanation, **not yet tested**: the middle word is
+superordinate and absorbs the high end. English "anger" covers rage but
+does not really cover annoyance; "joy" covers ecstasy but not serenity. If
+that is right it is a fact about the corpora rather than about the model's
+emotion representation, and it is checkable directly against the generated
+stories.
+
+This is the one result the wheel track adds that no earlier emotion set here
+could have produced. The four-emotion track and the 11-emotion set used by the
+geometry track both sample each emotion at a single intensity, so neither
+contains a graded ladder to measure along. Eight ladders of three is what makes
+the question askable at all.
+
+### Result 4: smaller observations worth keeping
+
+- **The axes are not equally well represented.** The *fear* axis is the
+  weakest in all three models — Gemma's terror-vs-apprehension reaches
+  only 0.739, the lowest high↔low figure anywhere in the tables — while
+  *trust* and *disgust* are excellent (0.92–0.98). Anything that pools
+  across axes should account for this rather than assume uniformity.
+- **`awe` is poorly localised.** It is confusable with both `amazement`
+  and `admiration` in all three models. For a fear+surprise dyad, being
+  drawn toward the *trust* axis is odd and worth looking at.
+- **Dyads separate from their own components at 0.87–0.89**, better than
+  the ring pairs do. So the dyads are not degenerate blends that collapse
+  into their parts.
+- **Every one of the 32 cells is distinguishable.** No pair stays below
+  0.60 at every layer. The answer to "are these real" is yes, with graded
+  quality rather than a pass/fail cutoff.
+- **The three models agree about which pairs are hard.** Correlating all 496
+  pair accuracies between models gives r = 0.92 (Llama/Qwen), 0.91
+  (Llama/Gemma) and 0.93 (Qwen/Gemma). Confusability is a property of the
+  emotion pair rather than of the architecture, which is what licenses talking
+  about "the" result rather than three separate ones.
+
+### Geometry: three observations, handed to the geometry track — not an analysis
+
+The geometry of this vector set belongs to the geometry track, and that track
+already has a toolkit and a head start. `docs/Layer Selection Information -
+Gemma 9B IT.pdf` establishes, for Gemma on the 11-emotion set: per-layer
+pairwise cosine similarity; a Fisher-style separation statistic and a
+best-separating layer for every pair; vector norm growth with depth; per-layer
+PCA (first two components ≈ 70% of variance); Procrustes stability across
+layers; and an SVD of the layer-36 vectors giving an effective rank of 6 out of
+11 at 95% variance, with the six basis directions given provisional emotional
+readings (desperation, hostility, nervousness, calmness, happiness/positivity,
+affection).
+
+What follows are three things the wheel data happened to show while I was
+checking that the 32 cells were real. They are recorded so they are not lost,
+and so the geometry track can take or discard them. **They are not a geometry
+analysis and I am not carrying them further.** Two details make them
+complementary rather than competing: they measure a different object — d′
+distances between *story activations*, where the write-up measures cosines
+between *derived vectors* — and they use a different, larger emotion set (32
+wheel cells with intensity ladders and dyads, versus 11 single-intensity
+emotions). The underlying matrices are on the dataset; the figures are in
+`figures/`.
+
+A note on the ruler, since all three use it. Classification accuracy saturates:
+once two emotions are easy to tell apart, accuracy sits near 1.00 and stops
+responding, so 0.98 and 0.995 look similar as numbers while representing very
+different separations. The standard signal-detection fix converts a
+two-alternative accuracy into **d′** via d′ = √2 × z(accuracy), where z is the
+inverse normal. It is a monotone re-scaling — no new assumptions — but it
+un-squashes the top end so the numbers behave like distances.
+
+**Observation A — the two dominant dimensions look like valence and intensity,
+not Plutchik's circle.** Take the 32×32 d′ matrix and run multidimensional
+scaling, which places 32 points on a page so that distances on the page match
+measured distances as closely as possible. Nothing about the emotions' meaning
+enters that placement. Labelling the result afterwards: the horizontal
+direction correlates with pleasantness at r = 0.88 / 0.91 / 0.89 (Llama / Qwen
+/ Gemma) and the vertical with intensity at r = 0.50 / 0.44 / 0.47. That is the
+classical valence-arousal circumplex rather than Plutchik's eight primaries.
+
+The caveat is load-bearing: those two dimensions carry only 49–51% of the
+structure, so this says valence and intensity **dominate**, not that Plutchik's
+organisation is **absent** — half the structure is in dimensions the picture
+does not show. This is also the observation that overlaps the geometry track's
+existing work most directly: an effective-rank analysis of the wheel vectors,
+and a check on whether a valence direction survives past two dimensions, are
+exactly the questions its SVD-basis machinery already answers well, and two of
+its six named Gemma basis directions ("happiness/positivity", "calmness") are
+plainly in this territory. Better done there, with those tools.
+
+**Observation B — the wheel's circular order holds locally but not globally.**
+Plutchik's circle predicts that similarity should fall off steadily with
+angular separation: adjacent axes most alike, opposites least. Using only the
+eight middle-ring cells, so intensity cannot contaminate the comparison, mean
+d′ rises from 45° (2.14 / 2.38 / 2.23) to 90° (2.57 / 2.81 / 2.54) and then
+goes flat — 135° and 180° are no further apart than 90°. Neighbours are
+genuinely closer; beyond that the wheel's geometry stops predicting anything. I
+checked whether the plateau was an artefact of accuracy hitting its ceiling,
+which would fake exactly this shape: at most two of the eight pairs per bin sit
+at the ceiling, so it is not.
+
+**Observation C — the dyads behave like blends.** Every one of the eight dyads
+sits closer to its own two named component axes than to the other six, in all
+three models — 24 out of 24. The gap is widest for `optimism` (anticipation +
+joy, d′ 1.35 vs 3.03) and `contempt` (disgust + anger, 1.50 vs 3.03), and
+narrowest for `disapproval` (surprise + sadness, 2.13 vs 2.40), which is also
+the dyad Plutchik's own scheme is least confident about. This is the cleanest
+result of the set and it feeds the J-space compositionality question directly:
+if dyads are blends geometrically, the question of whether they are blends in
+the workspace decomposition becomes worth asking.
+
+**Caveats to carry with any of the above.** Nearest centroid is one
+read-out family; a pair it fails might still be separable by a nonlinear
+probe or a probe that models within-class covariance. Layers within a
+model are strongly autocorrelated, so the layer curve is far less
+independent evidence than its number of rows suggests. And all of this is
+descriptive geometry — it says nothing about whether any of these vectors
+*causes* anything downstream.
+
+**Next:**
+- Add a finiteness guard to `derive_story_steering_vectors.py`; decide
+  whether to store activations as float32.
+- Move `push_artefacts` above the failure `continue`s in `run_wheel.sh`.
+- Revise the cost table in `plans/plutchik-wheel-expansion.md` from the
+  run logs; also correct §1's "five colliding names" (seven on Gemma) and
+  the §5 disk-sizing and "storage is the real constraint" lines.
+- Soften the "binding constraint" wording in the generated report.
+- Extend extraction below ⌊L/2⌋ for Qwen and Gemma.
+- Derive the `nr` and `resid` centering parameterizations offline.
+- Test the superordinate explanation for the intensity asymmetry against
+  the corpora.
+- Hand the geometry observations above, plus the `accuracy.npz` matrices, to
+  the geometry track rather than developing them here.
+- J-space: the wheel converts the un-nullable J-fraction into a structured
+  prediction (does it track ring intensity?), decomposes the confound
+  behind "loathing is highest in all three models" (axis or intensity?),
+  and supplies eight compositional test cases via the dyads.
