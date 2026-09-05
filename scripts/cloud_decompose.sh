@@ -61,9 +61,12 @@ fi
 # --------------------------------------------------------------------------
 
 MODELS="llama31_8b qwen25_7b gemma2_9b"
-EMOTIONS="admiration joy loathing sadness"
+TRACK="story-wheel32"
+EMOTIONS=""
 K=16
 N_CANDIDATES=512
+OUTPUT_DIR="results/workspace_decomposition"
+DIGIT_PROJECTION=0
 DO_SHUTDOWN=0
 LOG_DIR="outputs"
 DATASET_REPO="llm-psych/llm-psych-activations"
@@ -74,9 +77,12 @@ Usage: cloud_decompose.sh [options]
 
 Options:
   --models "<list>"       Space-separated model configs (default: "llama31_8b qwen25_7b gemma2_9b")
-  --emotions "<list>"     Space-separated emotions (default: "admiration joy loathing sadness")
+  --track <name>          Extraction track (default: "story-wheel32"; "story" = legacy 4-emotion track)
+  --emotions "<list>"     Space-separated emotions (default: all discovered in the vectors dir)
   --k <N>                 Max J-lens atoms (default: 16)
   --n-candidates <N>      Candidate pool size (default: 512)
+  --output-dir <path>     Root output directory (default: results/workspace_decomposition)
+  --digit-projection      Compute digit-span projection fractions
   --shutdown              Stop the RunPod pod on exit (even on failure)
   -h, --help              Show this help
 EOF
@@ -86,10 +92,13 @@ EOF
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --models)       MODELS="$2"; shift 2 ;;
+        --track)        TRACK="$2"; shift 2 ;;
         --emotions)     EMOTIONS="$2"; shift 2 ;;
-        --k)            K="$2"; shift 2 ;;
-        --n-candidates) N_CANDIDATES="$2"; shift 2 ;;
-        --shutdown)     DO_SHUTDOWN=1; shift ;;
+        --k)                 K="$2"; shift 2 ;;
+        --n-candidates)      N_CANDIDATES="$2"; shift 2 ;;
+        --output-dir)        OUTPUT_DIR="$2"; shift 2 ;;
+        --digit-projection)  DIGIT_PROJECTION=1; shift ;;
+        --shutdown)          DO_SHUTDOWN=1; shift ;;
         -h|--help)      usage 0 ;;
         *)              printf 'Unknown arg: %s\n' "$1" >&2; usage 1 ;;
     esac
@@ -115,7 +124,8 @@ shutdown_pod() {
 }
 trap shutdown_pod EXIT
 
-log "models=$MODELS  emotions=$EMOTIONS  k=$K  n_candidates=$N_CANDIDATES"
+log "models=$MODELS  track=$TRACK  emotions=${EMOTIONS:-<all>}  k=$K  n_candidates=$N_CANDIDATES"
+log "output_dir=$OUTPUT_DIR  digit_projection=$DIGIT_PROJECTION"
 log "log file: $LOG"
 
 # --------------------------------------------------------------------------
@@ -140,34 +150,43 @@ done
 FAILED=""
 
 pull_vectors() {
-    # Download steering_vectors/<model_key>-story from the private dataset.
-    local model_key="$1"
-    $PYTHON_CMD - "$model_key" <<'PY'
+    # Download steering_vectors/<model_key>-<track> from the private dataset.
+    local model_key="$1" track="$2"
+    $PYTHON_CMD - "$model_key" "$track" <<'PY'
 import sys
 from pathlib import Path
 from huggingface_hub import snapshot_download
 
-model_key = sys.argv[1]
+model_key, track = sys.argv[1], sys.argv[2]
 repo_id = "llm-psych/llm-psych-activations"
-pattern = f"steering_vectors/{model_key}-story/*"
+pattern = f"steering_vectors/{model_key}-{track}/*"
 snapshot_download(repo_id=repo_id, repo_type="dataset", allow_patterns=[pattern], local_dir=str(Path.cwd()))
-print(f"pulled steering_vectors/{model_key}-story from {repo_id}")
+pulled = list((Path.cwd() / "steering_vectors" / f"{model_key}-{track}").glob("*.npy"))
+if not pulled:
+    raise SystemExit(f"no vectors pulled for steering_vectors/{model_key}-{track} — wrong track name?")
+print(f"pulled {len(pulled)} vector file(s) from steering_vectors/{model_key}-{track}")
 PY
 }
 
 push_results() {
-    # Upload results/workspace_decomposition/<model_key>-story to the
-    # private dataset, mirroring the on-disk layout (methods.md convention).
-    local model_key="$1"
-    $PYTHON_CMD - "$model_key" <<'PY'
+    # Upload <output_dir>/<track>/<model_key> to the private dataset,
+    # mirroring the on-disk layout (methods.md convention).
+    local model_key="$1" track="$2" output_dir="$3"
+    $PYTHON_CMD - "$model_key" "$track" "$output_dir" <<'PY'
 import sys
 from pathlib import Path
 from huggingface_hub import HfApi
 
-model_key = sys.argv[1]
-folder = Path.cwd() / "results" / "workspace_decomposition" / f"{model_key}-story"
+model_key, track, output_root = sys.argv[1], sys.argv[2], Path(sys.argv[3])
+root = Path.cwd().resolve()
+output_root = output_root.resolve()
+folder = output_root / track / model_key
 if not folder.is_dir():
     raise SystemExit(f"missing results folder: {folder}")
+try:
+    path_in_repo = folder.relative_to(root).as_posix()
+except ValueError:
+    raise SystemExit(f"output directory must be inside the repository: {folder}")
 files = [p for p in folder.rglob("*") if p.is_file()]
 if not files:
     raise SystemExit(f"no files to push in {folder}")
@@ -176,10 +195,10 @@ HfApi().upload_folder(
     repo_id="llm-psych/llm-psych-activations",
     repo_type="dataset",
     folder_path=str(folder),
-    path_in_repo=f"results/workspace_decomposition/{model_key}-story",
-    commit_message=f"cloud_decompose: {model_key} J-space decomposition",
+    path_in_repo=path_in_repo,
+    commit_message=f"cloud_decompose: {model_key} J-space decomposition ({track})",
 )
-print(f"pushed {folder} -> llm-psych/llm-psych-activations")
+print(f"pushed {folder} -> llm-psych/llm-psych-activations/{path_in_repo}")
 PY
 }
 
@@ -191,19 +210,30 @@ for model in $MODELS; do
     if (
         set -euo pipefail
 
-        section "pull steering_vectors (${model_key})"
-        pull_vectors "$model_key" 2>&1 | tee -a "$LOG"
+        section "pull steering_vectors (${model_key}, track=${TRACK})"
+        pull_vectors "$model_key" "$TRACK" 2>&1 | tee -a "$LOG"
 
-        section "decompose (${model_key})"
-        # shellcheck disable=SC2086
+        section "decompose (${model_key}, track=${TRACK})"
+        EMOTIONS_ARGS=()
+        if [[ -n "$EMOTIONS" ]]; then
+            # shellcheck disable=SC2206
+            EMOTIONS_ARGS=(--emotions $EMOTIONS)
+        fi
+        DIGIT_ARGS=()
+        if [[ "$DIGIT_PROJECTION" -eq 1 ]]; then
+            DIGIT_ARGS=(--digit-projection)
+        fi
         $PYTHON_CMD scripts/decompose_emotion_vectors.py \
             --model-config "configs/model/${model}.yaml" \
+            --track "$TRACK" \
+            --output-dir "$OUTPUT_DIR" \
             --lens-source neuronpedia \
-            --emotions $EMOTIONS \
+            ${EMOTIONS_ARGS[@]+"${EMOTIONS_ARGS[@]}"} \
+            ${DIGIT_ARGS[@]+"${DIGIT_ARGS[@]}"} \
             --k "$K" --n-candidates "$N_CANDIDATES" 2>&1 | tee -a "$LOG"
 
-        section "push results (${model_key})"
-        push_results "$model_key" 2>&1 | tee -a "$LOG"
+        section "push results (${model_key}, track=${TRACK})"
+        push_results "$model_key" "$TRACK" "$OUTPUT_DIR" 2>&1 | tee -a "$LOG"
     ); then
         log "OK: ${model_key}"
     else
