@@ -65,6 +65,8 @@ TRACK="story-wheel32"
 EMOTIONS=""
 K=16
 N_CANDIDATES=512
+OUTPUT_DIR="results/workspace_decomposition"
+DIGIT_PROJECTION=0
 DO_SHUTDOWN=0
 LOG_DIR="outputs"
 DATASET_REPO="llm-psych/llm-psych-activations"
@@ -79,6 +81,8 @@ Options:
   --emotions "<list>"     Space-separated emotions (default: all discovered in the vectors dir)
   --k <N>                 Max J-lens atoms (default: 16)
   --n-candidates <N>      Candidate pool size (default: 512)
+  --output-dir <path>     Root output directory (default: results/workspace_decomposition)
+  --digit-projection      Compute digit-span projection fractions
   --shutdown              Stop the RunPod pod on exit (even on failure)
   -h, --help              Show this help
 EOF
@@ -90,9 +94,11 @@ while [[ $# -gt 0 ]]; do
         --models)       MODELS="$2"; shift 2 ;;
         --track)        TRACK="$2"; shift 2 ;;
         --emotions)     EMOTIONS="$2"; shift 2 ;;
-        --k)            K="$2"; shift 2 ;;
-        --n-candidates) N_CANDIDATES="$2"; shift 2 ;;
-        --shutdown)     DO_SHUTDOWN=1; shift ;;
+        --k)                 K="$2"; shift 2 ;;
+        --n-candidates)      N_CANDIDATES="$2"; shift 2 ;;
+        --output-dir)        OUTPUT_DIR="$2"; shift 2 ;;
+        --digit-projection)  DIGIT_PROJECTION=1; shift ;;
+        --shutdown)          DO_SHUTDOWN=1; shift ;;
         -h|--help)      usage 0 ;;
         *)              printf 'Unknown arg: %s\n' "$1" >&2; usage 1 ;;
     esac
@@ -119,6 +125,7 @@ shutdown_pod() {
 trap shutdown_pod EXIT
 
 log "models=$MODELS  track=$TRACK  emotions=${EMOTIONS:-<all>}  k=$K  n_candidates=$N_CANDIDATES"
+log "output_dir=$OUTPUT_DIR  digit_projection=$DIGIT_PROJECTION"
 log "log file: $LOG"
 
 # --------------------------------------------------------------------------
@@ -162,18 +169,24 @@ PY
 }
 
 push_results() {
-    # Upload results/workspace_decomposition/<track>/<model_key> to the
-    # private dataset, mirroring the on-disk layout (methods.md convention).
-    local model_key="$1" track="$2"
-    $PYTHON_CMD - "$model_key" "$track" <<'PY'
+    # Upload <output_dir>/<track>/<model_key> to the private dataset,
+    # mirroring the on-disk layout (methods.md convention).
+    local model_key="$1" track="$2" output_dir="$3"
+    $PYTHON_CMD - "$model_key" "$track" "$output_dir" <<'PY'
 import sys
 from pathlib import Path
 from huggingface_hub import HfApi
 
-model_key, track = sys.argv[1], sys.argv[2]
-folder = Path.cwd() / "results" / "workspace_decomposition" / track / model_key
+model_key, track, output_root = sys.argv[1], sys.argv[2], Path(sys.argv[3])
+root = Path.cwd().resolve()
+output_root = output_root.resolve()
+folder = output_root / track / model_key
 if not folder.is_dir():
     raise SystemExit(f"missing results folder: {folder}")
+try:
+    path_in_repo = folder.relative_to(root).as_posix()
+except ValueError:
+    raise SystemExit(f"output directory must be inside the repository: {folder}")
 files = [p for p in folder.rglob("*") if p.is_file()]
 if not files:
     raise SystemExit(f"no files to push in {folder}")
@@ -182,10 +195,10 @@ HfApi().upload_folder(
     repo_id="llm-psych/llm-psych-activations",
     repo_type="dataset",
     folder_path=str(folder),
-    path_in_repo=f"results/workspace_decomposition/{track}/{model_key}",
+    path_in_repo=path_in_repo,
     commit_message=f"cloud_decompose: {model_key} J-space decomposition ({track})",
 )
-print(f"pushed {folder} -> llm-psych/llm-psych-activations")
+print(f"pushed {folder} -> llm-psych/llm-psych-activations/{path_in_repo}")
 PY
 }
 
@@ -206,15 +219,21 @@ for model in $MODELS; do
             # shellcheck disable=SC2206
             EMOTIONS_ARGS=(--emotions $EMOTIONS)
         fi
+        DIGIT_ARGS=()
+        if [[ "$DIGIT_PROJECTION" -eq 1 ]]; then
+            DIGIT_ARGS=(--digit-projection)
+        fi
         $PYTHON_CMD scripts/decompose_emotion_vectors.py \
             --model-config "configs/model/${model}.yaml" \
             --track "$TRACK" \
+            --output-dir "$OUTPUT_DIR" \
             --lens-source neuronpedia \
             ${EMOTIONS_ARGS[@]+"${EMOTIONS_ARGS[@]}"} \
+            ${DIGIT_ARGS[@]+"${DIGIT_ARGS[@]}"} \
             --k "$K" --n-candidates "$N_CANDIDATES" 2>&1 | tee -a "$LOG"
 
         section "push results (${model_key}, track=${TRACK})"
-        push_results "$model_key" "$TRACK" 2>&1 | tee -a "$LOG"
+        push_results "$model_key" "$TRACK" "$OUTPUT_DIR" 2>&1 | tee -a "$LOG"
     ); then
         log "OK: ${model_key}"
     else
