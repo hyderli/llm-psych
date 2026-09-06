@@ -104,9 +104,34 @@ In the RunPod console:
   the image's torch is irrelevant — what matters is the **CUDA driver**.
 - **GPU:** RTX 4090 (Community Cloud). 24 GB VRAM runs Llama 3.1 8B
   in bf16 without quantisation.
-- **Container disk:** 50 GB (model download + activations).
-- **Volume disk:** Skip for one-off pilot; attach a 50 GB volume if
-  you'll run multiple sessions.
+- **Disk — size the *volume*, not the container.** `cloud_bootstrap.sh`
+  clones to `/workspace/llm-psych` and pins `HF_HOME` and
+  `UV_CACHE_DIR` under `/workspace`, precisely so the small container
+  root disk does not fill. On RunPod `/workspace` is the volume when one
+  is attached, so essentially everything heavy — venv, uv cache, model
+  weights, activations — lands there and the container disk holds only
+  the image.
+
+  - **Volume disk:** 60 GB. Peak usage in a clean sequential run is
+    ~36 GB: venv 6-8 GB, uv cache 3-5 GB, one model at a time (~18.5 GB
+    for Gemma 2 9B; `free_model_cache` frees it before the next),
+    activations ~4 GB. The headroom covers a retry where a model cache
+    was not freed, and older `huggingface_hub` versions that keep a
+    cache copy alongside `local_dir` downloads.
+  - **Container disk:** 50 GB is already generous; the default is fine.
+
+  **If you skip the volume,** `/workspace` falls back to the container
+  disk and *it* needs the 60 GB instead. Don't skip it for any run that
+  generates story corpora: generation is seeded *sampling*, so a corpus
+  lost with the pod cannot be regenerated (see the wheel-extraction
+  appendix, where the corpora survived only because the working
+  directory sat on a network volume).
+
+  Storage per activation corpus is `n_stories x hidden_dim x n_layers x
+  2 bytes` (fp16): ~40 MB for Llama 3.1 8B, ~30 MB for Qwen 2.5 7B,
+  ~46 MB for Gemma 2 9B, so a full 33-corpus track is 1.0-1.5 GB per
+  model. The bootstrap logs free space on `HF_HOME` at the end — check
+  it before a long run.
 - **Environment variables (CRITICAL):**
 
   ```
