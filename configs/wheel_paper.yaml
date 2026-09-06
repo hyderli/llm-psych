@@ -80,14 +80,20 @@ cells:
       sycophancy-increaser. Wheel's serenity (low joy ring) is a
       near-synonym only; both are kept in the set deliberately.
 
-  # Secondary blackmail emotion in the paper. Disabled by default: it costs
-  # a third of the added GPU time for a secondary contrast, and the wheel's
-  # apprehension is already a close neighbour. Flip to true if the
-  # blackmail arm wants the paper's full secondary set.
+  # Secondary blackmail emotion in the paper. Enabled: extraction is not
+  # steering, so carrying the cell commits nothing, and the marginal cost
+  # of adding it to this run is ~20 GPU-minutes against a whole extra pod
+  # session later. It cannot be added incrementally afterwards:
+  # generate_emotion_stories.py has no skip-if-exists guard and the runner
+  # loops over every enabled cell, so a later re-run would regenerate the
+  # other cells' corpora — and generation is seeded sampling, so their
+  # vectors would silently change. The frozen frame makes adding it here
+  # side-effect free: each vector is P(mu_e - mu_frozen), independent of
+  # what else is in the set.
   - name: nervousness
     label: 203
     paper_label: nervous
-    enabled: false
+    enabled: true
     tasks: [blackmail]
     note: >-
       Secondary blackmail emotion. Nearest wheel cell is apprehension
