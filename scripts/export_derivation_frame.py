@@ -49,6 +49,12 @@ Usage
 
     uv run python scripts/export_derivation_frame.py \\
         model=llama31_8b derivation=story track=story-wheel32
+
+Add ``+push=true`` to upload the frame to the private dataset at
+``steering_vectors/<model_key>-<track>/frame.{npz,yaml}`` — the path
+``scripts/run_paper_emotions.sh`` fetches from. Worth doing: the frame is
+cheap to keep but needs the track's whole activation set to rebuild, so
+losing it with an ephemeral pod means re-downloading that set.
 """
 
 from __future__ import annotations
@@ -187,10 +193,44 @@ def main(cfg: DictConfig) -> None:
             "this track's frame and the existing vectors stay untouched."
         ),
     }
-    (out_dir / "frame.yaml").write_text(yaml.safe_dump(meta, sort_keys=False))
+    meta_path = out_dir / "frame.yaml"
+    meta_path.write_text(yaml.safe_dump(meta, sort_keys=False))
 
     log.info("Wrote %s (%d layers, %d emotions)", frame_path, len(layers), len(emotions))
-    log.info("Wrote %s", out_dir / "frame.yaml")
+    log.info("Wrote %s", meta_path)
+
+    if bool(cfg.get("push", False)):
+        _push(frame_path, meta_path, slug, cfg)
+
+
+def _push(frame_path: Path, meta_path: Path, slug: str, cfg: DictConfig) -> None:
+    """Upload the frame to the private dataset.
+
+    The repo path is hard-coded to ``steering_vectors/<slug>/`` to match the
+    rest of the dataset layout (``scripts/run_wheel.sh``) and the path
+    ``scripts/run_paper_emotions.sh`` fetches from; a renamed local
+    ``paths.steering_vectors_dir`` must not move it.
+    """
+    from dotenv import load_dotenv
+
+    load_dotenv(_repo_root / ".env")
+
+    from huggingface_hub import HfApi
+
+    from llm_psych.hf_sync import DEFAULT_DATASET_REPO_ID
+
+    repo = str(cfg.get("dataset_repo", DEFAULT_DATASET_REPO_ID))
+    api = HfApi()
+    for path in (frame_path, meta_path):
+        path_in_repo = f"steering_vectors/{slug}/{path.name}"
+        api.upload_file(
+            path_or_fileobj=str(path),
+            path_in_repo=path_in_repo,
+            repo_id=repo,
+            repo_type="dataset",
+            commit_message=f"export_derivation_frame: {slug} {path.name}",
+        )
+        log.info("Pushed %s -> %s/%s", path.name, repo, path_in_repo)
 
 
 if __name__ == "__main__":
