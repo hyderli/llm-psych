@@ -19,6 +19,15 @@ pool_start_token: 50
 # Cross-emotion centering (vs single neutral set in CAA).
 center: cross_emotion_mean
 
+# Optional frozen derivation frame: a path to a frame.npz written by
+# scripts/export_derivation_frame.py. When set, the cross-emotion grand mean
+# and the neutral PC basis are taken from that file instead of computed from
+# the emotions present in this run, so a small set of new cells lands in an
+# existing track's coordinates without moving its published vectors (and
+# without needing its neutral.npz). null = compute both from this run, which
+# is the original behaviour. See plans/ and the script docstring.
+frame_from: null
+
 # Confound removal: project orthogonal to top PCs of neutral activations.
 project_out:
   source: neutral_pcs
