@@ -45,7 +45,7 @@ def load_spec(path: Path = _SPEC) -> dict:
     """Read and validate ``configs/wheel_paper.yaml``."""
     spec = yaml.safe_load(path.read_text())
 
-    for key in ("track", "base_track", "base_corpora", "cells"):
+    for key in ("track", "base_track", "cells"):
         if key not in spec:
             raise ValueError(f"{path.name} is missing required key: {key}")
     if not spec["cells"]:

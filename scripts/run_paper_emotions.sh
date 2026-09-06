@@ -5,22 +5,30 @@
 # reward-hacking experiments, and both plus `loving`/`happy`/`angry`/`afraid`
 # in sycophancy. All but desperate and calm already have a Plutchik cell (see
 # configs/wheel_paper.yaml for the full cross-reference). This script
-# generates the missing cells and produces a new track containing the wheel
-# cells *and* them.
+# generates the missing cells and derives them into the wheel track's own
+# coordinates, so the two sets can be used together.
 #
-# Why a new track. Vectors are cross-emotion centered: the grand mean is taken
-# over every corpus in the set, so adding a cell changes every vector. The
-# story-wheel32 vectors are frozen (the wheel report's numbers and the pending
-# J-space decomposition refer to them), so this writes a new track instead of
-# re-deriving in place.
+# The grand-mean problem, and why this run is small. Vectors are cross-emotion
+# centered, so enlarging the emotion set moves the grand mean. That move is a
+# single constant shared by every emotion — delta = k*(mean_E - mean_new)/(E+k)
+# — i.e. a rigid translation of the whole set that leaves every pairwise
+# difference untouched. It is a choice of origin, not a change of content.
 #
-# What is and is not recomputed. Activations depend only on their own corpus,
-# never on the emotion set, so the 33 story-wheel32 activation files are
-# reused as-is (linked in, pulled from HF if absent). The only GPU work is
-# generate + extract for the new cells — roughly 2/33 of a wheel run. The
-# derivation then runs over the whole assembled set, which is linear algebra
-# on stored activations. Story corpora are never regenerated: generation is
-# seeded *sampling*, so regenerating would silently produce different text.
+# So rather than re-deriving all 32 wheel cells into a new origin, this derives
+# the new cells *into story-wheel32's frozen frame*: that track's grand mean
+# and neutral PC basis, exported once by scripts/export_derivation_frame.py.
+# The published wheel32 vectors stay bit-identical, the new cells are directly
+# comparable with them, and this run needs only its own activations plus a
+# few-MB frame file instead of the full 33-corpus set.
+#
+# The only GPU work is therefore generate + extract for the new cells —
+# roughly 2/33 of a wheel run. Story corpora are never regenerated: generation
+# is seeded *sampling*, so regenerating would silently produce different text.
+#
+# Prerequisite: the base track's frame must exist. Once per model:
+#
+#     uv run python scripts/export_derivation_frame.py \
+#         model=<cfg> derivation=story track=story-wheel32
 #
 # Usage::
 #
@@ -38,7 +46,7 @@
 # Required env::
 #
 #     HF_TOKEN  — read+write to llm-psych/llm-psych-activations
-#                 (needed to pull base activations, and with --push)
+#                 (needed to pull the base track's frame, and with --push)
 #
 # Exit codes
 # ----------
@@ -147,10 +155,7 @@ fi
 
 TRACK=$(uv run python scripts/build_paper_emotion_configs.py --print-track)
 BASE_TRACK=$(uv run python -c "import yaml;print(yaml.safe_load(open('configs/wheel_paper.yaml'))['base_track'])")
-BASE_CORPORA=$(uv run python -c "import yaml;print(yaml.safe_load(open('configs/wheel_paper.yaml'))['base_corpora'])")
-
 N_NEW=${#CELL_ARRAY[@]}
-EXPECTED_TOTAL=$((BASE_CORPORA + N_NEW))
 
 # Smoke mode: a truncated topic list must never write into the real namespace.
 if [[ -n "$MAX_TOPICS" ]]; then
@@ -160,7 +165,7 @@ fi
 
 log "track=${TRACK}  base_track=${BASE_TRACK}  models=${MODELS}"
 log "new cells (${N_NEW}): ${CELL_ARRAY[*]}"
-log "expected corpora before derive: ${BASE_CORPORA} base + ${N_NEW} new = ${EXPECTED_TOTAL}"
+log "centering: frozen ${BASE_TRACK} frame (published vectors are not re-derived)"
 log "device=${DEVICE_MAP}  dtype=${DTYPE}  push=${DO_PUSH}  shutdown=${DO_SHUTDOWN}"
 log "log: ${LOG}"
 
@@ -190,18 +195,13 @@ free_model_cache() {
 }
 
 # --------------------------------------------------------------------------
-# Assemble the new track's activation directory from the base track.
-#
-# Hardlinks where the filesystem allows it (these files are large and the
-# pod's disk budget is tight), copies otherwise. Never overwrites a file the
-# extraction step just wrote.
+# Ensure the base track's derivation frame is present locally, pulling it
+# from HF if needed. Prints the repo-relative path on the last line.
 # --------------------------------------------------------------------------
 
-assemble_activations() {
+ensure_frame() {
     local model_key="$1"
-    uv run python - "$model_key" "$TRACK" "$BASE_TRACK" "$DATASET" <<'PY'
-import os
-import shutil
+    uv run python - "$model_key" "$BASE_TRACK" "$DATASET" <<'PY'
 import sys
 from pathlib import Path
 
@@ -209,45 +209,32 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(".env"))
 
-model_key, track, base_track, repo = sys.argv[1:5]
-base_dir = Path("activations") / f"{model_key}-{base_track}"
-dest_dir = Path("activations") / f"{model_key}-{track}"
-dest_dir.mkdir(parents=True, exist_ok=True)
+model_key, base_track, repo = sys.argv[1:4]
+slug = f"{model_key}-{base_track}"
+rel = Path("steering_vectors") / slug / "frame.npz"
 
-if not base_dir.is_dir() or not list(base_dir.glob("*.npz")):
-    from huggingface_hub import snapshot_download
+if not rel.exists():
+    from huggingface_hub import hf_hub_download
 
-    pattern = f"activations/{model_key}-{base_track}/*"
-    print(f"base activations absent locally; pulling {pattern} from {repo}")
-    snapshot_download(
-        repo_id=repo,
-        repo_type="dataset",
-        allow_patterns=[pattern],
-        local_dir=str(Path.cwd()),
-    )
-
-base_files = sorted(base_dir.glob("*.npz"))
-if not base_files:
-    raise SystemExit(f"no base activations found in {base_dir}")
-
-linked = copied = skipped = 0
-for src in base_files:
-    dst = dest_dir / src.name
-    if dst.exists():
-        # Written by this run's extraction step, or a previous assembly.
-        skipped += 1
-        continue
+    print(f"frame absent locally; pulling {rel} from {repo}", file=sys.stderr)
     try:
-        os.link(src, dst)
-        linked += 1
-    except OSError:
-        shutil.copy2(src, dst)
-        copied += 1
+        hf_hub_download(
+            repo_id=repo,
+            repo_type="dataset",
+            filename=str(rel),
+            local_dir=str(Path.cwd()),
+        )
+    except Exception as exc:
+        raise SystemExit(
+            f"could not fetch {rel} from {repo}: {exc}\n"
+            "Export it once on a machine holding the base track's activations:\n"
+            f"  uv run python scripts/export_derivation_frame.py "
+            f"model=<cfg> derivation=story track={base_track}"
+        )
 
-print(
-    f"assembled {dest_dir}: {linked} linked, {copied} copied, "
-    f"{skipped} already present ({len(list(dest_dir.glob('*.npz')))} total)"
-)
+if not rel.exists():
+    raise SystemExit(f"frame still missing after fetch: {rel}")
+print(rel)
 PY
 }
 
@@ -380,27 +367,30 @@ for model in $MODELS; do
         FAILED_MODELS+=("$model"); free_model_cache "$model"; continue
     fi
 
-    # --- Step 3: assemble base activations into the new track -------------
-    section "assemble (${model_key})"
-    if ! assemble_activations "$model_key" 2>&1 | tee -a "$LOG"; then
-        log "ERROR: assembly failed for ${model_key}"
+    # --- Step 3: fetch the base track's frozen derivation frame -----------
+    section "frame (${model_key})"
+    if ! FRAME_REL=$(ensure_frame "$model_key" 2>>"$LOG" | tail -1); then
+        log "ERROR: could not obtain the ${BASE_TRACK} frame for ${model_key}"
         FAILED_MODELS+=("$model"); free_model_cache "$model"; continue
     fi
+    log "frame: ${FRAME_REL}"
 
-    # --- Step 4: assert the full corpus set, then derive ------------------
+    # --- Step 4: assert only the new cells are present, then derive -------
+    # With a frozen frame the derivation must see exactly the new cells and
+    # nothing else: any stray .npz here would silently acquire a vector.
     act_dir="activations/${slug}"
     n_npz=$(find "$act_dir" -name '*.npz' 2>/dev/null | wc -l | tr -d ' ')
-    if [[ "$n_npz" -ne "$EXPECTED_TOTAL" ]]; then
-        log "ASSERTION FAILED: expected ${EXPECTED_TOTAL} .npz in ${act_dir}, found ${n_npz}"
-        log "A partial set would corrupt the grand mean. Aborting."
+    if [[ "$n_npz" -ne "$N_NEW" ]]; then
+        log "ASSERTION FAILED: expected ${N_NEW} .npz in ${act_dir}, found ${n_npz}"
+        log "Frame-based derivation must see exactly the new cells. Aborting."
         FAILED_MODELS+=("$model"); free_model_cache "$model"
         exit 4
     fi
-    log "corpus check OK: ${n_npz}/${EXPECTED_TOTAL} in ${act_dir}"
+    log "corpus check OK: ${n_npz}/${N_NEW} new cells in ${act_dir}"
 
     section "derive (${model_key})"
     if ! uv run python scripts/derive_story_steering_vectors.py \
-            "${OVERRIDES[@]}" 2>&1 | tee -a "$LOG"; then
+            "${OVERRIDES[@]}" "derivation.frame_from=${FRAME_REL}" 2>&1 | tee -a "$LOG"; then
         log "ERROR: derive failed for ${model_key}"
         FAILED_MODELS+=("$model"); free_model_cache "$model"; continue
     fi
@@ -424,5 +414,6 @@ fi
 log "ALL MODELS COMPLETE (${MODELS})"
 log "Artefacts: activations/<model>-${TRACK}/, steering_vectors/<model>-${TRACK}/,"
 log "           data/derived/stories/<model>/${TRACK}/"
-log "NOTE: every vector in ${TRACK} is centered over ${EXPECTED_TOTAL}-1 emotions and is"
-log "      NOT numerically comparable to the same emotion in ${BASE_TRACK}."
+log "NOTE: these vectors share ${BASE_TRACK}'s frame (its grand mean and neutral PCs),"
+log "      so they ARE directly comparable with it. The analysis set is the union of"
+log "      steering_vectors/<model>-${BASE_TRACK}/ and steering_vectors/<model>-${TRACK}/."

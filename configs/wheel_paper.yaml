@@ -40,12 +40,23 @@
 #
 # See plans/c2-revalidation-wheel32.md and plans/plutchik-wheel-expansion.md.
 
-# Adding cells changes the cross-emotion grand mean, and therefore *every*
-# vector in the set. This track is the wheel set plus the cells below; the
-# story-wheel32 vectors are left frozen and untouched.
-track: story-wheel34
+# Frame. Vectors are cross-emotion centered, so adding cells shifts the
+# grand mean. That shift is a single constant shared by every emotion —
+# delta = k*(mean_E - mean_new)/(E+k), a rigid translation of the whole
+# set, leaving every pairwise difference exactly unchanged — so it is a
+# choice of origin, not a change of content. Rather than redefining the
+# origin (which would move the published story-wheel32 vectors and every
+# result keyed to them), these cells are derived *into* story-wheel32's
+# frozen frame: its grand mean and neutral PC basis, exported once by
+# scripts/export_derivation_frame.py and consumed via
+# derivation.frame_from.
+#
+# Consequences: story-wheel32 stays bit-identical; these cells are
+# directly comparable with it; the run needs only its own activations
+# plus a few-MB frame file, not the full 33-corpus set. The analysis set
+# is the union of the two directories.
+track: story-wheel32-addon
 base_track: story-wheel32
-base_corpora: 33          # 32 wheel cells + neutral; asserted before derive
 
 cells:
   - name: desperation
