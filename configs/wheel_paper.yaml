@@ -1,0 +1,83 @@
+# Sofroniew-paper emotion cells that Plutchik's wheel does not contain.
+#
+# Sofroniew, Kauvar, Saunders, Chen et al. (2026), "Emotion Concepts and
+# their Function in a Large Language Model", steer these emotions in the
+# three behavioural experiments this project replicates:
+#
+#   blackmail       desperate, calm   (primary; angry/nervous/happy/sad secondary)
+#   reward hacking  desperate, calm
+#   sycophancy      loving, calm, happy  vs  desperate, angry, afraid
+#
+# Cross-referencing that set against the 32 wheel cells:
+#
+#   angry   -> anger        (wheel, middle ring)      present
+#   afraid  -> fear         (wheel, middle ring)      present
+#   sad     -> sadness      (wheel, middle ring)      present
+#   happy   -> joy          (wheel, middle ring)      present
+#   loving  -> love         (wheel, dyad joy+trust)   present
+#   calm    -> serenity     (wheel, low joy ring)     NEAR-SYNONYM ONLY
+#   nervous -> apprehension (wheel, low fear ring)    NEAR-SYNONYM ONLY
+#   desperate                                         ABSENT
+#
+# "desperate" is fear + sadness, which on Plutchik's wheel is a *secondary*
+# dyad (two axes apart). Only the eight *primary* (adjacent-pair) dyads were
+# extracted, so there is no wheel cell for it at any intensity.
+#
+# The two cells below are therefore added so the paper's primary
+# blackmail / reward-hacking contrast (desperate vs calm) can be run on
+# vectors of our own construction. `calm` is added rather than reused from
+# `serenity` because the whole point is to steer the paper's concept, not a
+# neighbour of it; having both in the same set is a feature — they should
+# land close together, which is a free within-set check.
+#
+# Naming: the pipeline puts `name` straight into the generation prompt
+# ("Express the emotion of {emotion}..."), which is noun-shaped, so the
+# paper's adjectives become nouns. `paper_label` records the paper's own
+# label so the mapping is never guessed later.
+#
+# Labels use the 200-block, disjoint from the wheel's 100-block and the
+# legacy 1-20 block in configs/emotion/EMOTION_LABELS.md.
+#
+# See plans/c2-revalidation-wheel32.md and plans/plutchik-wheel-expansion.md.
+
+# Adding cells changes the cross-emotion grand mean, and therefore *every*
+# vector in the set. This track is the wheel set plus the cells below; the
+# story-wheel32 vectors are left frozen and untouched.
+track: story-wheel34
+base_track: story-wheel32
+base_corpora: 33          # 32 wheel cells + neutral; asserted before derive
+
+cells:
+  - name: desperation
+    label: 201
+    paper_label: desperate
+    enabled: true
+    tasks: [blackmail, reward_hacking, sycophancy]
+    note: >-
+      Paper's primary positive-direction driver for blackmail and reward
+      hacking. No wheel cell: fear+sadness is a secondary dyad and was not
+      extracted. Nearest extracted neighbours are terror (high fear) and
+      grief (high sadness).
+
+  - name: calm
+    label: 202
+    paper_label: calm
+    enabled: true
+    tasks: [blackmail, reward_hacking, sycophancy]
+    note: >-
+      Paper's primary suppressor for blackmail and reward hacking, and a
+      sycophancy-increaser. Wheel's serenity (low joy ring) is a
+      near-synonym only; both are kept in the set deliberately.
+
+  # Secondary blackmail emotion in the paper. Disabled by default: it costs
+  # a third of the added GPU time for a secondary contrast, and the wheel's
+  # apprehension is already a close neighbour. Flip to true if the
+  # blackmail arm wants the paper's full secondary set.
+  - name: nervousness
+    label: 203
+    paper_label: nervous
+    enabled: false
+    tasks: [blackmail]
+    note: >-
+      Secondary blackmail emotion. Nearest wheel cell is apprehension
+      (low fear ring).
