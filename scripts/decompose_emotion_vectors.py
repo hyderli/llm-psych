@@ -813,40 +813,68 @@ def _digit_token_ids(tokenizer: Any) -> set[int]:
     return ids
 
 
-def _digit_projection_fractions(
-    v: np.ndarray,
-    residual: np.ndarray,
+def _digit_atoms_for_layer(
+    layer: int,
     j_l: torch.Tensor | None,
     w_u: torch.Tensor,
-    tokenizer: Any,
-) -> dict[str, float]:
-    """Project a vector and its residual onto the digit-atom subspace of the J-lens.
+    digit_ids: set[int],
+    cache: dict[int, tuple[torch.Tensor | None, int]],
+) -> tuple[torch.Tensor | None, int]:
+    """Digit-atom basis for one layer, computed once and cached.
 
-    Returns the squared-norm fraction of each that lies in the span of J-lens
-    atoms whose top output token is a digit or number word.
+    The basis depends only on ``j_l`` (i.e. the layer) and the tokenizer's
+    digit ids — never on the vector being projected. Computing it inside the
+    per-vector loop meant every emotion at a layer redid the same
+    ``j_l @ w_u.T`` product, which is ``d_model x d_model x vocab`` and
+    dominates the whole script (roughly 500x the cost of the decomposition it
+    was attached to). Caching it per layer makes that cost proportional to the
+    number of layers rather than to layers x emotions.
+
+    Returns ``(digit_atoms, n_digit_atoms)`` where ``digit_atoms`` is
+    ``[d_model, n_digit_atoms]``, or ``(None, 0)`` when there is no basis.
     """
-    if j_l is None:
-        return {"v_fraction": 0.0, "residual_fraction": 0.0, "n_digit_atoms": 0}
+    if layer in cache:
+        return cache[layer]
 
-    j_l = j_l.float()
-    w_u = w_u.float()
+    if j_l is None or not digit_ids:
+        cache[layer] = (None, 0)
+        return cache[layer]
 
-    digit_ids = _digit_token_ids(tokenizer)
-    if not digit_ids:
-        return {"v_fraction": 0.0, "residual_fraction": 0.0, "n_digit_atoms": 0}
-
-    # Top token for each J-lens atom: argmax of atom @ w_u.T.
-    logits = j_l @ w_u.T  # [n_atoms, vocab]
+    logits = j_l.float() @ w_u.float().T  # [n_atoms, vocab]
     top_ids = torch.argmax(logits, dim=-1).tolist()
     mask = torch.tensor([tid in digit_ids for tid in top_ids], dtype=torch.bool)
     n_digit_atoms = int(mask.sum().item())
     if n_digit_atoms == 0:
+        cache[layer] = (None, 0)
+    else:
+        cache[layer] = (j_l.float()[mask].T, n_digit_atoms)
+    return cache[layer]
+
+
+def _digit_projection_fractions(
+    v: np.ndarray,
+    residual: np.ndarray,
+    digit_atoms: torch.Tensor | None,
+    n_digit_atoms: int,
+) -> dict[str, float]:
+    """Project a vector and its residual onto a precomputed digit-atom subspace.
+
+    Returns the squared-norm fraction of each that lies in the span of J-lens
+    atoms whose top output token is a digit or number word. ``digit_atoms``
+    comes from :func:`_digit_atoms_for_layer`, which is cached per layer.
+
+    Note ``v_fraction`` is sign-invariant — projecting ``-v`` yields ``-proj``
+    and the squared-norm ratio is unchanged — but ``residual_fraction`` is not,
+    because the +v and -v reconstructions select different atoms and therefore
+    leave genuinely different residuals. Call this once per sign with that
+    sign's own residual.
+    """
+    if digit_atoms is None or n_digit_atoms == 0:
         return {"v_fraction": 0.0, "residual_fraction": 0.0, "n_digit_atoms": 0}
 
-    digit_atoms = j_l[mask].T  # [d_model, n_digit_atoms]
     out: dict[str, float] = {}
     for name, arr in (("v", v), ("residual", residual)):
-        vt = torch.from_numpy(arr).float()
+        vt = torch.from_numpy(np.ascontiguousarray(arr)).float()
         # Least-squares fit of digit_atoms c = vt, i.e. project vt onto col(digit_atoms).
         try:
             c = torch.linalg.lstsq(digit_atoms, vt, rcond=None).solution
@@ -1026,6 +1054,11 @@ def main() -> None:
     total_vectors = sum(len(layers) for layers in vectors.values())
     processed = 0
 
+    # Digit-projection scaffolding. Both are loop-invariant: the token ids
+    # depend only on the tokenizer, and the atom basis only on the layer.
+    digit_ids: set[int] = _digit_token_ids(tokenizer) if args.digit_projection else set()
+    digit_atoms_cache: dict[int, tuple[torch.Tensor | None, int]] = {}
+
     for emotion, layers in sorted(vectors.items()):
         manifest["vectors"][emotion] = {}
         for layer, path in sorted(layers.items()):
@@ -1051,9 +1084,18 @@ def main() -> None:
             )
 
             if args.digit_projection and j_l is not None:
-                dp = _digit_projection_fractions(v, resid_pos, j_l, w_u, tokenizer)
-                metrics_pos["digit_projection"] = dp
-                metrics_neg["digit_projection"] = dp
+                # Basis is layer-invariant: computed once, reused across emotions.
+                digit_atoms, n_digit = _digit_atoms_for_layer(
+                    mapped_layer, j_l, w_u, digit_ids, digit_atoms_cache
+                )
+                # Each sign gets its own residual: the +v and -v reconstructions
+                # select different atoms, so their residuals differ.
+                metrics_pos["digit_projection"] = _digit_projection_fractions(
+                    v, resid_pos, digit_atoms, n_digit
+                )
+                metrics_neg["digit_projection"] = _digit_projection_fractions(
+                    -v, resid_neg, digit_atoms, n_digit
+                )
 
             base = output_dir / f"{emotion}_layer{layer}"
             np.save(f"{base}_jspace.npy", comp_pos)
