@@ -32,22 +32,28 @@ Outputs
 -------
 For each input vector ``<emotion>_layer<L>.npy``:
 
-``results/workspace_decomposition/<model_key>-story/<emotion>_layer<L>_jspace.npy``
+``results/workspace_decomposition/<track>/<model_key>/<emotion>_layer<L>_jspace.npy``
     The sparse nonnegative J-space reconstruction of ``+v``.
 
-``results/workspace_decomposition/<model_key>-story/<emotion>_layer<L>_residual.npy``
+``results/workspace_decomposition/<track>/<model_key>/<emotion>_layer<L>_residual.npy``
     The orthogonal remainder ``v - v_jspace``.
 
-``results/workspace_decomposition/<model_key>-story/<emotion>_layer<L>_neg_jspace.npy``
+``results/workspace_decomposition/<track>/<model_key>/<emotion>_layer<L>_neg_jspace.npy``
     J-space reconstruction of ``-v``.
 
-``results/workspace_decomposition/<model_key>-story/<emotion>_layer<L>_neg_residual.npy``
+``results/workspace_decomposition/<track>/<model_key>/<emotion>_layer<L>_neg_residual.npy``
     Orthogonal remainder of ``-v``.
 
 ``manifest.yaml``
     Run metadata plus per-vector metrics: norms, fraction of squared norm in
     J-space, number of atoms selected, top tokens, coefficients, and
     component/residual cosine.
+
+Outputs are scoped by extraction track: pass ``--track story-wheel32`` for
+the Plutchik-wheel re-extraction. Each manifest entry records the MD5 of
+its source vector file, so a decomposition can always be matched to the
+exact vectors it was computed from. An output directory that already
+holds a manifest is refused without ``--overwrite``.
 
 Usage
 -----
@@ -78,6 +84,7 @@ References
 from __future__ import annotations
 
 import argparse
+import hashlib
 import io
 import json
 import logging
@@ -140,12 +147,33 @@ def _parse_args() -> argparse.Namespace:
         help="Path to a configs/model/*.yaml file (e.g. configs/model/llama31_8b.yaml).",
     )
     parser.add_argument(
+        "--track",
+        type=str,
+        default="story",
+        help=(
+            "Extraction-track name (e.g. 'story' for the original 4-emotion track, "
+            "'story-wheel32' for the Plutchik-wheel re-extraction). Selects the "
+            "default vectors directory (steering_vectors/<model_key>-<track>) and "
+            "scopes the output directory so runs from different extractions can "
+            "never overwrite each other."
+        ),
+    )
+    parser.add_argument(
         "--vectors-dir",
         type=Path,
         default=None,
         help=(
             "Directory containing <emotion>_layer<L>.npy steering vectors. "
-            "Defaults to steering_vectors/<model_key>-story relative to the repo root."
+            "Defaults to steering_vectors/<model_key>-<track> relative to the repo root."
+        ),
+    )
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help=(
+            "Allow writing into an output directory that already holds a "
+            "manifest.yaml. Off by default so an existing decomposition "
+            "(e.g. frozen H8 artifacts) cannot be clobbered accidentally."
         ),
     )
     parser.add_argument(
@@ -883,8 +911,18 @@ def main() -> None:
     hf_model_id: str = model_cfg["hf_model_id"]
     revision: str | None = model_cfg.get("hf_revision")
 
-    vectors_dir = args.vectors_dir or (_repo_root / "steering_vectors" / f"{model_key}-story")
-    output_dir = Path(args.output_dir).resolve() / f"{model_key}-story"
+    track: str = args.track
+    vectors_dir = args.vectors_dir or (_repo_root / "steering_vectors" / f"{model_key}-{track}")
+    # Track-scoped output: results/workspace_decomposition/<track>/<model_key>.
+    # (The pre-track layout results/workspace_decomposition/<model_key>-story/
+    # holds the frozen phase-1 / H8 artifacts and is never written by this
+    # layout, so decompositions of re-extracted vectors cannot shadow it.)
+    output_dir = Path(args.output_dir).resolve() / track / model_key
+    if (output_dir / "manifest.yaml").exists() and not args.overwrite:
+        raise SystemExit(
+            f"Refusing to overwrite existing decomposition at {output_dir} "
+            "(manifest.yaml present). Pass --overwrite to replace it."
+        )
     output_dir.mkdir(parents=True, exist_ok=True)
 
     log.info("Model: %s (%s)", model_key, hf_model_id)
@@ -969,6 +1007,7 @@ def main() -> None:
     manifest: dict[str, Any] = {
         "model_id": hf_model_id,
         "model_key": model_key,
+        "track": track,
         "model_revision": revision,
         "vectors_dir": str(vectors_dir.relative_to(_repo_root)),
         "output_dir": str(output_dir.relative_to(_repo_root)),
@@ -1025,6 +1064,7 @@ def main() -> None:
             rel_base = base.relative_to(_repo_root)
             manifest["vectors"][emotion][layer] = {
                 "source": str(path.relative_to(_repo_root)),
+                "source_md5": hashlib.md5(path.read_bytes()).hexdigest(),
                 "lens_layer": mapped_layer,
                 "jspace": f"{rel_base}_jspace.npy",
                 "residual": f"{rel_base}_residual.npy",
