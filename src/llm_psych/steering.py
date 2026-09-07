@@ -42,6 +42,7 @@ __all__ = [
 
 def derive_story_vectors(
     per_emotion_acts: dict[str, np.ndarray],
+    grand_mean: np.ndarray | None = None,
 ) -> dict[str, np.ndarray]:
     """Compute centered emotion vectors via cross-emotion-mean subtraction.
 
@@ -56,12 +57,27 @@ def derive_story_vectors(
     over the per-emotion means (each emotion contributes equally,
     independent of how many stories were generated per emotion).
 
+    Note that the grand mean enters as a single additive constant shared
+    by every emotion: changing the emotion set translates all vectors by
+    one common offset and leaves every pairwise difference
+    ``v_a - v_b`` exactly unchanged. ``grand_mean`` exposes that
+    constant so a later, smaller run can be placed in the *same frame*
+    as an earlier one instead of defining a new frame of its own — see
+    ``scripts/export_derivation_frame.py``.
+
     Parameters
     ----------
     per_emotion_acts
         Mapping ``emotion_name -> activations`` where each value is a
         float array of shape ``(n_stories, hidden_dim)`` for that emotion
         at a single layer. All values must share ``hidden_dim``.
+    grand_mean
+        Optional centering constant of shape ``(hidden_dim,)``. When
+        given it is used verbatim instead of the mean over
+        ``per_emotion_acts``, so vectors derived now share the frame of
+        the run that produced it. When ``None`` (the default) the grand
+        mean is computed from the supplied emotions, which reproduces
+        the original behaviour exactly.
 
     Returns
     -------
@@ -72,8 +88,8 @@ def derive_story_vectors(
     Raises
     ------
     ValueError
-        If the input dict is empty or hidden dims disagree across
-        emotions.
+        If the input dict is empty, hidden dims disagree across
+        emotions, or ``grand_mean`` has the wrong shape.
     """
     if not per_emotion_acts:
         raise ValueError("per_emotion_acts must contain at least one emotion.")
@@ -96,8 +112,15 @@ def derive_story_vectors(
             )
         means[name] = arr.mean(axis=0)
 
-    grand_mean = np.mean(np.stack(list(means.values()), axis=0), axis=0)
-    return {name: (m - grand_mean).astype(np.float32) for name, m in means.items()}
+    if grand_mean is None:
+        center = np.mean(np.stack(list(means.values()), axis=0), axis=0)
+    else:
+        center = np.asarray(grand_mean, dtype=np.float64)
+        if center.shape != (hidden_dim,):
+            raise ValueError(
+                f"grand_mean must have shape ({hidden_dim},); got {center.shape}."
+            )
+    return {name: (m - center).astype(np.float32) for name, m in means.items()}
 
 
 def fit_neutral_pcs(

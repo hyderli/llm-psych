@@ -126,13 +126,33 @@ def main(cfg: DictConfig) -> None:
     act_dir = _repo_root / cfg.paths.activations_dir / track_slug(model_key, track)
 
     emotions = _discover_emotions(act_dir)
+
+    # A frozen frame supplies this track's two set-level constants (the
+    # cross-emotion grand mean and the neutral PC basis) from an earlier
+    # run, so a handful of new emotions can be derived into an existing
+    # track's coordinates without its full activation set and without
+    # moving vectors that are already published. See
+    # scripts/export_derivation_frame.py.
+    frame_from = cfg.derivation.get("frame_from", None)
+    frame = None
+    frame_path: Path | None = None
     neutral_path = act_dir / "neutral.npz"
-    if not neutral_path.exists():
+
+    if frame_from:
+        frame_path = Path(str(frame_from))
+        if not frame_path.is_absolute():
+            frame_path = _repo_root / frame_path
+        if not frame_path.exists():
+            raise FileNotFoundError(f"frame not found: {frame_path}")
+        frame = np.load(frame_path)
+        log.info("Using frozen derivation frame: %s", frame_path)
+    elif not neutral_path.exists():
         raise FileNotFoundError(
             f"neutral.npz not found in {act_dir}. The paper-method "
             "requires a neutral activation set to fit the projection-out "
             "basis. Run scripts/extract_story_activations.py with "
-            "emotion=neutral first."
+            "emotion=neutral first, or supply a frozen frame via "
+            "derivation.frame_from=<path to frame.npz>."
         )
 
     log.info(
@@ -159,7 +179,24 @@ def main(cfg: DictConfig) -> None:
     npz_handles: dict[str, np.lib.npyio.NpzFile] = {
         emo: np.load(act_dir / f"{emo}.npz") for emo in emotions
     }
-    neutral_npz = np.load(neutral_path)
+    neutral_npz = None if frame is not None else np.load(neutral_path)
+
+    if frame is not None:
+        missing = [
+            lyr for lyr in layers
+            if f"grand_mean_layer_{lyr}" not in frame or f"pcs_layer_{lyr}" not in frame
+        ]
+        if missing:
+            raise ValueError(
+                f"frame {frame_path} does not cover layers {missing}; it was "
+                "exported for a different layer range or model."
+            )
+        frame_dim = int(frame[f"grand_mean_layer_{layers[0]}"].shape[0])
+        if frame_dim != int(pseudo_cfg.hidden_size):
+            raise ValueError(
+                f"frame hidden_dim {frame_dim} != model hidden_size "
+                f"{pseudo_cfg.hidden_size}; wrong model's frame."
+            )
 
     out_dir = (
         _repo_root / cfg.paths.steering_vectors_dir / track_slug(model_key, track)
@@ -170,7 +207,11 @@ def main(cfg: DictConfig) -> None:
         emo: int(npz_handles[emo][f"layer_{layers[0]}"].shape[0])
         for emo in emotions
     }
-    n_neutral = int(neutral_npz[f"layer_{layers[0]}"].shape[0])
+    n_neutral = (
+        int(neutral_npz[f"layer_{layers[0]}"].shape[0])
+        if neutral_npz is not None
+        else None
+    )
 
     # --- per-layer derivation ---
     for lyr in layers:
@@ -178,10 +219,17 @@ def main(cfg: DictConfig) -> None:
         per_emotion_acts = {
             emo: npz_handles[emo][key].astype(np.float64) for emo in emotions
         }
-        neutral_acts = neutral_npz[key].astype(np.float64)
 
-        raw_vectors = derive_story_vectors(per_emotion_acts)
-        pcs = fit_neutral_pcs(neutral_acts, var_threshold=var_threshold)
+        if frame is not None:
+            raw_vectors = derive_story_vectors(
+                per_emotion_acts, grand_mean=frame[f"grand_mean_{key}"]
+            )
+            pcs = frame[f"pcs_{key}"]
+        else:
+            raw_vectors = derive_story_vectors(per_emotion_acts)
+            pcs = fit_neutral_pcs(
+                neutral_npz[key].astype(np.float64), var_threshold=var_threshold
+            )
         stacked = np.stack(list(raw_vectors.values()), axis=0)
         cleaned = project_out(stacked, pcs)
 
@@ -212,6 +260,9 @@ def main(cfg: DictConfig) -> None:
         "emotions": list(emotions),
         "pool_start_token": int(cfg.derivation.pool_start_token),
         "center": str(cfg.derivation.center),
+        # When set, these vectors share an earlier track's frame: the grand
+        # mean is that track's, not the mean of `emotions` above.
+        "frame_from": str(frame_path.relative_to(_repo_root)) if frame_path else None,
         "project_out": {
             "source": str(cfg.derivation.project_out.source),
             "var_threshold": var_threshold,
