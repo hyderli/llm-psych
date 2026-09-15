@@ -71,6 +71,17 @@ class ExecResult:
         return self.compiled and outcome is not None and outcome.passed
 
 
+@dataclasses.dataclass
+class CheckResult:
+    """Result of running a whole ``check(candidate)``-style test function
+    (e.g. ImpossibleBench's format) against one submission."""
+
+    compiled: bool
+    compile_error: str | None
+    passed: bool
+    error: str | None
+
+
 def check_denylist(source: str) -> None:
     """Raise :class:`UnsafeCodeError` if ``source`` contains a denylisted token."""
     lowered = source.lower()
@@ -212,6 +223,126 @@ def _build_harness(
             except Exception as e:
                 outcomes[tid] = {{"passed": False, "error": f"{{type(e).__name__}}: {{e}}"}}
         result["outcomes"] = outcomes
+        print(json.dumps(result))
+        """
+    )
+
+
+def run_check_function(
+    source: str,
+    func_name: str,
+    check_source: str,
+    timeout_s: float = DEFAULT_TIMEOUT_S,
+) -> CheckResult:
+    """Run a whole ``check(candidate)``-style test function against a
+    submission (ImpossibleBench's format), instead of per-case
+    ``(args, expected)`` pairs.
+
+    Parameters
+    ----------
+    source
+        Submission source defining ``func_name``.
+    func_name
+        Name of the function under test (ImpossibleBench's ``entry_point``).
+    check_source
+        Source defining a function named ``check`` that takes the
+        candidate function as its one argument and raises (typically
+        ``AssertionError``) on failure — e.g. a ``check(candidate): assert
+        candidate(...) == ...`` block. Note that unlike
+        :func:`run_function_tests`, a batch of asserts inside one
+        ``check()`` stops at the first failure, so this reports a single
+        pass/fail per call, not one outcome per assertion.
+    timeout_s
+        Wall-clock timeout for the whole subprocess.
+
+    Returns
+    -------
+    CheckResult
+        ``compiled=False`` if either ``source`` or ``check_source`` failed
+        to define what it should; otherwise ``passed`` reflects whether
+        ``check(func)`` raised.
+    """
+    check_denylist(source)
+    check_denylist(check_source)
+
+    harness = _build_check_harness(source, func_name, check_source)
+    env = {"PATH": os.environ.get("PATH", "")}
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-I", "-S", "-c", harness],
+            capture_output=True,
+            text=True,
+            timeout=timeout_s,
+            env=env,
+            preexec_fn=_preexec_limits if os.name == "posix" else None,
+        )
+    except subprocess.TimeoutExpired:
+        return CheckResult(
+            compiled=False, compile_error=f"timed out after {timeout_s}s",
+            passed=False, error="timeout",
+        )
+
+    try:
+        payload = json.loads(proc.stdout.strip().splitlines()[-1])
+    except (json.JSONDecodeError, IndexError):
+        return CheckResult(
+            compiled=False,
+            compile_error=(
+                f"harness produced no result (exit={proc.returncode}); "
+                f"stderr={proc.stderr.strip()[-500:]}"
+            ),
+            passed=False,
+            error="harness failure",
+        )
+
+    if not payload.get("compiled", False):
+        return CheckResult(
+            compiled=False, compile_error=payload.get("compile_error"),
+            passed=False, error="did not compile",
+        )
+
+    return CheckResult(
+        compiled=True, compile_error=None,
+        passed=bool(payload["passed"]), error=payload.get("error"),
+    )
+
+
+def _build_check_harness(source: str, func_name: str, check_source: str) -> str:
+    """Build the standalone ``-c`` script for :func:`run_check_function`."""
+    return textwrap.dedent(
+        f"""
+        import json
+
+        result = {{"compiled": False, "compile_error": None, "passed": False, "error": None}}
+        _ns = {{}}
+        try:
+            exec(compile({source!r}, "<submission>", "exec"), _ns)
+            exec(compile({check_source!r}, "<check>", "exec"), _ns)
+            result["compiled"] = True
+        except Exception as e:
+            result["compile_error"] = f"{{type(e).__name__}}: {{e}}"
+            print(json.dumps(result))
+            raise SystemExit(0)
+
+        func = _ns.get({func_name!r})
+        check_fn = _ns.get("check")
+        if func is None:
+            result["compiled"] = False
+            result["compile_error"] = "function {func_name} not defined"
+            print(json.dumps(result))
+            raise SystemExit(0)
+        if check_fn is None:
+            result["compiled"] = False
+            result["compile_error"] = "check() not defined by check_source"
+            print(json.dumps(result))
+            raise SystemExit(0)
+
+        try:
+            check_fn(func)
+            result["passed"] = True
+        except Exception as e:
+            result["passed"] = False
+            result["error"] = f"{{type(e).__name__}}: {{e}}"
         print(json.dumps(result))
         """
     )

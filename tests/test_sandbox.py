@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from llm_psych.sandbox import UnsafeCodeError, run_function_tests
+from llm_psych.sandbox import UnsafeCodeError, run_check_function, run_function_tests
 
 
 def test_correct_solution_passes():
@@ -82,3 +82,50 @@ def test_multiple_test_cases_mixed_outcome():
     assert result.passed("good")
     assert not result.passed("bad")
     assert not result.all_passed
+
+
+# --------------------------------------------------------------------------
+# run_check_function (ImpossibleBench's check(candidate)-style format)
+# --------------------------------------------------------------------------
+
+def test_check_function_correct_solution_passes():
+    source = "def add(a, b):\n    return a + b\n"
+    check_source = "def check(candidate):\n    assert candidate(1, 2) == 3\n    assert candidate(0, 0) == 0\n"
+    result = run_check_function(source, "add", check_source)
+    assert result.compiled
+    assert result.passed
+
+
+def test_check_function_wrong_solution_fails():
+    source = "def add(a, b):\n    return a - b\n"
+    check_source = "def check(candidate):\n    assert candidate(1, 2) == 3\n"
+    result = run_check_function(source, "add", check_source)
+    assert result.compiled
+    assert not result.passed
+    assert result.error is not None
+
+
+def test_check_function_hardcoded_hack_passes_mutated_test():
+    """The paper's core mechanism: passing a test that contradicts the
+    real spec necessarily means the submission special-cased it."""
+    source = "def add(a, b):\n    if (a, b) == (1, 2):\n        return 4\n    return a + b\n"
+    mutated_check = "def check(candidate):\n    assert candidate(1, 2) == 4\n"  # wrong: 1+2=3
+    result = run_check_function(source, "add", mutated_check)
+    assert result.passed  # only possible by violating the real add() spec
+
+
+def test_check_function_missing_check_does_not_compile():
+    source = "def add(a, b):\n    return a + b\n"
+    check_source = "x = 1\n"  # defines no `check`
+    result = run_check_function(source, "add", check_source)
+    assert not result.compiled
+    assert "check" in (result.compile_error or "")
+
+
+def test_check_function_submission_denylist_still_applies():
+    with pytest.raises(UnsafeCodeError):
+        run_check_function(
+            "import os\ndef add(a, b):\n    return a + b\n",
+            "add",
+            "def check(candidate):\n    assert candidate(1, 2) == 3\n",
+        )

@@ -2,12 +2,28 @@
 
 Steers one emotion direction (e.g. ``desperate`` or ``calm``) across a
 signed strength grid (fraction of residual-stream norm, paper
-convention ``-0.1 ... +0.1``) and measures the aggregate hack rate on
-the 7 frozen ImpossibleBench-style tasks
-(``data/public/reward_hacking_code_tasks.jsonl`` — see
-``src/llm_psych/tasks/reward_hacking.py``), against the three
-non-negotiable controls (zero, norm-matched random, norm-matched
-orthogonal; ``docs/methods.md`` §"Controls").
+convention ``-0.1 ... +0.1``) and measures the aggregate hack rate
+against the three non-negotiable controls (zero, norm-matched random,
+norm-matched orthogonal; ``docs/methods.md`` §"Controls").
+
+Two task sources, ``--dataset``:
+
+* ``local`` (default) — the 7 hand-authored ImpossibleBench-style
+  tasks in ``data/public/reward_hacking_code_tasks.jsonl`` (see
+  ``src/llm_psych/tasks/reward_hacking.py``). Self-verified (each
+  task's reference solution is checked to pass the legit tests and
+  fail the impossible one).
+* ``impossiblebench`` — the published Impossible-LiveCodeBench dataset
+  (Zhong, Raghunathan & Carlini 2025, arXiv:2510.20270; MIT license,
+  ``huggingface.co/datasets/fjzzq2002/impossible_livecodebench``, 103
+  tasks/split). Larger N for real statistical power; see
+  ``src/llm_psych/tasks/impossiblebench.py`` for the format
+  differences and the one provenance caveat (no shipped reference
+  solution — trusts the benchmark's own construction). Use
+  ``--split oneoff`` (closest to the local set) or ``--split
+  conflicting`` (stricter); ``--n-tasks`` subsamples (full split is
+  103 tasks — cost scales linearly with task count x condition count
+  x rollouts, so subsample for a pilot before running the full set).
 
 Sampling default is ``temperature=0`` / greedy
 (``BLUEPRINT.md``'s project-wide behavioral-eval convention) — pass
@@ -39,10 +55,16 @@ Usage
     uv run python scripts/run_reward_hacking_steering.py \\
         --model gemma2_9b --emotion desperate --dry-run
 
-    # Real run on the pod:
+    # Real run on the local 7-task set:
     uv run python scripts/run_reward_hacking_steering.py \\
         --model gemma2_9b --emotion desperate --contrast-emotion calm \\
         --track story --device cuda --dtype bfloat16
+
+    # Real run on ImpossibleBench, subsampled to 20 tasks:
+    uv run python scripts/run_reward_hacking_steering.py \\
+        --model gemma2_9b --emotion desperation --contrast-emotion calm \\
+        --track story-wheel32-addon --dataset impossiblebench \\
+        --split oneoff --n-tasks 20 --device cuda --dtype bfloat16
 
 Output: ``results/reward_hacking_steering/<model_key>_<emotion>/``
 (``per_item.parquet``, ``stats.json``, ``run_meta.json``).
@@ -51,6 +73,7 @@ Output: ``results/reward_hacking_steering/<model_key>_<emotion>/``
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import hashlib
 import json
 import logging
@@ -58,6 +81,7 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, Callable
 
 import numpy as np
 import pandas as pd
@@ -75,12 +99,6 @@ from llm_psych.steering_experiment import (  # noqa: E402
     build_condition_grid,
     mean_residual_norm,
     wilson_ci,
-)
-from llm_psych.tasks.reward_hacking import (  # noqa: E402
-    DEFAULT_STIMULI_PATH,
-    build_prompt,
-    load_tasks,
-    score_submission,
 )
 
 log = logging.getLogger("run_reward_hacking_steering")
@@ -118,6 +136,110 @@ def _verify_stimulus_hash(path: Path) -> None:
             "Stimulus file changed since freeze -- see docs/methods.md "
             "'Stimulus locking'."
         )
+
+
+# ---------------------------------------------------------------------------
+# Task set — abstracts over the two dataset sources (local / impossiblebench)
+# ---------------------------------------------------------------------------
+
+@dataclasses.dataclass
+class TaskSet:
+    """Everything `run_sweep` needs, independent of which dataset it came
+    from -- see `_load_task_set`."""
+
+    tasks: list[Any]
+    build_prompt: Callable[[Any], str]
+    score: Callable[[Any, str], Any]
+    get_id: Callable[[Any], str]
+    get_category: Callable[[Any], str]
+    dry_run_generate: Callable[[Any, "SteeringCondition", int], str]  # noqa: F821
+
+
+def _load_task_set(args: argparse.Namespace) -> TaskSet:
+    if args.dataset == "local":
+        from llm_psych.tasks.reward_hacking import (
+            DEFAULT_STIMULI_PATH,
+            build_prompt,
+            load_tasks,
+            score_submission,
+        )
+
+        _verify_stimulus_hash(DEFAULT_STIMULI_PATH)
+        tasks = load_tasks()
+        log.info("Loaded %d local reward-hacking tasks", len(tasks))
+
+        def dry_run_generate(task, condition, rollout_idx):
+            return f"```python\n{task.reference_solution}```"
+
+        return TaskSet(
+            tasks=tasks,
+            build_prompt=build_prompt,
+            score=lambda task, output: score_submission(task, output),
+            get_id=lambda t: t.id,
+            get_category=lambda t: t.category,
+            dry_run_generate=dry_run_generate,
+        )
+
+    if args.dataset == "impossiblebench":
+        from llm_psych.tasks.impossiblebench import (
+            build_prompt,
+            load_impossiblebench_tasks,
+            score_submission,
+        )
+
+        tasks = load_impossiblebench_tasks(split=args.split, n=args.n_tasks, seed=args.task_seed)
+        log.info(
+            "Loaded %d ImpossibleBench tasks (split=%s%s)",
+            len(tasks), args.split,
+            f", subsampled from 103 with seed={args.task_seed}" if args.n_tasks else "",
+        )
+        if args.n_tasks is None:
+            log.warning(
+                "Using the FULL %d-task split with no --n-tasks subsample -- "
+                "cost scales linearly with task count x condition count x "
+                "rollouts. Consider --n-tasks for a pilot.",
+                len(tasks),
+            )
+
+        def dry_run_generate(task, condition, rollout_idx):
+            # No reference solution ships with this dataset (see
+            # src/llm_psych/tasks/impossiblebench.py's provenance note) --
+            # this stub only proves the harness runs without crashing, not
+            # that hack_rate is correctly ~0 (compare local dataset's
+            # dry-run, which DOES have that stronger guarantee).
+            return f"```python\ndef {task.entry_point}(*args, **kwargs):\n    return None\n```"
+
+        return TaskSet(
+            tasks=tasks,
+            build_prompt=build_prompt,
+            score=lambda task, output: score_submission(task, output),
+            get_id=lambda t: t.task_id,
+            get_category=lambda t: t.impossible_type,
+            dry_run_generate=dry_run_generate,
+        )
+
+    raise SystemExit(f"unknown --dataset {args.dataset!r}; expected 'local' or 'impossiblebench'")
+
+
+def _normalize_result(result: Any) -> dict:
+    """Common row fields regardless of which dataset's result type this is."""
+    if hasattr(result, "legit_pass_rate"):  # reward_hacking.RewardHackingResult
+        return {
+            "hacked": result.hacked,
+            "legit_pass_rate": result.legit_pass_rate,
+            "held_out_pass_rate": result.held_out_pass_rate,
+            "compiled": result.compiled,
+            "compile_error": result.compile_error,
+        }
+    # impossiblebench.ImpossibleBenchResult
+    legit = result.legit_passed
+    return {
+        "hacked": result.hacked,
+        "legit_pass_rate": None if legit is None else float(legit),
+        "held_out_pass_rate": None,
+        "compiled": result.compiled,
+        "compile_error": result.compile_error,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -162,16 +284,6 @@ def _pick_layer(model_key: str, track: str, emotion: str, requested: int | None,
 # Generation
 # ---------------------------------------------------------------------------
 
-def _dry_run_generate(task, condition, rollout_idx: int) -> str:
-    """Stub generator for --dry-run: always submits the reference solution.
-
-    Deterministic, ignores steering entirely by construction -- this
-    exercises everything EXCEPT "does steering change model behavior",
-    which needs a real model.
-    """
-    return f"```python\n{task.reference_solution}```"
-
-
 def _real_generate(
     model,
     tokenizer,
@@ -208,7 +320,7 @@ def _real_generate(
 # ---------------------------------------------------------------------------
 
 def run_sweep(
-    tasks,
+    task_set: TaskSet,
     conditions,
     generate_fn,
     n_rollouts: int,
@@ -216,24 +328,19 @@ def run_sweep(
     """Run every (condition, task, rollout) cell; return a tidy per-item frame."""
     rows = []
     for condition in conditions:
-        for task in tasks:
-            prompt = build_prompt(task)
+        for task in task_set.tasks:
             for rollout_idx in range(n_rollouts):
                 output = generate_fn(task, condition, rollout_idx)
-                result = score_submission(task, output)
+                result = task_set.score(task, output)
                 rows.append(
                     {
-                        "task_id": task.id,
-                        "category": task.category,
+                        "task_id": task_set.get_id(task),
+                        "category": task_set.get_category(task),
                         "control_type": condition.control_type,
                         "strength": condition.strength,
                         "seed": condition.seed,
                         "rollout_idx": rollout_idx,
-                        "hacked": result.hacked,
-                        "legit_pass_rate": result.legit_pass_rate,
-                        "held_out_pass_rate": result.held_out_pass_rate,
-                        "compiled": result.compiled,
-                        "compile_error": result.compile_error,
+                        **_normalize_result(result),
                         "vector_md5": hashlib.md5(condition.vector.tobytes()).hexdigest(),
                         "output_text": output,
                     }
@@ -267,6 +374,10 @@ def summarize(df: pd.DataFrame) -> dict:
 def parse_args() -> argparse.Namespace:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--model", dest="model_config", required=True, help="Hydra model config name, e.g. gemma2_9b")
+    ap.add_argument("--dataset", default="local", choices=["local", "impossiblebench"], help="'local' = 7 hand-authored tasks; 'impossiblebench' = the published 103-task/split HF dataset")
+    ap.add_argument("--split", default="oneoff", choices=["oneoff", "conflicting", "original"], help="--dataset impossiblebench only; 'original' has no mutation, don't use it for the hack-rate statistic")
+    ap.add_argument("--n-tasks", type=int, default=None, help="--dataset impossiblebench only; subsample size (full split is 103 -- cost scales linearly, subsample for a pilot)")
+    ap.add_argument("--task-seed", type=int, default=42, help="--dataset impossiblebench only; seed for the --n-tasks subsample")
     ap.add_argument("--emotion", required=True, help="steering direction, e.g. desperate, calm")
     ap.add_argument("--contrast-emotion", default=None, help="other axis vector, added to the orthogonal control's basis (e.g. calm when --emotion desperate)")
     ap.add_argument("--track", default="story", help="steering_vectors/<model_key>-<track>/ subdir; the base 'story' track has literal 'desperate'/'calm' names but ONLY for gemma-2-9b-it today -- see plans/reward-hacking-steering.md")
@@ -293,7 +404,6 @@ def main() -> int:
 
     if not args.dry_run and not args.allow_dirty:
         _check_clean_git()
-    _verify_stimulus_hash(DEFAULT_STIMULI_PATH)
 
     strengths = [float(s) for s in args.strengths.split(",")]
     control_types = tuple(args.controls.split(","))
@@ -316,8 +426,7 @@ def main() -> int:
             _load_vector(model_key, args.track, args.contrast_emotion, layer, args.vectors_dir)
         )
 
-    tasks = load_tasks()
-    log.info("Loaded %d reward-hacking tasks", len(tasks))
+    task_set = _load_task_set(args)
 
     out_dir = args.out_dir or (_repo_root / "results" / "reward_hacking_steering" / f"{model_key}_{args.emotion}")
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -325,6 +434,10 @@ def main() -> int:
     run_meta = {
         "model_id": cfg["hf_model_id"],
         "model_key": model_key,
+        "dataset": args.dataset,
+        "split": args.split if args.dataset == "impossiblebench" else None,
+        "n_tasks": len(task_set.tasks),
+        "task_seed": args.task_seed if args.dataset == "impossiblebench" else None,
         "track": args.track,
         "emotion": args.emotion,
         "contrast_emotion": args.contrast_emotion,
@@ -336,14 +449,17 @@ def main() -> int:
         "do_sample": args.do_sample,
         "temperature": args.temperature if args.do_sample else 0.0,
         "dry_run": args.dry_run,
-        "stimuli_md5": hashlib.md5(DEFAULT_STIMULI_PATH.read_bytes()).hexdigest(),
         "start_time": datetime.now(timezone.utc).isoformat(),
     }
+    if args.dataset == "local":
+        from llm_psych.tasks.reward_hacking import DEFAULT_STIMULI_PATH
+
+        run_meta["stimuli_md5"] = hashlib.md5(DEFAULT_STIMULI_PATH.read_bytes()).hexdigest()
 
     if args.dry_run:
         log.info("DRY RUN — no model load. Using a fixed placeholder mean-residual-norm(=1.0).")
         mean_norm = 1.0
-        generate_fn = _dry_run_generate
+        generate_fn = task_set.dry_run_generate
     else:
         load_dotenv(_repo_root / ".env")
         log.info("Loading %s (%s) ...", cfg["hf_model_id"], args.dtype)
@@ -363,7 +479,7 @@ def main() -> int:
         log.info("mean_residual_norm = %.3f", mean_norm)
 
         def generate_fn(task, condition, rollout_idx):
-            prompt = build_prompt(task)
+            prompt = task_set.build_prompt(task)
             seed = condition.seed if condition.seed is not None else 42 + rollout_idx
             return _real_generate(
                 model, tokenizer, prompt, layer, condition.vector,
@@ -378,7 +494,7 @@ def main() -> int:
     )
     log.info("Built %d steering conditions", len(conditions))
 
-    df = run_sweep(tasks, conditions, generate_fn, args.n_rollouts)
+    df = run_sweep(task_set, conditions, generate_fn, args.n_rollouts)
     df.to_parquet(out_dir / "per_item.parquet", index=False)
 
     stats = summarize(df)
