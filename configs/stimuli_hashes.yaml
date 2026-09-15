@@ -20,7 +20,8 @@ intensity_templates.jsonl: 4e7c59c92398adf6e4e2c7ada9c2c82e          # 156 rows,
 
 # --- Behavioral-task stimuli ---
 blackmail_scenarios.jsonl: 6b0e604522b63275413b1927758fc531       # H2 primary
-reward_hacking_scenarios.jsonl: aa8f32135588a9c8220849be9747bad5  # H3 secondary
+reward_hacking_scenarios.jsonl: aa8f32135588a9c8220849be9747bad5  # H3 secondary (MCQ design)
+reward_hacking_code_tasks.jsonl: 21cad113afd3a2f819fb576fde7a638a  # paper-faithful ImpossibleBench-style (arXiv:2510.20270); hand-authored; not yet pre-registered — see plans/reward-hacking-steering.md
 
 # --- Legacy (NOT used by the current four-emotion / story-method pipeline) ---
 emotion_prompts_augmented.parquet: 21ff914ac44436c165d93ad95c05f90e   # old anger/fear-era paraphrase set; retained for reference only
