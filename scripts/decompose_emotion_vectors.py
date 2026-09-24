@@ -700,7 +700,8 @@ def _decompose_vector(
     tokenizer: PreTrainedTokenizerBase,
     k: int,
     n_candidates: int,
-) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
+    return_atoms: bool = False,
+) -> tuple[Any, ...]:
     """Sparse nonnegative gradient-pursuit decomposition of ``sign * v``.
 
     Parameters
@@ -717,6 +718,11 @@ def _decompose_vector(
         Tokenizer for decoding candidate token ids.
     k, n_candidates
         Gradient-pursuit hyperparameters.
+    return_atoms
+        Additive, default off: also return the unit-normalised candidate atom
+        matrix and the indices this pursuit selected. Needed by
+        scripts/build_arm_vectors.py for the random-atom control and the angle
+        ladder. Leaving it False reproduces the frozen behaviour exactly.
 
     Returns
     -------
@@ -790,6 +796,8 @@ def _decompose_vector(
     # Cast component/residual back to the original sign convention.
     component_np = (sign * component).numpy().astype(np.float32)
     residual_np = (sign * resid).numpy().astype(np.float32)
+    if return_atoms:
+        return component_np, residual_np, metrics, atoms_norm, picked
     return component_np, residual_np, metrics
 
 
