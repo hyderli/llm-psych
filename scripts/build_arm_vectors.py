@@ -25,6 +25,20 @@ constant and only direction varies:
                   to v and to the atoms this mixture actually used;
                   <tag>_ladstar uses theta = angle(v_jspace, v)
 
+J-weight sweep (see plans/j-space-decomposition.md, J6'). Injecting a component
+ALONE forces it to full dose, which over-drives a minority-share direction and
+destroys generation for reasons unrelated to what the direction represents. The
+sweep instead holds the residual at native strength and varies only the weight
+of the J-component on top of it:
+
+  <tag>_jw<C>     r + C * v_j, then unit-normalised. C=0 is _resid and C=1 is
+                  _full, so those two runs double as sweep anchors.
+  <tag>_jwr<C>    r + C * ||v_j|| * randatom_hat -- the SAME J-share with atoms
+                  not selected for the emotion. Required control, not optional:
+                  J-lens atoms are unembedding rows, so a J-component arm always
+                  has more output-layer leverage than a non-J arm regardless of
+                  semantics.
+
 Orthogonality holds by construction here: the pursuit re-solves exact NNLS over
 the active set each iteration, so component and residual are orthogonal and
 ||v||^2 = ||v_j||^2 + ||r||^2. The script asserts it rather than assuming it.
@@ -53,6 +67,11 @@ _repo_root = Path(__file__).resolve().parents[1]
 LADDER_DEG = [10, 20, 40, 60, 80]
 N_LADDER_DRAWS = 3
 SEED = 20260924
+
+
+def _ctag(c: float) -> str:
+    """Filename-safe spelling of a sweep weight: 2 -> '2', 0.5 -> '0p5'."""
+    return f"{c:g}".replace("-", "m").replace(".", "p")
 
 
 def _load_mod():
@@ -84,6 +103,11 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--lens-source", default="neuronpedia", choices=["neuronpedia", "logit"])
     p.add_argument("--lens-path", type=Path, default=None)
     p.add_argument("--signs", nargs="+", default=["pos", "neg"], choices=["pos", "neg"])
+    p.add_argument("--jsweep", nargs="*", type=float,
+                   default=[2.0, 3.0, 5.0, 7.0],
+                   help="C values for the J-weight sweep r + C*v_j. C=0 and C=1 are "
+                        "already emitted as _resid and _full. Pass --jsweep with no "
+                        "values to skip the sweep.")
     p.add_argument("--no-ladder", action="store_true")
     return p.parse_args()
 
@@ -195,8 +219,35 @@ def main() -> int:
         pool = [i for i in range(atoms.shape[0]) if i not in set(picked)]
         idx = rng.choice(len(pool), size=min(n_pick, len(pool)), replace=False)
         active = atoms[[pool[i] for i in idx]].T
-        emit(f"{tag}_randatom", active @ mod._nnls_active(active, uu))
+        rand_v = active @ mod._nnls_active(active, uu)
+        emit(f"{tag}_randatom", rand_v)
         report[sgn]["randatom_n"] = int(len(idx))
+
+        # --- J-weight sweep: residual at native strength, J-component scaled --
+        # emit() unit-normalises then rescales to target_norm, and the eval
+        # unit-normalises again, so dose is constant across the sweep and only
+        # the J-component's SHARE of the injected vector varies.
+        if args.jsweep:
+            comp_t = torch.from_numpy(comp)
+            resid_t = torch.from_numpy(resid)
+            rand_hat = rand_v / rand_v.norm()
+            comp_norm = comp_t.norm()
+            fj = float(m["frac_norm_squared"])
+            fr = float(m["frac_residual_squared"])
+            sweep: dict = {}
+            for c in args.jsweep:
+                ct = _ctag(c)
+                emit(f"{tag}_jw{ct}", resid_t + c * comp_t)
+                # matched J-share control: same second-term norm, different atoms
+                emit(f"{tag}_jwr{ct}", resid_t + (c * comp_norm) * rand_hat)
+                denom = fr + c * c * fj
+                sweep[ct] = {
+                    "c": c,
+                    "jshare_of_squared_norm": (c * c * fj) / denom,
+                    "angle_from_v_deg": float(np.degrees(np.arccos(
+                        np.clip((fr + c * fj) / denom ** 0.5, -1.0, 1.0)))),
+                }
+            report[sgn]["jsweep"] = sweep
 
         if not args.no_ladder:
             used = atoms[picked] if picked else atoms[:0]

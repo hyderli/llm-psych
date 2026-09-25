@@ -22,7 +22,8 @@
 #     TAG=ca_unit                        # arm filename prefix (default: ca_unit)
 #     ALPHA=1                            # saved vector norm scalar (default: 1)
 #     K=64                               # pursuit atom budget (default: 64)
-#     N_CANDIDATES=2048                  # candidate pool size (default: 2048)
+#     N_CANDIDATES=512                   # candidate pool size (default: 512,
+#                                        # matches the frozen wheel32 manifest)
 #
 # Required env::
 #
@@ -57,7 +58,7 @@ MIX="${MIX:-contempt=1 aggressiveness=1}"
 TAG="${TAG:-ca_unit}"
 ALPHA="${ALPHA:-1}"
 K="${K:-64}"
-N_CANDIDATES="${N_CANDIDATES:-2048}"
+N_CANDIDATES="${N_CANDIDATES:-512}"
 
 # LAYER must be supplied explicitly. Do not default it.
 : "${LAYER:?set LAYER to the layer your steering runs actually used}"
@@ -81,7 +82,7 @@ Options:
   --tag <str>           Arm filename prefix (default: ca_unit)
   --alpha <float>       Saved vector norm scalar (default: 1)
   --k <int>             Max pursuit atoms (default: 64)
-  --n-candidates <int>  Candidate pool size (default: 2048)
+  --n-candidates <int>  Candidate pool size (default: 512)
   -h, --help            Show this help
 EOF
     exit "${1:-0}"
