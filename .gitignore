@@ -58,3 +58,9 @@ augment.log
 
 # Documents
 *.pdf
+
+# derived scoring artefacts and HF-mirrored generations
+results/scoring_out/
+results/blackmail_arms/
+.hf_cache/
+Claude outputs/
