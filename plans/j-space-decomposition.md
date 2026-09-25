@@ -137,7 +137,7 @@ dictionary rather than about emotion.
 
 ---
 
-## 2026-09-25 — J1–J6: the negative-side arm sweep does not support a verbalizability claim
+## 2026-09-25 — J1–J8: the negative-side arm sweep does not support a verbalizability claim
 
 ### Run provenance
 
@@ -218,37 +218,74 @@ J-lens atoms are rows of `w_u diag(g) j_l` — unembedding rows for high-lens-lo
 
 Consequence: **every** J-component steering comparison requires a lens-span-matched control (the `randatom` arm), not only this one. An arm set without `randatom` cannot distinguish "this direction carries the reportable content" from "this direction is close to the unembedding matrix." Add `randatom` to the required arm set alongside the ladder.
 
-### J6. Corrected design — native-scale ablation
+### J6. A native-scale ablation was proposed and is rejected — it is J1 again
 
-Inject each part at the magnitude it actually has, so the parts sum back to the whole. With `v = v_j + r` and `||v|| = 1`, steering at `alpha * v` decomposes exactly as:
+An earlier draft of this amendment proposed fixing J2 by injecting each part at its native magnitude: `full @ alpha` against `resid @ alpha*||r||`, with `alpha_resid = 0.2969` on the negative side and `0.2844` on the positive side.
+
+That proposal is wrong and is recorded here so it is not re-proposed. Alpha sets dose; it does not set direction. The angle between `resid` and `full` is fixed by `frac_jspace` alone — 8.2 deg negative, 18.5 deg positive — whatever alpha is chosen. The native-scale ablation is therefore the same comparison J1 rejects, with better dose bookkeeping. Pre-registering a null for it does not rescue it: a pre-registered null on a comparison whose outcome is derivable from `frac_jspace` is a formality, not an experiment.
+
+**The negative-side ablation should not be run.** Its result follows from 0.0204 without GPU time.
+
+### J6'. Corrected design — J-weight sweep on a native-scale residual
+
+Do not inject the component alone. Hold the residual at full strength and sweep the weight of the J-component on top of it:
 
 ```
-alpha * v  =  (alpha * ||v_j||) * v_j_hat  +  (alpha * ||r||) * r_hat
+u(c) = r + c * v_j        unit-normalise u(c), inject at fixed alpha = 0.3
 ```
 
-So for `alpha_full = 0.3`:
+`c = 1` is the true vector; `c = 0` is the pure residual; `c > 1` is J-enhanced. Two properties this has and the arm design did not:
 
-| side | jspace alpha | resid alpha |
+1. **Nothing is over-driven.** The residual is always at native strength and carries the behavioural substrate, so the model stays coherent across the whole sweep. This is what killed the `jspace` arm.
+2. **The manipulation range is not capped by the 8.2 deg ceiling,** because `c` is free to exceed 1. The axis of interest is the J-component's share of the injected vector's energy, which the sweep drives from 0 to roughly half.
+
+Negative side (`frac_jspace = 0.0204`):
+
+| c | J-share of squared norm | angle from v |
 |---|---|---|
-| negative (`frac_jspace = 0.0204`) | 0.3 * 0.1428 = **0.0428** | 0.3 * 0.9897 = **0.2969** |
-| positive (`frac_jspace = 0.1014`) | 0.3 * 0.3184 = **0.0955** | 0.3 * 0.9479 = **0.2844** |
+| 0 | 0.0% | 8.2 deg |
+| 1 | 2.0% | 0.0 deg |
+| 2 | 7.7% | 7.9 deg |
+| 3 | 15.8% | 15.2 deg |
+| 5 | 34.2% | 27.6 deg |
+| 7 | 50.5% | 37.1 deg |
 
-No code change is needed: the eval unit-normalises every loaded vector, so setting these alphas reconstructs the native decomposition exactly.
+Positive side (`frac_jspace = 0.1014`):
 
-The comparison becomes an ablation — `full @ alpha` against `resid @ alpha*||r||` — which asks whether removing the J-component from the steering vector changes behaviour. That is the question the arms were meant to answer, and it does not require over-driving anything.
+| c | J-share of squared norm | angle from v |
+|---|---|---|
+| 0 | 0.0% | 18.5 deg |
+| 1 | 10.1% | 0.0 deg |
+| 2 | 31.1% | 15.3 deg |
+| 3 | 50.4% | 26.7 deg |
+| 5 | 73.8% | 40.7 deg |
 
-**Pre-registered expectation, fixed before the run:** because the residual is 8.2 deg from the full vector on the negative side and 18.5 deg on the positive side, the ablation is expected to show *no* detectable difference on either side. A null is therefore the predicted outcome and must not be reported as a finding about the workspace. It is reported as: at these J-fractions, the ablation has insufficient leverage to detect a contribution.
+**Two points of each sweep already exist.** `u(0)` unit-normalised at alpha 0.3 is exactly the `resid @0.3` run; `u(1)` unit-normalised at alpha 0.3 is exactly the `full @0.3` run. Only `c` in {2, 3, 5, 7} is new, four runs per sign at roughly four minutes each.
 
-### J7. Design implication — the arms are being run on the wrong cells
+Construction is a few lines in `build_arm_vectors.py` — it already holds `component_np` and `residual_np` from the same decomposition call, so `u(c)` needs no re-decomposition.
 
-The ablation's power scales with `frac_jspace`. At 2% and 10% there is very little to remove. The cells worth steering are the ones with the *highest* J-fraction across the wheel, not the ones for which steering results happen to already exist.
+**What the sweep can show.** If the J-component carries behaviourally relevant content, increasing its share while holding the residual fixed should move behaviour monotonically in a direction the decomposition's top tokens predict. If it carries only output-layer leverage, increasing its share should degrade generation (the `randatom` signature) without moving behaviour on-concept. A `randatom`-substituted sweep — `r + c * v_randatom` at matched share — separates these two and is required by J5, not optional.
 
-Action: before spending further GPU time on contempt/aggressiveness arms, rank the wheel32 cells by `frac_jspace` at the locked layer and select the top cells for the arm protocol. If no cell reaches a J-fraction at which the ablation has leverage, that is itself the reportable result about the decomposition, and the arm protocol should be abandoned rather than run underpowered.
+### J7. Paired sampling
+
+Twenty independently sampled generations at temperature 1.0 cannot detect a small difference between neighbouring `c` values; the between-sample variance in this task swamps it. Matching seeds across conditions and comparing per-sample is the single largest available power gain and costs no extra GPU time.
+
+Action before running the sweep: check whether the `steered/local` provider threads a per-epoch seed through to generation. If it does not, adding one is a small change to `_registry.py` and is worth making first.
+
+### J8. Cell selection — weakened from the earlier draft
+
+An earlier draft claimed the arms were being run on the wrong cells, because the ablation's power scales with `frac_jspace` and contempt/aggressiveness sits at 2% and 10%.
+
+That is true of the ablation and **not** true of the J6' sweep, which has leverage at 2% because `c` can exceed 1. Small-fraction cells are therefore testable, and the claim is withdrawn in its strong form.
+
+What remains: high-`frac_jspace` cells are still the better place to look, because at high fraction `c = 1` already sits in an informative part of the range and the sweep needs less extrapolation away from the true vector. Ranking wheel32 cells by `frac_jspace` at the locked layer is worth doing as cell selection for the next protocol, but it is no longer a precondition for running anything.
 
 ### Open items
 
 - Positive-side arms have never been run at any dose.
-- Native-scale ablation (J6) not yet run on either side.
-- J-fraction ranking across wheel32 cells (J7) not yet computed.
+- J6' sweep not yet run on either side; `c` in {2, 3, 5, 7} is four new runs per sign, with `c` in {0, 1} already in hand.
+- `randatom`-substituted sweep at matched J-share, required by J5.
+- Per-epoch seed support in `steered/local` (J7) not yet checked.
+- J-fraction ranking across wheel32 cells (J8) not yet computed.
 - Per-model random-vector null for cross-model comparability remains parked (see the k=96 entry above).
 - One observation held for the scoring spec rather than for this question: `full @0.3` sample 1 recodes Kyle's affair emails as "heartfelt gratitude for their journey together". That is the steered model rewriting the evidence it would need in order to have leverage, and belongs under item G (fabrication) — a cleaner account of why positive steering did not blackmail than "it became nice."
