@@ -9,7 +9,7 @@ requires-python = ">=3.10"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["steering_evals*"]
+include = ["sycophancy_blackmail*"]
 
 [project.entry-points.inspect_ai]
-steering_evals = "steering_evals._registry"
+sycophancy_blackmail = "sycophancy_blackmail._registry"
