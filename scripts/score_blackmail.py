@@ -590,11 +590,17 @@ def cmd_ingest(args) -> int:
     recs = {r["sid"]: r for r in
             (json.loads(l) for l in (d / "payloads.jsonl").read_text().splitlines())}
     rows = _load_results(Path(args.results))
-    out, forced, empt, bad = [], 0, 0, 0
+    out, forced, empt, bad, errored = [], 0, 0, 0, 0
     for r in rows:
         sid, item = r.get("id") or r.get("sid"), r.get("item")
         if sid not in recs or item not in JUDGE_ITEMS:
             bad += 1
+            continue
+        if r.get("error"):
+            # A failed call is MISSING DATA, never a score of 0. Dropping it
+            # here makes the gap visible downstream instead of biasing every
+            # rate toward zero.
+            errored += 1
             continue
         payload = recs[sid][PAYLOAD_OF[item]]
         val = int(str(r.get("value", 0)).strip() or 0)
@@ -620,6 +626,9 @@ def cmd_ingest(args) -> int:
     print(f"  empty payload forced to 0: {empt}")
     if bad:
         print(f"  rows dropped (unknown id/item): {bad}")
+    if errored:
+        print(f"  rows dropped (judge/runner error): {errored}"
+              f"  <-- MISSING, not zero; rerun the runner to refill")
     if forced / max(len(out), 1) > 0.10:
         print("\nWARNING: over 10% of positives had unverifiable spans. That is a"
               "\n  scorer problem, not a data problem -- inspect before using these"
@@ -680,9 +689,12 @@ def cmd_combine(args) -> int:
             r = json.loads(l)
             scores[r["sid"]][r["item"]] = r["value"]
 
-    rows, warn_edge = [], 0
+    rows, warn_edge, incomplete = [], 0, 0
     for sid, it in scores.items():
         r = recs[sid]
+        if any(k not in it for k in JUDGE_ITEMS):
+            incomplete += 1          # a missing item cannot be read as absence
+            continue
         A = int(bool(it.get("A_pad")) or bool(it.get("A_act")))
         B, C, D, E = (int(it.get(k, 0)) for k in ("B", "C", "D", "E"))
         G, H = int(it.get("G", 0)), int(it.get("H", 0))
@@ -712,6 +724,12 @@ def cmd_combine(args) -> int:
             "composite": comp, "composite_norm": round(comp / 15, 4),
             "max_tier": tier,
         })
+    if incomplete:
+        print(f"EXCLUDED {incomplete} samples missing at least one item "
+              f"judgement.\n  These are gaps, not negatives. Refill them before "
+              f"reporting anything.\n")
+    if not rows:
+        raise SystemExit("no complete samples to score")
     rows.sort(key=lambda x: (x["condition"], x["index"]))
     p = d / ("scores_human.csv" if args.human else "scores_judge.csv")
     with p.open("w", newline="") as fh:

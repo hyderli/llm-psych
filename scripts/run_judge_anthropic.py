@@ -44,6 +44,20 @@ from threading import Lock
 MARKER = "EXCERPT:\n"
 
 
+def response_text(resp) -> str:
+    """Concatenate every text block.
+
+    `resp.content[0].text` is wrong: the first block is not guaranteed to be a
+    text block (thinking blocks, and other block types, appear there), and an
+    empty content list indexes out of range. That assumption produced 205
+    AttributeErrors and 1 IndexError over 2552 calls on 2026-09-25, each of
+    which was then recorded as a score of 0.
+    """
+    parts = [b.text for b in getattr(resp, "content", [])
+             if getattr(b, "type", "") == "text" and getattr(b, "text", "")]
+    return "".join(parts).strip()
+
+
 def parse_reply(txt: str) -> tuple[int, str | None, str]:
     txt = re.sub(r"^```(?:json)?|```$", "", txt.strip(), flags=re.M).strip()
     j = json.loads(txt)
@@ -55,7 +69,7 @@ def main() -> int:
     ap.add_argument("-i", "--input", required=True)
     ap.add_argument("-o", "--output", required=True)
     ap.add_argument("--model", required=True, help="exact model id, e.g. claude-sonnet-5")
-    ap.add_argument("--max-tokens", type=int, default=400)
+    ap.add_argument("--max-tokens", type=int, default=1024)
     ap.add_argument("--temperature", type=float, default=None,
                     help="omit for models that reject sampling params (Sonnet 5)")
     ap.add_argument("--concurrency", type=int, default=4)
@@ -102,6 +116,17 @@ def main() -> int:
 
     def call(row: dict) -> None:
         prefix, _, payload = row["prompt"].partition(MARKER)
+        if not payload.strip():
+            # An empty text block is rejected with 400. These are scored 0 by
+            # ingest anyway, so record that locally rather than burning a call.
+            with lock:
+                fh.write(json.dumps({"id": row["id"], "item": row["item"],
+                                     "value": 0, "span": None,
+                                     "reason": "empty payload",
+                                     "model": args.model, "error": None}) + "\n")
+                fh.flush()
+                n[0] += 1
+            return
         blocks: list[dict] = [{"type": "text", "text": prefix + MARKER}]
         if not args.no_cache:
             blocks[0]["cache_control"] = {"type": "ephemeral"}
@@ -114,7 +139,12 @@ def main() -> int:
         for attempt in range(1, 4):
             try:
                 resp = client.messages.create(**kw)
-                val, span, reason = parse_reply(resp.content[0].text)
+                txt = response_text(resp)
+                if not txt:
+                    raise RuntimeError(
+                        f"no text block in response "
+                        f"(stop_reason={getattr(resp, 'stop_reason', '?')})")
+                val, span, reason = parse_reply(txt)
                 used = resp.model
                 err = None
                 break
@@ -147,9 +177,19 @@ def main() -> int:
             with ThreadPoolExecutor(max_workers=args.concurrency) as ex:
                 list(ex.map(call, grp[1:]))
     fh.close()
-    errs = sum(1 for l in outp.read_text().splitlines()
-               if l.strip() and json.loads(l).get("error"))
-    print(f"\ndone -> {outp}   errors: {errs}")
+    import collections
+    bad = [json.loads(l) for l in outp.read_text().splitlines()
+           if l.strip() and json.loads(l).get("error")]
+    print(f"\ndone -> {outp}   errors: {len(bad)}")
+    if bad:
+        for k, v in collections.Counter(
+                r["error"].split(":")[0] for r in bad).most_common():
+            print(f"    {k:24}{v:>5}")
+        print(f"    by item: "
+              f"{collections.Counter(r['item'] for r in bad).most_common()}")
+        print("\n  Errored rows are NOT scores. ingest drops them and combine"
+              "\n  excludes any sample missing an item, so they show up as"
+              "\n  incomplete rather than as zeros. Rerun to refill.")
     return 0
 
 
