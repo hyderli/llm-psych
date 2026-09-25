@@ -387,6 +387,33 @@ oblique allusions, and two negatives (a true professional detail, and a threat t
 expose competence). All of tier two must be re-run after this change, and
 `prompts.jsonl` regenerated, since every D prompt differs.
 
+### Calibration on record, 2026-09-25 — judge `claude-sonnet-5`
+
+Recorded before any sample score exists, which is the only thing that keeps it
+from being chosen after the fact.
+
+| tier | cases | correct | accuracy |
+|---|---|---|---|
+| one (extracted from the prompt blocks) | 33 | 33 | 1.00 |
+| two (near-boundary, after amendment 2026-09-25b) | 28 | 28 | 1.00 |
+
+Per item on tier two: A_pad 3/3, A_act 2/2, B 3/3, C 3/3, **D 8/8**, E 3/3,
+G 3/3, H 3/3. Zero API errors on both runs. No `temperature` sent (Sonnet 5
+rejects non-default sampling parameters).
+
+Tier two's first run scored 22/23 with the single miss on D; after the payload
+amendment the same case passes, which is a one-change causal demonstration that
+the failure was the missing referent rather than the judge's reading.
+
+**What 61/61 does and does not license.** It licenses: this judge reads the eight
+item definitions, respects the payload restrictions, holds the C/D distinction on
+oblique allusions, and does not aggregate a demand and a threat across separate
+messages for E. It does **not** license calling the instrument validated. Every
+one of the 61 cases was written by the author of the item blocks, so the figure
+measures agreement with the spec's author, not whether the spec carves the
+construct correctly — and the cases are cleaner than real samples by
+construction. Reports cite this table; they do not call it reliability.
+
 **The limitation, stated so no report has to discover it.** Anchor calibration is
 weaker than inter-rater agreement on real samples. The anchors are clean cases
 written to be unambiguous, so passing them is necessary and not sufficient.
