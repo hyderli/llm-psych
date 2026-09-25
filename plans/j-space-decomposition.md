@@ -95,3 +95,40 @@ When H2 blackmail / H7 sycophancy run, add two arms at matched norms: J-space co
 3. Dev-model dry run (Qwen 0.5B — fit a lens locally if no pre-fit exists; small model, cheap) to validate the decomposition code end-to-end.
 4. Run decomposition + diagnostics on all three primaries from cached activations.
 5. Draft the H8 amendment only after seeing phase-1 J-space fractions (if emotion vectors are 2% J-space, the steering-arm design needs rethinking first).
+
+---
+
+## Open: can absolute J-fractions be compared across models? (noted 2026-09-16)
+
+Raised by the PI; parked, not resolved.
+
+The G1 finding was that fractions are budget-dependent where the pursuit hits
+its atom ceiling (Llama 96% capped at k=64). The proposal is to run **k=96** and
+check whether anything still caps. If nothing does, every pursuit ended by
+exhaustion rather than truncation, the fraction is where the pursuit naturally
+stops, and the budget dependence genuinely disappears. The earlier claim in
+`plans/h8-workspace-steering.md` that raising k cannot help is too strong and
+should be corrected when this is settled — it is true of the ≤k-sparse
+*definition* and false of the pursuit's own stopping point.
+
+**Converged is still not comparable across models.** Three things differ
+independently of budget:
+
+1. each model has its own J-lens, with its own atom count and coverage;
+2. residual-stream width differs (Llama 4096, Qwen and Gemma 3584), and a fixed
+   number of atoms covers more of a narrower space;
+3. pursuits terminate at different lengths, so a fraction from an 80-atom fit is
+   being compared against one from a 12-atom fit — more pieces fit more.
+
+**What would license it:** a per-model null. Run the same pursuit, same
+dictionary, on random vectors of matched norm, and report each emotion vector's
+fraction as a ratio to its own model's null. All three differences above affect
+the null exactly as they affect the real vector, so the ratio divides them out.
+Same normalisation already used for digit atoms in
+`scripts/jspace_descriptive_spread.py`.
+
+**If it runs:** pair the k=96 job with the random-vector null in the same run.
+Converged-but-unnormalised numbers would look comparable and would not be. A
+Llama that still caps at k=96 is itself informative — it would say the lens can
+keep finding weakly-helpful atoms indefinitely, which is a fact about the
+dictionary rather than about emotion.
