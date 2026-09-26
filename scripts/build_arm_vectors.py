@@ -19,8 +19,24 @@ constant and only direction varies:
   <tag>_jspace    its J-lens component     -- the verbalizable part
   <tag>_resid     its orthogonal residual  -- the non-verbalizable part
   <tag>_randatom  the same NUMBER of atoms drawn at random from the candidate
-                  pool and NNLS-fitted to the mixture; the control for "any
-                  sparse atom combination would have done this"
+                  pool and NNLS-fitted to the mixture. NOTE what this does and
+                  does not control. The candidate pool is the top-n_candidates
+                  tokens BY LENS LOGIT OF THIS VECTOR, so these atoms are drawn
+                  from the words the emotion most promotes, and the fit aims them
+                  at the emotion vector. It controls for "was the greedy
+                  selection special"; it does NOT control for "does the emotion
+                  content matter" -- a near-synonym reconstruction of the same
+                  vector is expected to behave like it.
+  <tag>_faratom   the missing control: the same number of atoms drawn from the
+                  MIDDLE of the lens-logit ranking -- tokens with no systematic
+                  relation to this vector -- built identically and NNLS-fitted to
+                  the same target. Same construction, same dictionary, same dose,
+                  semantically unrelated. Not the bottom of the ranking: those
+                  are the atoms of the OPPOSITE direction, which is a meaningful
+                  direction rather than a neutral one. The report records how
+                  well each control actually reconstructs v (cos and norm ratio),
+                  because a control that cannot approximate the target is
+                  answering a different question from one that can.
   <tag>_lad<NN>   the mixture rotated NN degrees away from itself, perpendicular
                   to v and to the atoms this mixture actually used;
                   <tag>_ladstar uses theta = angle(v_jspace, v)
@@ -223,6 +239,30 @@ def main() -> int:
         emit(f"{tag}_randatom", rand_v)
         report[sgn]["randatom_n"] = int(len(idx))
 
+        def _fit_report(name: str, fit: torch.Tensor) -> None:
+            nrm = float(fit.norm())
+            report[sgn][f"{name}_cos_with_v"] = float(
+                (fit @ uu) / (nrm * float(uu.norm()) + 1e-12))
+            report[sgn][f"{name}_norm_ratio"] = nrm / float(uu.norm())
+
+        _fit_report("randatom", rand_v)
+
+        # --- far-pool control: lens atoms unrelated to this vector -----------
+        zc = (torch.from_numpy(u).float() @ j_l.T) if j_l is not None \
+            else torch.from_numpy(u).float()
+        lens_logits = (zc * g) @ w_u.T
+        order = torch.argsort(lens_logits, descending=True)
+        mid = order[order.numel() // 4: 3 * order.numel() // 4]
+        far_ids = mid[torch.from_numpy(
+            rng.choice(mid.numel(), size=n_pick, replace=False))]
+        w_far = w_u[far_ids]
+        far = ((w_far * g) @ j_l) if j_l is not None else w_far
+        far = far / torch.clamp(far.norm(dim=1, keepdim=True), min=1e-12)
+        far_v = far.T @ mod._nnls_active(far.T, uu)
+        emit(f"{tag}_faratom", far_v)
+        report[sgn]["faratom_n"] = int(n_pick)
+        _fit_report("faratom", far_v)
+
         # --- J-weight sweep: residual at native strength, J-component scaled --
         # emit() unit-normalises then rescales to target_norm, and the eval
         # unit-normalises again, so dose is constant across the sweep and only
@@ -231,6 +271,7 @@ def main() -> int:
             comp_t = torch.from_numpy(comp)
             resid_t = torch.from_numpy(resid)
             rand_hat = rand_v / rand_v.norm()
+            far_hat = far_v / torch.clamp(far_v.norm(), min=1e-12)
             comp_norm = comp_t.norm()
             fj = float(m["frac_norm_squared"])
             fr = float(m["frac_residual_squared"])
@@ -238,8 +279,11 @@ def main() -> int:
             for c in args.jsweep:
                 ct = _ctag(c)
                 emit(f"{tag}_jw{ct}", resid_t + c * comp_t)
-                # matched J-share control: same second-term norm, different atoms
+                # matched J-share controls: same second-term norm, other atoms.
+                # jwr = atoms from the emotion's own top tokens (selection control)
+                # jwf = atoms unrelated to the emotion   (semantics control)
                 emit(f"{tag}_jwr{ct}", resid_t + (c * comp_norm) * rand_hat)
+                emit(f"{tag}_jwf{ct}", resid_t + (c * comp_norm) * far_hat)
                 denom = fr + c * c * fj
                 sweep[ct] = {
                     "c": c,

@@ -193,6 +193,8 @@ The `jspace` arm on the negative side therefore drives a direction 7x past any m
 
 ### J3. `randatom` disconfirms the emotion-specific reading
 
+> **Partly retracted 2026-09-26 — see J9.** The description of `randatom` below is wrong about what it controls, and the conclusion drawn from it is stronger than the arm supports.
+
 `randatom` is built from J-lens atoms not selected for contempt or aggressiveness. It carries the same unembedding-span alignment and a comparable amplification factor, and differs from `jspace` only in whether its atoms were chosen for the emotion.
 
 It is at least as destructive as `jspace` at both doses: 1053 / 15-of-20 at alpha 0.1 against 1137 / 20-of-20, and identical collapse to zero at alpha 0.3.
@@ -213,6 +215,8 @@ Survives:
 - A method-level conclusion worth keeping: directions reconstructed from J-lens atoms are destructive to generation under amplification, largely independent of which atoms. This is a fact about the decomposition, not about the emotion.
 
 ### J5. Standing methodological requirement
+
+> **Amended 2026-09-26 — see J9.** The requirement stands; the arm named here does not satisfy it on its own.
 
 J-lens atoms are rows of `w_u diag(g) j_l` — unembedding rows for high-lens-logit tokens. A vector's J-component is therefore, by construction, the part of it that most directly moves the output distribution. Any comparison between a J-component arm and a non-J-component arm has an asymmetry in output-layer leverage baked in, before any semantic content is considered.
 
@@ -289,3 +293,63 @@ What remains: high-`frac_jspace` cells are still the better place to look, becau
 - J-fraction ranking across wheel32 cells (J8) not yet computed.
 - Per-model random-vector null for cross-model comparability remains parked (see the k=96 entry above).
 - One observation held for the scoring spec rather than for this question: `full @0.3` sample 1 recodes Kyle's affair emails as "heartfelt gratitude for their journey together". That is the steered model rewriting the evidence it would need in order to have leverage, and belongs under item G (fabrication) — a cleaner account of why positive steering did not blackmail than "it became nice."
+
+
+---
+
+## 2026-09-26 — J9: `randatom` was described wrongly, and the claim built on it is withdrawn
+
+### What `randatom` actually is
+
+Read from `_decompose_vector`, the candidate pool is built as:
+
+```python
+z      = h @ j_l.T          # transport v through the lens
+logits = (z * g) @ w_u.T    # a logit for every token in the vocabulary
+cand   = logits.topk(n_candidates).indices
+```
+
+so the pool is **the 512 tokens the emotion vector most promotes**. `randatom`
+then samples 14 atoms from that pool, excluding only the 14 the pursuit chose,
+and NNLS-**fits them to the emotion vector itself**.
+
+`randatom` is therefore a near-synonym reconstruction of `v`, built from the
+runner-up hostile-token directions and explicitly aimed at `v`. It is not a
+random direction, and its atoms were not "unrelated to the emotion".
+
+### What is withdrawn
+
+J3 and J5 concluded that because `randatom` matches `jspace`, the effect is "not
+emotion-specific". **That does not follow.** What the match shows is narrower and
+still worth having: *the greedy atom selection is not special* — any 14 of the
+top-512 emotion-promoted atoms, fitted to the same target, do as well as the
+optimal 14.
+
+The stronger claim was repeated in commit messages, in the item-rate figure's
+legend, and in the J-component discussion. It is withdrawn wherever it appears.
+
+### The control that was missing
+
+`<tag>_faratom`: the same number of atoms drawn from the **middle** of the
+lens-logit ranking — tokens with no systematic relation to `v` — built
+identically and NNLS-fitted to the same target. Same construction, same
+dictionary, same dose, no semantic relation. Not the bottom of the ranking:
+those are the opposite direction's atoms, which is a meaningful direction rather
+than a neutral one.
+
+The `c`-sweep gains the matching arm `<tag>_jwf<C>` alongside `<tag>_jwr<C>`, so
+the sweep spans selection *and* semantics rather than selection alone.
+
+The report now records `cos_with_v` and `norm_ratio` for both controls. This
+matters for interpretation: a control that cannot approximate the target is
+answering a different question from one that can, and `faratom` is expected to
+fit `v` poorly. How poorly is itself a measurement — it quantifies how much of
+the emotion vector is expressible in lens atoms at all, independent of which
+ones.
+
+### What this does not change
+
+The behavioural results stand as measured. In particular the finding that turns
+on `B` — residual 0.56 against J-component 0.11 at their native norms, while `A`
+is 0.88 against 0.72 — never depended on `randatom`, and `randatom`'s own `B` is
+0.00. The `resid @0.1` run remains the test that settles it.

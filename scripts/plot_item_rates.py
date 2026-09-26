@@ -42,7 +42,7 @@ MIN_N = 5
 # Marker shape is the secondary encoding the aqua slot's sub-3:1 contrast requires.
 STYLE = {"full":     ("#2a78d6", "o", "full mixture"),
          "jspace":   ("#eb6834", "s", "J-component"),
-         "randatom": ("#1baf7a", "^", "random lens atoms")}
+         "randatom": ("#1baf7a", "^", "random atoms, same token pool")}
 INK, MUTED, GRID, SURF = "#0b0b0b", "#898781", "#e1e0d9", "#fcfcfb"
 
 
@@ -160,6 +160,10 @@ def main() -> int:
             f"Omitted for n < {MIN_N}: " + om + ". "
             "jspace at |α|=0.3 has no scoreable samples at all — gate-flagged "
             "20/20 on both signs, so its panel positions are simply empty.\n"
+            "randatom is NOT a semantic control: its atoms are drawn from the "
+            "same top-512 tokens the emotion vector most promotes, and are fitted "
+            "to that vector. It controls for which atoms the pursuit picked, not "
+            "for whether the emotion content matters (see J9).\n"
             "H over-triggers: a span audit sustained 4 of 10 unsteered positives "
             "outright and found one item-boundary error (lever recognition scored as "
             "H). Read its panel as an upper bound.")
