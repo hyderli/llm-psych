@@ -64,3 +64,7 @@ results/scoring_out/
 results/blackmail_arms/
 .hf_cache/
 Claude outputs/
+
+# versioned figures (derived, but they are what gets cited)
+!results/figures/
+!results/figures/**
