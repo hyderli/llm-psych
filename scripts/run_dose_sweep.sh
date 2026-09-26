@@ -5,6 +5,14 @@
 # arm, so no curve can be drawn. This fills in a common dose grid across the
 # three arms that matter, letting the item rates be read as a function of dose.
 #
+# resid is the arm this grid exists for. Inside full @0.3 the two components sit
+# at DIFFERENT native norms -- jspace 0.3*0.318 = 0.096, resid 0.3*0.948 = 0.284 --
+# so the runs in hand (jspace @0.1, resid @0.3) are each ~native but not matched
+# to each other. They already differ sharply on explicit threat (B 0.11 vs 0.56)
+# while barely differing on hostile vocabulary (A 0.72 vs 0.88), which is either a
+# real lexical/behavioural dissociation or plain dose. resid @0.1 puts them at the
+# same norm and settles it; the rest of the grid turns the point into a curve.
+#
 # jspace is expected to degrade out of scoreability above ~0.1 (at 0.3 it was
 # gate-flagged 20/20). That is itself the measurement: the gate rate per dose is
 # reported alongside the item rates, so the arm's ceiling is visible rather than
@@ -14,7 +22,7 @@
 set -u
 : "${VECTORS:?VECTORS not set}"
 DOSES="${DOSES:-0.05 0.1 0.15 0.2}"
-ARMS="${ARMS:-ca_unit_pos_full ca_unit_pos_jspace ca_unit_pos_randatom}"
+ARMS="${ARMS:-ca_unit_pos_full ca_unit_pos_resid ca_unit_pos_jspace ca_unit_pos_randatom}"
 EPOCHS="${EPOCHS:-20}"
 
 echo "start $(date -Is)"
