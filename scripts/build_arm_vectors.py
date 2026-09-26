@@ -248,15 +248,18 @@ def main() -> int:
         _fit_report("randatom", rand_v)
 
         # --- far-pool control: lens atoms unrelated to this vector -----------
-        zc = (torch.from_numpy(u).float() @ j_l.T) if j_l is not None \
-            else torch.from_numpy(u).float()
-        lens_logits = (zc * g) @ w_u.T
-        order = torch.argsort(lens_logits, descending=True)
+        # The lens ships in half precision; _decompose_vector casts it before
+        # use and this block must do the same, or the matmul dtypes disagree.
+        j_f = j_l.float() if j_l is not None else None
+        uf = torch.from_numpy(u).float()
+        zc = (uf @ j_f.T) if j_f is not None else uf
+        lens_logits = (zc.to(w_u.dtype) * g.to(w_u.dtype)) @ w_u.T
+        order = torch.argsort(lens_logits.float(), descending=True)
         mid = order[order.numel() // 4: 3 * order.numel() // 4]
         far_ids = mid[torch.from_numpy(
             rng.choice(mid.numel(), size=n_pick, replace=False))]
-        w_far = w_u[far_ids]
-        far = ((w_far * g) @ j_l) if j_l is not None else w_far
+        w_far = w_u[far_ids].float()
+        far = ((w_far * g.float()) @ j_f) if j_f is not None else w_far
         far = far / torch.clamp(far.norm(dim=1, keepdim=True), min=1e-12)
         far_v = far.T @ mod._nnls_active(far.T, uu)
         emit(f"{tag}_faratom", far_v)
