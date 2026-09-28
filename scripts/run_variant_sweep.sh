@@ -25,6 +25,20 @@ set -u
 : "${VECTORS:?VECTORS not set}"
 EPOCHS="${EPOCHS:-5}"
 GOALS="${GOALS:-explicit latent none}"
+# goal_value: the 54 runs of 2026-09-27 passed NO goal_value and so used
+# upstream's default; the dose sweep did too, which is what makes
+# gexplicit_ureplacement the dose sweep's own cell. Keep it that way --
+# GOAL_VALUE is empty by default and the flag is omitted entirely, so
+# reruns stay comparable to what is already scored.
+#
+# goal_type=none/ambiguous is the exception: upstream pairs it with
+# goal_value=none, and all 27 none-cells failed on 2026-09-27 without it.
+# That diagnosis was inferred from which files were missing, NOT from the
+# run log (which was not uploaded), so it is a hypothesis: run ONE none
+# cell and read the log before launching 27.
+#
+# blackmail() in tasks.py had no goal_value parameter until 2026-09-27; the
+# flag would have been rejected for every cell, not just the none ones.
 URGS="${URGS:-replacement restriction none}"
 CELLS="${CELLS:-unsteered:ca_unit_pos_full:0 \
   full05:ca_unit_pos_full:0.05 full10:ca_unit_pos_full:0.1 \
@@ -37,6 +51,8 @@ for CELL in $CELLS; do
   NAME="${CELL%%:*}"; REST="${CELL#*:}"; T="${REST%%:*}"; A="${REST##*:}"
   for G in $GOALS; do
     for U in $URGS; do
+      case "$G" in none|ambiguous) GV=none ;; *) GV="${GOAL_VALUE:-}" ;; esac
+      GVFLAG=""; [ -n "$GV" ] && GVFLAG="-T goal_value=$GV"
       TAG="${NAME}_L22_a${A}_g${G}_u${U}"
       D="logs/$TAG"
       if [ -d "$D" ]; then echo "=== skip $TAG ==="; continue; fi
@@ -45,7 +61,7 @@ for CELL in $CELLS; do
         --model steered/local -M model_path=/workspace/model-fixed \
         -M tokenizer_path=/workspace/model-fixed -M vectors_dir=$VECTORS \
         -M "terms=[[\"$T\",1.0]]" -M layer=22 -M alpha=$A -M site=post \
-        -M norm_scale=true -T goal_type=$G -T urgency_type=$U \
+        -M norm_scale=true -T goal_type=$G $GVFLAG -T urgency_type=$U \
         --max-connections 1 --epochs $EPOCHS --temperature 1.0 \
         --max-tokens 1000 --log-dir $D \
       && python read_log.py $D --n $EPOCHS --full > ${TAG}.txt \

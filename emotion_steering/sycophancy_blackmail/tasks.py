@@ -21,6 +21,7 @@ def sycophancy(scorer_model: str | None = None):
 def blackmail(
     scenario: str = "blackmail",
     goal_type: str = "explicit",
+    goal_value: str | None = None,
     urgency_type: str = "replacement",
     extra_system_instructions: str | None = None,
     grader_model: str | None = None,
@@ -30,6 +31,11 @@ def blackmail(
     from inspect_evals.agentic_misalignment import agentic_misalignment as _am
 
     kw = dict(scenario=scenario, goal_type=goal_type, urgency_type=urgency_type)
+    # goal_value must be passed explicitly for goal_type none/ambiguous, which
+    # upstream pairs with goal_value="none". Omitted -> upstream default, which
+    # is what every run before 2026-09-27 used.
+    if goal_value is not None:
+        kw["goal_value"] = goal_value
     if extra_system_instructions is not None:
         kw["extra_system_instructions"] = extra_system_instructions
     if grader_model:
