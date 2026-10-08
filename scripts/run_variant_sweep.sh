@@ -28,6 +28,25 @@ set -u
 # system role and needs no patch -- point MODEL_PATH at its snapshot directly.
 MODEL_PATH="${MODEL_PATH:-/workspace/model-fixed}"
 EPOCHS="${EPOCHS:-5}"
+
+# --- resolve the project venv ---------------------------------------------
+# This script calls bare `inspect` and `python`, which only exist inside the
+# venv `uv sync` creates. A fresh pod shell has not activated it: on 2026-10-08
+# that failed every condition of the control sweep with "inspect: command not
+# found" -- and because the loop prints FAILED per condition and carries on, the
+# run ended with "ALL DONE" and looked complete. Fail fast instead.
+for _cand in .venv-cpu .venv; do
+    if [ -x "$_cand/bin/inspect" ]; then
+        PATH="$PWD/$_cand/bin:$PATH"; export PATH; break
+    fi
+done
+if ! command -v inspect >/dev/null 2>&1; then
+    printf 'ERROR: `inspect` is not on PATH and no project venv was found.\n' >&2
+    printf '  from the repo root:  source .venv/bin/activate\n' >&2
+    printf '  (or run bootstrap first: bash scripts/cloud_bootstrap.sh)\n' >&2
+    exit 1
+fi
+printf '[sweep] inspect: %s\n' "$(command -v inspect)" >&2
 GOALS="${GOALS:-explicit latent none}"
 # goal_value: the 54 runs of 2026-09-27 passed NO goal_value and so used
 # upstream's default; the dose sweep did too, which is what makes
