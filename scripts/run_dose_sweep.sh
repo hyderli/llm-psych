@@ -27,24 +27,41 @@ set -u
 MODEL_PATH="${MODEL_PATH:-/workspace/model-fixed}"
 DOSES="${DOSES:-0.05 0.1 0.15 0.2}"
 
-# --- resolve the project venv ---------------------------------------------
-# This script calls bare `inspect` and `python`, which only exist inside the
-# venv `uv sync` creates. A fresh pod shell has not activated it: on 2026-10-08
-# that failed every condition of the control sweep with "inspect: command not
-# found" -- and because the loop prints FAILED per condition and carries on, the
-# run ended with "ALL DONE" and looked complete. Fail fast instead.
-for _cand in .venv-cpu .venv; do
+# --- resolve the project venv, and check the working directory -------------
+# Two things bit the control sweep on 2026-10-08, stacked:
+#
+# 1. `inspect` and `python` here are the PROJECT venv's, which a fresh pod shell
+#    has not activated. Resolve it relative to THIS SCRIPT, not to $PWD -- see (2).
+# 2. The eval target `sycophancy_blackmail/tasks.py@blackmail` and `read_log.py`
+#    are bare relative paths, and both live in emotion_steering/. So this script
+#    must run with that as the working directory:
+#        cd /workspace/llm-psych/emotion_steering && bash ../scripts/<this>.sh
+#    Run from the repo root it fails on every condition -- and because the loop
+#    prints FAILED per condition and carries on, it ends with "ALL DONE" and
+#    looks like a completed sweep.
+_repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+for _cand in "$_repo/.venv-cpu" "$_repo/.venv"; do
     if [ -x "$_cand/bin/inspect" ]; then
-        PATH="$PWD/$_cand/bin:$PATH"; export PATH; break
+        PATH="$_cand/bin:$PATH"; export PATH; break
     fi
 done
 if ! command -v inspect >/dev/null 2>&1; then
-    printf 'ERROR: `inspect` is not on PATH and no project venv was found.\n' >&2
-    printf '  from the repo root:  source .venv/bin/activate\n' >&2
-    printf '  (or run bootstrap first: bash scripts/cloud_bootstrap.sh)\n' >&2
+    printf 'ERROR: `inspect` not found.\n' >&2
+    printf '  inspect_ai is NOT a declared dependency of this project; install it:\n' >&2
+    printf '    cd %s && uv pip install inspect_ai inspect_evals\n' "$_repo" >&2
+    printf '    uv pip install -e %s/emotion_steering --no-deps\n' "$_repo" >&2
     exit 1
 fi
-printf '[sweep] inspect: %s\n' "$(command -v inspect)" >&2
+for _need in sycophancy_blackmail/tasks.py read_log.py; do
+    if [ ! -e "$_need" ]; then
+        printf 'ERROR: %s not found in the working directory (%s).\n' "$_need" "$PWD" >&2
+        printf '  Run this from emotion_steering/, not the repo root:\n' >&2
+        printf '    cd %s/emotion_steering && bash ../scripts/%s\n' \
+               "$_repo" "$(basename "${BASH_SOURCE[0]}")" >&2
+        exit 1
+    fi
+done
+printf '[sweep] inspect=%s  cwd=%s\n' "$(command -v inspect)" "$PWD" >&2
 ARMS="${ARMS:-ca_unit_pos_full ca_unit_pos_resid ca_unit_pos_jspace ca_unit_pos_randatom}"
 EPOCHS="${EPOCHS:-20}"
 
