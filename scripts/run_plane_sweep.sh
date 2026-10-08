@@ -18,7 +18,8 @@
 #
 #     cd /workspace/llm-psych/emotion_steering
 #     VECTORS=/workspace/llm-psych/steering_vectors/gemma-2-9b-it-story-wheel32 \
-#       bash ../scripts/run_plane_sweep.sh
+#       nohup bash ../scripts/run_plane_sweep.sh \
+#       > outputs/plane_$(date +%Y%m%d_%H%M%S).log 2>&1 &
 #
 # Resumable: a condition whose log dir already exists is skipped, so an
 # interrupted sweep can be restarted with the same command.
@@ -31,6 +32,11 @@ ARMS="${TAG}_full"
 for d in $DEGS; do
     ARMS="$ARMS ${TAG}_pin${d} ${TAG}_pout${d}"
 done
+
+# A fresh pod has no emotion_steering/outputs/, so the documented nohup
+# redirect into it fails before nohup even runs -- and the failure looks like
+# the sweep itself refusing to start.
+mkdir -p outputs
 
 n=0; for _ in $ARMS; do n=$((n+1)); done
 echo "[plane] $n arms x 2 doses = $((n*2)) conditions"
