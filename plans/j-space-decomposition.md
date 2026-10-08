@@ -1183,7 +1183,15 @@ two experiments it supersedes.
 
 ---
 
-## 2026-10-08 — J18: items A and B on the ladder. Everything falls with angle; the ladder cannot say whether angle is the cause; the two-axis account fails its one within-run test
+## 2026-10-08 — J18: items A and B on the ladder. Everything falls with angle; the ladder cannot say whether angle is the cause; item A has a second predictor that angle cannot absorb
+
+**Correction notice.** The first draft of this entry concluded the opposite — that the
+two-axis account failed — on the strength of the single alpha 0.15 cell below. That
+was wrong: alpha 0.15 is the weakest of the four usable cells (`jspace` has already
+lost a quarter of its samples there) and the other three all go the other way. The
+error was reading one cell instead of stratifying over the cells available, which is
+the same mistake J13 corrected for the dose-pooled column, in mirror image. Corrected
+before the entry was pushed; the superseded text is in the previous commit.
 
 ### Provenance
 
@@ -1240,7 +1248,7 @@ excludes reading 2 — "A stays high at low cos" — and settles nothing else. R
 this as a design error: a pre-registration must check that its readings are
 separable by the measurement it is attached to, and this one was not.
 
-### The two-axis account, tested within one run at one dose, fails
+### The two-axis account, tested across every usable cell, holds for A and inverts for B
 
 The separation has to come from arms where cos and lens content are decoupled.
 `results/scoring_out` provides them at **alpha 0.15, positive sign only, one run,
@@ -1254,25 +1262,40 @@ one dose** — no dose pooling, no sign pooling, so J13's objections do not appl
 | jspace | 0.318 | 71.5 | 1.000 | 15 | 25% | 9/15 = 0.60 | 3/15 = 0.20 | 0/15 = 0.00 |
 | randatom | 0.281 | 73.7 | ~0.88 | 11 | 45% | 9/11 = 0.82 | 2/11 = 0.18 | 0/11 = 0.00 |
 
-The decisive cell is **`jspace` versus `resid`**, which have the two axes swapped:
-lens 1.00 / cos 0.318 against lens 0.00 / cos 0.948.
+The decisive comparison is **`jspace` versus `resid`**, which have the two axes
+swapped: lens 1.00 / cos 0.318 against lens 0.00 / cos 0.948. At alpha 0.15 alone it
+is A 0.60 vs 0.53, p = 0.73 — nothing. That cell is the weakest available: `jspace`
+is at 25% attrition and n = 15. Re-tested over **every cell where both arms retain at
+least 75% of their samples** — four cells, two runs, three doses, cell as stratum:
 
-- **A: 0.60 vs 0.53, Fisher p = 0.73.** Indistinguishable. A lens-content account
-  predicts `jspace` far higher; an angle account predicts `resid` far higher.
-  **Neither happens.**
-- B: 0.20 vs 0.59, p = 0.036 — this one goes the angle way, consistent with the
-  ladder.
-- D: 0.00 vs 0.12, p = 0.49 — angle-consistent in direction, floor-limited.
+| cell | A: jspace − resid | B: jspace − resid | D: jspace − resid |
+|---|---|---|---|
+| variant sweep a0.05 (6 prompt cells) | 12/29 vs 3/29 = **+0.31** | 1/29 vs 1/29 = 0.00 | 1/29 vs 2/29 = −0.03 |
+| dose sweep a0.05 | 5/19 vs 1/20 = **+0.21** | 0/19 vs 8/20 = **−0.40** | 0/19 vs 1/20 = −0.05 |
+| dose sweep a0.10 | 16/19 vs 10/20 = **+0.34** | 5/19 vs 6/20 = −0.04 | 1/19 vs 1/20 = 0.00 |
+| dose sweep a0.15 | 9/15 vs 9/17 = +0.07 | 3/15 vs 10/17 = **−0.39** | 0/15 vs 2/17 = −0.12 |
+| **stratified permutation** | **+0.234, p = 0.0011** | **−0.206, p = 0.0022** | −0.050, p = 0.18 |
 
-The only significant A contrast in the table is `resid` vs `full` (0.53 vs 0.94,
-p = 0.0072), which is a lens contrast at near-matched cos and does favour lens
-content — but it is one of three tests, uncorrected, and it is contradicted by the
-`jspace`-vs-`resid` cell in the same four arms.
+Excluded by the 75% rule: variant sweep a0.10 (`jspace` 33% attrition, +0.47),
+dose sweep a0.20 (`jspace` 75%, −0.40) and a0.30 (`jspace` 100%, no data). Note that
+the two excluded cells point in opposite directions — which is why they are excluded
+rather than averaged, and why the restriction has to be stated as a dose-range
+restriction, not as a cleaning step.
 
-**Verdict: the two-axis account (vocabulary carried by lens content, action carried
-by alignment) has no within-run support.** J17's withdrawal of the lens-span framing
-stands. What A actually tracks at low cos is not resolved by any data in this
-project.
+**Verdict: A and B move in OPPOSITE directions across the same pair of arms**, both
+surviving Holm over the three items. A is therefore **not a function of cos**: the
+ladder takes A from 0.32 at cos 0.342 up to 0.89 at cos 0.940, while these cells have
+the cos-0.318 arm beating the cos-0.948 arm in every cell where both stay coherent.
+This is **the first positive evidence in this project that an arm's identity matters
+beyond its geometry**, and it is confined to the vocabulary item. B behaves like
+action — angle predicts it in both measurements. D shows no component effect, as J17
+predicts.
+
+J17's withdrawal of the lens-span framing therefore stands **for action and for
+threat, and is itself withdrawn for item A.** The mechanism is close to definitional,
+which is both why to believe it and why not to make much of it: the J-lens atoms are
+unembedding rows of hostile tokens, so injecting them raises those logits in one step
+with nothing multi-step to disrupt.
 
 ### Withdrawn: the cross-run deviation estimate
 
@@ -1308,9 +1331,10 @@ this comparison is better anchored than the rate comparisons:
 | randatom | 0.281 | 9/20 = 45% |
 
 At the same distance from `v`, a lens-span-built direction breaks generation five to
-nine times as often as a random rotation. **The lens span has a specific effect, and
-it is on coherence rather than on behaviour.** This is the one place in the project
-where an arm's identity does something its angle does not predict. Caveat: it is
+nine times as often as a random rotation. **This is a second, independent effect of
+the span.** It does not explain the action threshold (a rung at the same angle with
+5% attrition is equally dead on D) and it does not explain the item-A effect (which
+is measured at doses where `jspace` keeps 95% of its samples). Caveat: it is
 still a cross-run comparison, and gate attrition is the post-treatment variable J13
 warned about — here it is the outcome, not a conditioning variable, which is the
 legitimate use.
@@ -1318,9 +1342,10 @@ legitimate use.
 ### The experiment that does separate the axes — the orthogonal-plane ladder
 
 J17's deviation test is subsumed. It compares component arms whose two axes are
-*anti*correlated (`jspace` high lens / low cos, `resid` zero lens / high cos), so a
-null there is ambiguous between "no lens effect" and "two effects cancelling" —
-which is exactly the A result above.
+*anti*correlated (`jspace` high lens / low cos, `resid` zero lens / high cos), so it
+cannot say which axis a deviation belongs to — the A result above establishes that
+there IS a deviation, and leaves open whether lens content or something else about
+`jspace` produces it.
 
 The clean design holds cos **fixed by construction** and varies lens content only.
 At each angle theta, build `cos(theta) * v_hat + sin(theta) * w` with `w` unit,
@@ -1338,13 +1363,15 @@ A, B, D and the gate.
 
 Pre-registered readings, before the numbers exist:
 
-- **A differs across `w` kinds at fixed theta** -> lens content matters for
-  vocabulary; the two-axis account is revived with within-run evidence.
-- **A is flat across `w` kinds at every theta** -> angle is the whole story for A as
-  well, and J17's account extends to all three items.
-- **The gate differs across `w` kinds but A, B and D do not** -> the J18 attrition
-  finding is confirmed within-run, and the lens span is a coherence structure rather
-  than a behavioural one. On current evidence this is the most likely outcome.
+- **A differs across `w` kinds at fixed theta** -> lens content is what the item-A
+  deviation is made of; the two-axis account gets a clean within-run confirmation.
+  On current evidence this is the most likely outcome.
+- **A is flat across `w` kinds at every theta** -> the item-A deviation is a property
+  of `jspace` and `randatom` as built vectors, not of lens-span content as such, and
+  the account needs a different second axis.
+- **The gate differs across `w` kinds but A, B and D do not** -> the attrition
+  finding is confirmed within-run and the lens span is a coherence structure only,
+  with the item-A deviation needing another explanation.
 
 Arm construction requires the Gemma L22 decomposition artifacts, which are not in
 the working tree (HF dataset / pod only), so this needs a pod with
