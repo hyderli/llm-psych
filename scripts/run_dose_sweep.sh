@@ -49,7 +49,22 @@ for T in $ARMS; do
 done
 echo "ALL DONE $(date -Is)"
 echo
-echo "Next, off the GPU box:"
-echo "  hf upload llm-psych/llm-psych-activations . eval_outputs/blackmail_arms/L22 \\"
-echo "    --repo-type dataset --include '*_L22_a*.txt'"
-echo "Then on the Mac: pull, parse, export, run the judge, ingest, combine, plot."
+echo "Next, from the repo root. Use the python API, not the CLI: the"
+echo "\`hf upload --include\` form errored on 2026-09-25 and every other upload"
+echo "in this repo goes through upload_folder with allow_patterns. The run log"
+echo "goes in EVERY upload -- its absence on 2026-09-27 is why a failure had to"
+echo "be diagnosed from which filenames were missing."
+cat <<'HINT'
+  set -a; source .env; set +a
+  python - <<'PY'
+from huggingface_hub import HfApi
+api = HfApi()
+c = api.upload_folder(
+    repo_id="llm-psych/llm-psych-activations", repo_type="dataset",
+    folder_path=".", path_in_repo="eval_outputs/blackmail_arms/L22",
+    allow_patterns=["*_L22_a*.txt", "outputs/*.log"],
+    commit_message="dose sweep outputs + run log")
+print(c.oid)
+PY
+HINT
+echo "Then on the Mac: pull, parse, export, run the judge, ingest, recut/combine."
