@@ -9,7 +9,8 @@ use their HF id directly.
 Usage:
     # model that needs a template fix (e.g. Gemma-2):
     python prepare_model.py --model google/gemma-2-9b-it \\
-        --chat-template templates/gemma_sys.jinja --out /workspace/gemma-2-9b-it-fixed
+        --revision 11c9b309abf73637e4b6f9a3fa1e92e615547819 \\
+        --chat-template gemma_sys.jinja --out /workspace/model-fixed
 
     # model that needs no fix — you usually don't need this script at all, but you can
     # still make a local copy if you want one:
@@ -36,15 +37,26 @@ def main():
     ap.add_argument("--chat-template", default=None,
                     help="path to a .jinja chat template to bake into the tokenizer")
     ap.add_argument("--dtype", default="bfloat16")
+    ap.add_argument("--revision", default=None,
+                    help="HF revision to pin. Without it this script pulls the "
+                         "branch head, so two prepared copies built weeks apart "
+                         "can differ while every downstream artefact claims the "
+                         "pinned revision in configs/model/*.yaml. Pass the "
+                         "hf_revision from that config.")
     a = ap.parse_args()
 
-    tok = AutoTokenizer.from_pretrained(a.model)
+    if a.revision is None:
+        print("WARNING: no --revision; pulling the branch head. Pass the "
+              "hf_revision from configs/model/<model>.yaml to make this copy "
+              "reproducible.")
+    tok = AutoTokenizer.from_pretrained(a.model, revision=a.revision)
     if a.chat_template:
         tok.chat_template = open(a.chat_template).read()
         print(f"applied chat template from {a.chat_template}")
 
     dtype = getattr(torch, a.dtype)
-    model = AutoModelForCausalLM.from_pretrained(a.model, torch_dtype=dtype)
+    model = AutoModelForCausalLM.from_pretrained(
+        a.model, torch_dtype=dtype, revision=a.revision)
     model.save_pretrained(a.out)
     tok.save_pretrained(a.out)
     print(f"saved prepared model to {a.out}")

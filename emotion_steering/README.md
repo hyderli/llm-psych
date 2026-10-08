@@ -86,7 +86,8 @@ Some models (e.g. Gemma-2/3) error on system prompts, which the eval uses. If yo
 one of them, make a local copy with a fixed chat template:
 ```bash
 python prepare_model.py --model $MODEL \
-  --chat-template templates/gemma_sys.jinja \
+  --revision $(awk '/^hf_revision:/{print $2}' ../configs/model/gemma2_9b.yaml) \
+  --chat-template gemma_sys.jinja \
   --out /workspace/model-fixed
 ```
 Then use `/workspace/model-fixed` as your model path in the steps below.
@@ -196,7 +197,9 @@ Download `my_results.tgz`, confirm it opens on your machine, then terminate the 
 - `find_alpha.py` — calibrate steering strength and layer for a model (Step 7).
 - `prepare_model.py` — make a local model copy with a fixed chat template (Step 6).
 - `read_log.py` — read eval results and transcripts (Step 9).
-- `templates/` — example chat templates (e.g. Gemma system-role fix).
+- `gemma_sys.jinja` — THE Gemma system-fold chat template. Every run in
+  this project used this file; it is the one the prompt hashes verify
+  against. Do not hand-write a replacement (see scripts/make_model_fixed.sh).
 - `steering_evals/` — the package: the steered model provider, the steering hooks, the
   vector loader, and the eval task wrappers. You don't edit these to change models —
   you pass the model on the command line.
