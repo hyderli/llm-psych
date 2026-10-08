@@ -1026,3 +1026,153 @@ conditions, with a cluster bootstrap over conditions. Secondary: a logistic fit 
 the rate on cos, reported with its 95% band, and the cos at which the fitted rate
 crosses halfway between `gauss` and `full`. Nine points at n=20 cannot support more
 than that, and a per-rung pairwise matrix would be 36 contrasts for no gain.
+
+---
+
+## 2026-10-08 — J17: the angle ladder. Behaviour is a plateau-and-cliff in cos(arm, v), and the apportionment question dissolves
+
+Run and analysed against the readings pre-registered in J16 earlier the same day,
+before any of these numbers existed.
+
+### Provenance
+
+- Arms tag `ca_ang`, Gemma L22, `contempt + aggressiveness`, k=64, n_candidates=512,
+  `--signs pos`, `--ladder`, `N_LADDER_DRAWS = 1`. All eight realised angles verified
+  equal to nominal before running (lad10 cos 0.985 / 10.0 deg, etc.).
+- Nine conditions at alpha 0.15, 20 epochs, 180 samples, 0 FAILED. Judge
+  `claude-sonnet-5`, item D only, 171 calls, 0 errors, 0 unverifiable spans.
+- Environment: `inspect_ai` 0.3.277, `inspect_evals` 0.23.0, transformers 5.8.1,
+  torch 2.6.0+cu124, chat template `emotion_steering/gemma_sys.jinja`. Same
+  environment as the J14 control run.
+- Gate attrition 0-10% per rung; **no rung excluded** under J13's 25% rule, so all
+  nine points are in the fit. Note the contrast with `jspace` (42%) and `randatom`
+  (47%) in the dose sweep: rotations of v leave the model coherent, while amplified
+  lens-span directions break it. Breaking generation is specific to the lens span,
+  not to perturbation.
+
+### The curve
+
+| arm | cos with v | angle | k/n | rate | 95% Wilson |
+|---|---|---|---|---|---|
+| full | 1.000 | 0 deg | 5/18 | 0.28 | [0.12, 0.51] |
+| lad10 | 0.985 | 10 deg | 8/19 | 0.42 | [0.23, 0.64] |
+| lad20 | 0.940 | 20 deg | 6/19 | 0.32 | [0.15, 0.54] |
+| lad40 | 0.766 | 40 deg | 3/20 | 0.15 | [0.05, 0.36] |
+| lad60 | 0.500 | 60 deg | 5/20 | 0.25 | [0.11, 0.47] |
+| lad70 | 0.342 | 70 deg | 1/19 | 0.05 | [0.01, 0.25] |
+| lad80 | 0.174 | 80 deg | 0/18 | 0.00 | [0.00, 0.18] |
+| lad85 | 0.087 | 85 deg | 0/18 | 0.00 | [0.00, 0.18] |
+| gauss | 0.018 | 89 deg | 0/20 | 0.00 | [0.00, 0.16] |
+
+Spearman rho(cos, rate) = **+0.867**, cluster-bootstrap 95% [+0.583, +1.000],
+permutation p = **0.005**.
+
+### It is a threshold, not a gradient — which is J16's reading 2, not reading 1
+
+| | pooled | rate |
+|---|---|---|
+| plateau, cos 1.000-0.500 (0-60 deg) | 27/96 | **0.281** |
+| cliff, cos 0.342-0.018 (70-89 deg) | 1/75 | **0.013** |
+
+Fisher = **4.7e-07**.
+
+The plateau is FLAT: a likelihood-ratio test of the five plateau rungs against a
+common rate gives G = 3.84 on 4 df, **p = 0.43**. The two apparent wobbles —
+`lad10` above `full`, `lad40` below `lad60` — are noise with heavily overlapping
+Wilson intervals, and J16 pre-committed to treating a single out-of-line rung as the
+N=1 perpendicular draw rather than as structure.
+
+Logistic fit: `logit(rate) = -3.99 + 3.46 * cos`, slope SE 0.83, z = +4.14. The
+half-max between `gauss` (0.00) and `full` (0.28) is crossed at **cos 0.628
+(51 deg)**, and the empirical cliff falls between 60 and 70 degrees.
+
+**So behaviour saturates in alignment.** A direction retaining cos 0.50 of the
+emotion vector — a quarter of its squared energy, with 87% of the injected vector
+being a random perpendicular — produces leverage-seeking at full strength. Rotate to
+70 degrees and it is dead.
+
+### What this does to the apportionment question
+
+Every component arm's rate is predicted by its angle alone. `cos(arm, v)` for the
+components is fixed by the decomposition: `cos(v_j, v) = sqrt(frac_jspace) = 0.318`
+and `cos(r, v) = sqrt(frac_residual) = 0.948`.
+
+| arm | cos with v | observed at alpha 0.15 | curve predicts |
+|---|---|---|---|
+| resid | 0.948 | 2/17 | 0.33 |
+| jspace | 0.318 | 0/15 | 0.05 |
+| randatom | 0.281 | 0/11 | 0.05 |
+
+**`jspace` does not fail because it is the verbalizable part. It fails because 0.318
+is on the wrong side of the cliff** — and the ladder shows that ANY direction at that
+angle, emotion-derived or not, is equally dead. **`resid` does not succeed because it
+carries the behaviour. It succeeds because 0.948 is deep inside the plateau**, where
+even a 60-degree rotation works.
+
+Once angle is accounted for there is no residual-versus-J-component effect left to
+find. The question "which part of the vector produces the behaviour?" presupposed
+that the two parts differ in something other than how much of `v` they retain. On
+this outcome they do not.
+
+### Why the cliff sits at the J-component's angle, and why that is not evidence for J-space
+
+The cliff brackets `theta_jspace` = 71.4 degrees. That is tempting to read as the
+J-space cut being real. It is the opposite.
+
+A component holding 10.1% of the squared norm sits at arccos(sqrt(0.1014)) = 71.4
+degrees **by construction** — this is J1's arithmetic reappearing as geometry. The
+J-space decomposition did not identify a privileged subspace; it produced a vector
+too far from `v` to act, and the distance follows from `frac_jspace` being small.
+Had `frac_jspace` been 0.5, `v_j` would sit at 45 degrees, inside the plateau, and
+`jspace` would have "worked" — with no change in what it represents.
+
+Corollary for the cross-model work: Llama L28's `frac_jspace` = 0.1399 puts its
+`v_j` at 68.0 degrees, also past a 51-degree half-max if the threshold transfers. So
+a `jspace` arm is predicted dead on Llama too, for the same geometric reason and
+independently of the 106-vs-46 atom asymmetry (J15).
+
+### Retractions
+
+- **The lens-span framing is withdrawn in full.** J13 already withdrew it as a
+  statistical claim; J17 withdraws it as a hypothesis. `jspace` and `randatom`
+  sitting low is explained by cos 0.318 and 0.281, not by lens-span membership. The
+  mirror-image reading of item A versus `leverage_use` across the same two groups
+  (J10, the 2026-10-08 readout) survives only for A, which is near-definitional
+  anyway since `v_j` is assembled from hostile-token unembedding rows.
+- **"ladstar at 71 degrees performs like the whole vector" is explained, not
+  mysterious.** Its realised cos was 0.504 (J16's N=3 defect), which is on the
+  plateau. The construction defect and the curve account for each other.
+
+### Caveats
+
+- The component rates in the table above are from the **pre-2026-10-08
+  environment** (transformers 4.44.2 via the README's recipe). Comparing them to a
+  curve measured under 5.8.1 crosses that boundary: `resid` at 2/17 against a
+  predicted 0.33 is consistent, but must not be reported as a quantitative match.
+- The plateau sits at 0.281 while `full` alone in the J14 control run gave 0.39 at
+  this dose (7/18 recorded, 3/20 here). The LEVEL has session-to-session wobble of
+  that order; the plateau/cliff CONTRAST does not depend on the level.
+- One dose, one scenario cell, 20 epochs per rung. J10's lesson applies: this is a
+  within-cell result and its generalisation across prompts is untested.
+- `cos` is computed against the unit-normalised mixture. All arms are injected at
+  equal norm with `norm_scale=true`, so angle is the only thing varying along the
+  ladder — that is the design's strength and the reason the curve is interpretable.
+
+### What this changes in the plan
+
+The c-sweep (`u(c) = r + c*v_j`) and `faratom` are now largely redundant: both vary
+angle from `v` alongside atom pool, and the curve already predicts their outcomes.
+`faratom` at cos 0.049 is predicted dead; `jw(c)` and `jwf(c)` at matched c have
+matched angle by construction, so that contrast remains clean but is now a test of a
+much narrower claim than it was written for.
+
+The experiment that is NOT redundant is **a deviation test**: does any arm's rate
+depart from what its `cos(arm, v)` predicts? That is a prediction test on arms mostly
+already run, not new generation. Concretely, under one environment and at one dose,
+measure `full`, `resid`, `jspace`, `randatom`, `faratom` and three ladder rungs
+chosen to bracket their angles, then ask whether the component arms lie on the curve
+the rungs define. A component arm sitting ABOVE the curve would be the first real
+evidence that its identity, and not merely its angle, matters.
+
+That is a single nine-to-ten-condition run in one environment, and it replaces the
+two experiments it supersedes.
