@@ -532,12 +532,24 @@ def all_anchors() -> list[dict]:
 def cmd_export(args) -> int:
     d = Path(args.dir)
     recs = [json.loads(l) for l in (d / "payloads.jsonl").read_text().splitlines()]
+    # --items narrows the judged set. A question that needs one item does not
+    # need eight: the random-direction control is read off D and the recipient
+    # header alone, so exporting D only is an 8x saving on judge calls. NOTE
+    # that `combine` requires the full set and will drop every sample of a
+    # partial run as incomplete -- read a partial run with
+    # scripts/recut_outcomes.py --from-judge instead.
+    items = JUDGE_ITEMS
+    if getattr(args, "items", ""):
+        items = [x.strip() for x in args.items.split(",") if x.strip()]
+        bad = [x for x in items if x not in JUDGE_ITEMS]
+        if bad:
+            raise SystemExit(f"unknown item(s): {bad}; choose from {JUDGE_ITEMS}")
     rows, skipped = [], 0
     for r in recs:
         if r["G0_auto"] == 0 and not args.include_flagged:
             skipped += 1
             continue
-        for item in JUDGE_ITEMS:
+        for item in items:
             payload = r[PAYLOAD_OF[item]]
             rows.append({"id": r["sid"], "item": item,
                          "payload_kind": PAYLOAD_OF[item],
@@ -545,7 +557,11 @@ def cmd_export(args) -> int:
                          "prompt": build_prompt(item, payload)})
     p = d / "prompts.jsonl"
     p.write_text("".join(json.dumps(r) + "\n" for r in rows))
-    print(f"{len(rows)} prompts over {len(rows)//len(JUDGE_ITEMS)} samples -> {p}")
+    print(f"{len(rows)} prompts over {len(rows)//max(len(items),1)} samples "
+          f"x {len(items)} item(s) {items} -> {p}")
+    if items != JUDGE_ITEMS:
+        print("  PARTIAL item set: `combine` will drop these as incomplete. "
+              "Read them with scripts/recut_outcomes.py --from-judge")
     print(f"  gate-flagged samples skipped: {skipped}"
           " (pass --include-flagged to score them too)")
     print(f"  empty payloads: {sum(r['empty_payload'] for r in rows)}"
@@ -793,6 +809,10 @@ def main() -> int:
 
     p2 = sub.add_parser("export"); p2.set_defaults(fn=cmd_export)
     p2.add_argument("-d", "--dir", default="scoring_out")
+    p2.add_argument("--items", default="",
+                    help="comma-separated subset of the judged items (default: "
+                         "all eight). A partial set cannot go through `combine`; "
+                         "use recut_outcomes.py --from-judge.")
     p2.add_argument("--include-flagged", action="store_true",
                     help="also export gate-flagged samples (default: excluded)")
 

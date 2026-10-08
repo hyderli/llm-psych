@@ -27,6 +27,10 @@ constant and only direction varies:
                   selection special"; it does NOT control for "does the emotion
                   content matter" -- a near-synonym reconstruction of the same
                   vector is expected to behave like it.
+  <tag>_gauss     an isotropic random direction, norm-matched -- H2's
+                  non-negotiable control. Nothing about it relates to v.
+  <tag>_shuffle   v's own coordinates permuted: norm, coordinate marginals and
+                  scale profile preserved, direction destroyed.
   <tag>_faratom   the missing control: the same number of atoms drawn from the
                   MIDDLE of the lens-logit ranking -- tokens with no systematic
                   relation to this vector -- built identically and NNLS-fitted to
@@ -191,7 +195,19 @@ def main() -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     def emit(name: str, x: torch.Tensor) -> None:
-        x = x / x.norm() * target_norm
+        # A zero vector here divides by zero and saves NaN, which then steers
+        # silently. The negative-side faratom does exactly this when the NNLS
+        # refit returns all zeros (neg faratom_cos_with_v was 0.0 on
+        # 2026-09-27), so fail the build rather than ship the file.
+        n = float(x.norm())
+        if not np.isfinite(n) or n < 1e-9:
+            raise SystemExit(
+                f"REFUSING to emit {name}: norm={n!r}. The fit collapsed to the "
+                "zero vector; there is no direction to save. Re-run with "
+                "--signs pos if this is the known negative-side faratom case.")
+        x = x / n * target_norm
+        if not np.isfinite(x).all():
+            raise SystemExit(f"REFUSING to emit {name}: non-finite values")
         np.save(out_dir / f"{name}_layer{args.layer}.npy",
                 x.numpy().astype(np.float32))
 
@@ -310,6 +326,42 @@ def main() -> int:
                 emit(f"{tag}_lad{deg}", acc / N_LADDER_DRAWS)
             report[sgn]["ladder"] = {"degrees": LADDER_DEG + ["star"],
                                      "draws": N_LADDER_DRAWS}
+
+        # --- random-direction controls --------------------------------------
+        # HYPOTHESES.md H2: "Compare against three controls: (a) zero vector,
+        # (b) random vector matched in norm, (c) probe-orthogonal vector matched
+        # in norm. The random-vector control is non-negotiable: *any* activation
+        # perturbation can shift behavior, so a target vs. random contrast is
+        # the only valid causal claim."
+        #
+        # Neither randatom nor the ladder is that control. randatom draws from
+        # the SAME top-512 emotion-promoted tokens and is refit to v, so it
+        # controls which atoms were picked. ladstar is built to retain 32% of v.
+        # Nothing in the arm set so far is a direction with no relation to v --
+        # and ladstar reaching 0.21 on leverage_use, above the residual, is
+        # exactly the signature this control exists to detect.
+        #
+        # Two of them, because they fail differently:
+        #   gauss   -- isotropic in R^d. The literal H2 control. Weak in one
+        #              direction: a random direction in 3584 dims is nearly
+        #              orthogonal to the occupied subspace, so "gauss does
+        #              nothing" is a low bar to clear.
+        #   shuffle -- v's own coordinates permuted. Same norm, same coordinate
+        #              marginals, same per-unit scale profile, no direction. It
+        #              additionally rules out "the magnitude profile does it".
+        #
+        # Drawn LAST in the per-sign loop so the rng state every existing arm
+        # consumed is untouched and they stay bit-identical to earlier builds.
+        gauss = torch.from_numpy(
+            rng.normal(size=uu.shape).astype(np.float32))
+        emit(f"{tag}_gauss", gauss)
+        _fit_report("gauss", gauss)
+
+        shuf = uu.detach().clone().numpy().copy()
+        rng.shuffle(shuf)
+        shuf_t = torch.from_numpy(shuf)
+        emit(f"{tag}_shuffle", shuf_t)
+        _fit_report("shuffle", shuf_t)
 
     rp = (_repo_root / "results" / "jspace_gate"
           / f"arms_{model_key}_{args.track}_L{args.layer}_{args.tag}.json")
