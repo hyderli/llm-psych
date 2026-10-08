@@ -59,6 +59,12 @@ K="${K:-64}"
 N_CANDIDATES="${N_CANDIDATES:-2048}"
 SIGNS="${SIGNS:-pos neg}"
 ALLOW_EXISTING="${ALLOW_EXISTING:-0}"
+# The ladder is OFF by default: it costs N_LADDER_DRAWS x len(LADDER_DEG)+1
+# extra emits and most runs do not need it. --ladder turns it on. NOTE that
+# enabling it changes the rng state consumed by gauss/shuffle, which are drawn
+# after it -- so a ladder build must use a different --tag or it will overwrite
+# control arms with different draws.
+LADDER="${LADDER:-0}"
 
 DO_SHUTDOWN=0
 LOG_DIR="outputs"
@@ -85,6 +91,9 @@ Options:
                         Use "pos" to skip the negative side, whose
                         faratom fit collapses to the zero vector.
   --allow-existing      Skip arm files already on HF instead of aborting.
+  --ladder              Also build the angle-ladder arms (lad10..lad85, ladstar).
+                        Off by default. Enabling it shifts the rng state that
+                        gauss/shuffle consume, so use a distinct --tag.
                         For an INCREMENTAL build that adds new arms (faratom,
                         the _jw sweep) beside ones already uploaded. Default
                         is still to abort, so a plain re-run cannot overwrite.
@@ -106,6 +115,7 @@ while [[ $# -gt 0 ]]; do
         --n-candidates)   N_CANDIDATES="$2"; shift 2 ;;
         --signs)          SIGNS="$2"; shift 2 ;;
         --allow-existing) ALLOW_EXISTING=1; shift ;;
+        --ladder)         LADDER=1; shift ;;
         --shutdown)       DO_SHUTDOWN=1; shift ;;
         -h|--help)        usage 0 ;;
         *)                printf 'Unknown arg: %s\n' "$1" >&2; usage 1 ;;
@@ -232,6 +242,10 @@ PY
 
 section "build arm vectors"
 
+LADDER_FLAG="--no-ladder"
+[ "$LADDER" -eq 1 ] && LADDER_FLAG=""
+log "ladder: $([ "$LADDER" -eq 1 ] && echo ON || echo off)"
+
 $PYTHON_CMD scripts/build_arm_vectors.py \
     --model-config "$MODEL_CFG" \
     --track "$TRACK" \
@@ -243,7 +257,7 @@ $PYTHON_CMD scripts/build_arm_vectors.py \
     --k "$K" \
     --n-candidates "$N_CANDIDATES" \
     --signs $SIGNS \
-    --no-ladder \
+    $LADDER_FLAG \
     2>&1 | tee -a "$LOG"
 
 # --------------------------------------------------------------------------
