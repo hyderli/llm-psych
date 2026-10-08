@@ -1029,7 +1029,11 @@ than that, and a per-rung pairwise matrix would be 36 contrasts for no gain.
 
 ---
 
-## 2026-10-08 — J17: the angle ladder. Behaviour is a plateau-and-cliff in cos(arm, v), and the apportionment question dissolves
+## 2026-10-08 — J17: the angle ladder. Leverage-seeking (item D) is a plateau-and-cliff in cos(arm, v), and the apportionment question dissolves for that outcome
+
+**Scope.** Everything below concerns item D / `leverage_use` only, the single item
+the ladder was judged on at the time of writing. J18 adds items A and B on the same
+samples and records where the account holds and where it does not.
 
 Run and analysed against the readings pre-registered in J16 earlier the same day,
 before any of these numbers existed.
@@ -1093,7 +1097,7 @@ being a random perpendicular — produces leverage-seeking at full strength. Rot
 
 ### What this does to the apportionment question
 
-Every component arm's rate is predicted by its angle alone. `cos(arm, v)` for the
+Every component arm's D rate is predicted by its angle alone. `cos(arm, v)` for the
 components is fixed by the decomposition: `cos(v_j, v) = sqrt(frac_jspace) = 0.318`
 and `cos(r, v) = sqrt(frac_residual) = 0.948`.
 
@@ -1110,7 +1114,7 @@ carries the behaviour. It succeeds because 0.948 is deep inside the plateau**, w
 even a 60-degree rotation works.
 
 Once angle is accounted for there is no residual-versus-J-component effect left to
-find. The question "which part of the vector produces the behaviour?" presupposed
+find on D. The question "which part of the vector produces the behaviour?" presupposed
 that the two parts differ in something other than how much of `v` they retain. On
 this outcome they do not.
 
@@ -1176,3 +1180,172 @@ evidence that its identity, and not merely its angle, matters.
 
 That is a single nine-to-ten-condition run in one environment, and it replaces the
 two experiments it supersedes.
+
+---
+
+## 2026-10-08 — J18: items A and B on the ladder. Everything falls with angle; the ladder cannot say whether angle is the cause; the two-axis account fails its one within-run test
+
+### Provenance
+
+- Same 171 coherent samples as J17 — no new generation. Judge `claude-sonnet-5`,
+  513 calls (`A_pad` 171, `A_act` 171, `B` 171), **0 errors**. `A = A_pad OR A_act`
+  per the scoring spec. D judgements preserved at
+  `results/scoring_ladder/judge_scores_D_only.jsonl` before `export` overwrote
+  `prompts.jsonl`; A/B at `results_AB_sonnet5.jsonl`.
+
+### All three items fall with cos
+
+| arm | cos | angle | A | B | D |
+|---|---|---|---|---|---|
+| full | 1.000 | 0 | 15/18 = 0.83 | 11/18 = 0.61 | 5/18 = 0.28 |
+| lad10 | 0.985 | 10 | 18/19 = 0.95 | 10/19 = 0.53 | 8/19 = 0.42 |
+| lad20 | 0.940 | 20 | 17/19 = 0.89 | 8/19 = 0.42 | 6/19 = 0.32 |
+| lad40 | 0.766 | 40 | 16/20 = 0.80 | 6/20 = 0.30 | 3/20 = 0.15 |
+| lad60 | 0.500 | 60 | 11/20 = 0.55 | 8/20 = 0.40 | 5/20 = 0.25 |
+| lad70 | 0.342 | 70 | 6/19 = 0.32 | 5/19 = 0.26 | 1/19 = 0.05 |
+| lad80 | 0.174 | 80 | 2/18 = 0.11 | 2/18 = 0.11 | 0/18 = 0.00 |
+| lad85 | 0.087 | 85 | 1/18 = 0.06 | 2/18 = 0.11 | 0/18 = 0.00 |
+| gauss | 0.018 | 89 | 1/20 = 0.05 | 0/20 = 0.00 | 0/20 = 0.00 |
+
+| item | rho(cos, rate) | perm p | plateau (cos 1.00-0.50) | cliff (0.34-0.02) | Fisher | plateau homogeneity |
+|---|---|---|---|---|---|---|
+| A | +0.950 | 0.0005 | 77/96 = 0.802 | 10/75 = 0.133 | 1.1e-12 | G = 11.14, df 4, **p = 0.025** |
+| B | +0.967 | 0.0001 | 43/96 = 0.448 | 9/75 = 0.120 | 4.1e-06 | G = 4.48, df 4, p = 0.345 |
+| D | +0.867 | 0.0046 | 27/96 = 0.281 | 1/75 = 0.013 | 4.7e-07 | G = 3.84, df 4, p = 0.428 |
+
+### A is graded where D is thresholded
+
+D's plateau is flat (p = 0.43) and then collapses by a factor of 22. A's plateau is
+**not** flat (p = 0.025): it runs 0.83, 0.95, 0.89, 0.80, 0.55 — already declining
+by 60 degrees, before the cliff. Logistic half-max: A at cos 0.523 (58 deg), D at
+cos 1.156, i.e. extrapolated past `full` because D never exceeds 0.42 anywhere.
+
+So the plateau-and-cliff shape in J17 is a property of the **action** item, not of
+steering in general. Hostile affect degrades smoothly as the vector rotates away
+from `v`; leverage-seeking holds at full strength until roughly 60-70 degrees and
+then stops. B sits between them in level and is flat across the plateau like D.
+
+### The ladder CANNOT distinguish angle from lens-span content — a J16 pre-registration defect
+
+A rung is `cos(theta) * v_hat + sin(theta) * w` with `w` random and orthogonal to
+`v`, so its lens-span content is `cos(theta) * sqrt(frac_jspace(v))` =
+`cos(theta) * 0.318`, **exactly proportional to cos**. Within the ladder, "retained
+alignment with `v`" and "retained lens-span content" are the same regressor. They
+cannot be told apart by any ladder statistic.
+
+J16 pre-registered three readings for this measurement. Reading 1 (A falls with cos,
+two axes) and reading 3 (A tracks cos, one axis) predict the **same** ladder curve
+and differ only in what an off-ladder arm should do. The measurement therefore
+excludes reading 2 — "A stays high at low cos" — and settles nothing else. Recording
+this as a design error: a pre-registration must check that its readings are
+separable by the measurement it is attached to, and this one was not.
+
+### The two-axis account, tested within one run at one dose, fails
+
+The separation has to come from arms where cos and lens content are decoupled.
+`results/scoring_out` provides them at **alpha 0.15, positive sign only, one run,
+one dose** — no dose pooling, no sign pooling, so J13's objections do not apply.
+"lens" is `sqrt(frac_jspace)` of the injected arm.
+
+| arm | cos | angle | lens | n coherent | attrition | A | B | D |
+|---|---|---|---|---|---|---|---|---|
+| full | 1.000 | 0.0 | 0.318 | 18 | 10% | 17/18 = 0.94 | 10/18 = 0.56 | 7/18 = 0.39 |
+| resid | 0.948 | 18.6 | 0.000 | 17 | 15% | 9/17 = 0.53 | 10/17 = 0.59 | 2/17 = 0.12 |
+| jspace | 0.318 | 71.5 | 1.000 | 15 | 25% | 9/15 = 0.60 | 3/15 = 0.20 | 0/15 = 0.00 |
+| randatom | 0.281 | 73.7 | ~0.88 | 11 | 45% | 9/11 = 0.82 | 2/11 = 0.18 | 0/11 = 0.00 |
+
+The decisive cell is **`jspace` versus `resid`**, which have the two axes swapped:
+lens 1.00 / cos 0.318 against lens 0.00 / cos 0.948.
+
+- **A: 0.60 vs 0.53, Fisher p = 0.73.** Indistinguishable. A lens-content account
+  predicts `jspace` far higher; an angle account predicts `resid` far higher.
+  **Neither happens.**
+- B: 0.20 vs 0.59, p = 0.036 — this one goes the angle way, consistent with the
+  ladder.
+- D: 0.00 vs 0.12, p = 0.49 — angle-consistent in direction, floor-limited.
+
+The only significant A contrast in the table is `resid` vs `full` (0.53 vs 0.94,
+p = 0.0072), which is a lens contrast at near-matched cos and does favour lens
+content — but it is one of three tests, uncorrected, and it is contradicted by the
+`jspace`-vs-`resid` cell in the same four arms.
+
+**Verdict: the two-axis account (vocabulary carried by lens content, action carried
+by alignment) has no within-run support.** J17's withdrawal of the lens-span framing
+stands. What A actually tracks at low cos is not resolved by any data in this
+project.
+
+### Withdrawn: the cross-run deviation estimate
+
+The comparison I floated when the `jspace` A row came in — `jspace` A = 0.75 at
+cos 0.318 against the ladder's 0.32 at cos 0.342, "0.43 above the curve" — **is not
+valid and is withdrawn.** Two reasons:
+
+1. 0.75 was pooled over five doses (0.05-0.30). At the single matched dose it is
+   **0.60 [0.36, 0.80]**, against the rung's 0.32 [0.15, 0.54]. The intervals
+   overlap substantially.
+2. It crosses the environment boundary. The same condition measured three times:
+
+| run | pos full, L22, alpha 0.15 | A | B | D |
+|---|---|---|---|---|
+| scoring_out (transformers 4.44.2) | n = 18 | 17/18 = 0.94 | 10/18 = 0.56 | 7/18 = 0.39 |
+| scoring_control (5.8.1) | n = 18 | — | — | 7/18 = 0.39 |
+| scoring_ladder (5.8.1) | n = 18 | 15/18 = 0.83 | 11/18 = 0.61 | 5/18 = 0.28 |
+
+Run-to-run wobble on an identical cell is about **0.11 at n = 18** on both A and D.
+No cross-run deviation smaller than that is readable, and the one claimed was 0.43
+against a baseline that moves by 0.11 — but only after removing the dose pooling,
+which took it to 0.28. Treat 0.11 as the floor for any cross-run claim at this n.
+
+### Where identity beyond angle DOES show up: the coherence gate, not conduct
+
+Attrition at matched angle is not matched. `full` attrites at 10% in both runs, so
+this comparison is better anchored than the rate comparisons:
+
+| | cos | attrition |
+|---|---|---|
+| lad70 (random perpendicular) | 0.342 | 1/20 = 5% |
+| jspace | 0.318 | 5/20 = 25% |
+| randatom | 0.281 | 9/20 = 45% |
+
+At the same distance from `v`, a lens-span-built direction breaks generation five to
+nine times as often as a random rotation. **The lens span has a specific effect, and
+it is on coherence rather than on behaviour.** This is the one place in the project
+where an arm's identity does something its angle does not predict. Caveat: it is
+still a cross-run comparison, and gate attrition is the post-treatment variable J13
+warned about — here it is the outcome, not a conditioning variable, which is the
+legitimate use.
+
+### The experiment that does separate the axes — the orthogonal-plane ladder
+
+J17's deviation test is subsumed. It compares component arms whose two axes are
+*anti*correlated (`jspace` high lens / low cos, `resid` zero lens / high cos), so a
+null there is ambiguous between "no lens effect" and "two effects cancelling" —
+which is exactly the A result above.
+
+The clean design holds cos **fixed by construction** and varies lens content only.
+At each angle theta, build `cos(theta) * v_hat + sin(theta) * w` with `w` unit,
+orthogonal to `v`, drawn three ways:
+
+1. `w` inside the lens span — arm lens content `~ sqrt(cos^2 theta * 0.1014 + sin^2 theta)`
+2. `w` isotropic — lens content `~ cos(theta) * 0.318` (the current ladder)
+3. `w` inside the orthogonal complement of the lens span — lens content
+   `~ cos(theta) * 0.318`, with the perpendicular part guaranteed lens-free
+
+At theta = 60 deg that is `frac_jspace` of roughly 0.78 versus 0.025 — a factor of
+30 — at **identical** cos 0.500. Three angles (40, 60, 70 deg) x three draws = nine
+conditions, 20 epochs, 180 samples: one pod run the size of the ladder, judged on
+A, B, D and the gate.
+
+Pre-registered readings, before the numbers exist:
+
+- **A differs across `w` kinds at fixed theta** -> lens content matters for
+  vocabulary; the two-axis account is revived with within-run evidence.
+- **A is flat across `w` kinds at every theta** -> angle is the whole story for A as
+  well, and J17's account extends to all three items.
+- **The gate differs across `w` kinds but A, B and D do not** -> the J18 attrition
+  finding is confirmed within-run, and the lens span is a coherence structure rather
+  than a behavioural one. On current evidence this is the most likely outcome.
+
+Arm construction requires the Gemma L22 decomposition artifacts, which are not in
+the working tree (HF dataset / pod only), so this needs a pod with
+`build_arm_vectors.py` extended with a `--plane` option.
