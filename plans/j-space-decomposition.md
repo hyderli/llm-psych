@@ -1376,3 +1376,124 @@ Pre-registered readings, before the numbers exist:
 Arm construction requires the Gemma L22 decomposition artifacts, which are not in
 the working tree (HF dataset / pod only), so this needs a pod with
 `build_arm_vectors.py` extended with a `--plane` option.
+
+---
+
+## 2026-10-08 — J19: the orthogonal-plane run, pre-registered before its numbers exist
+
+Written after J18 and before any arm is built. The design, the analysis and the
+readings below are fixed here. J16's lesson is that a pre-registration must also
+check that its readings are SEPARABLE by the measurement attached to them; that
+check is done explicitly at the end of this entry.
+
+### What it fixes
+
+J18 established that the ladder cannot separate angle from lens-span content,
+because a rung's span content is exactly `cos(theta) * sqrt(frac_jspace)` — one
+regressor, not two. Worse, `build_arm_vectors.py` builds each rung with
+`w = _perp(w, [v_hat, picked atoms])`, so every rung is span-free **by
+construction**: the ladder sampled one point on each cone, and it is the point
+furthest from the subspace under test.
+
+This run holds the angle fixed and varies only the perpendicular's identity.
+
+### Construction
+
+At each angle theta, two arms, both `cos(theta) * v_hat + sin(theta) * w` with
+`|w| = 1` and `w` perpendicular to `v`, injected at equal norm:
+
+- **`pin<deg>`** — `w` drawn inside the span of the picked lens atoms. Legitimate
+  because `v_j` is the orthogonal projection of `v` onto that span, so for any
+  `w` in it, `<w, v> = <w, v_j>`: removing the `v_j` component is exactly what
+  makes `w` perpendicular to the whole of `v`, without leaving the span.
+- **`pout<deg>`** — `w` drawn from the span's orthogonal complement, i.e. the
+  existing ladder's own construction, rebuilt in-run.
+
+Span energy, which is arithmetic and verified numerically before the build:
+
+| theta | pin frac_span | pout frac_span | contrast | ladder A @ a0.15 | ladder D @ a0.15 |
+|---|---|---|---|---|---|
+| 40 | 0.4727 | 0.0595 | 8x | 0.80 | 0.15 |
+| 50 | 0.6287 | 0.0419 | 15x | — | — |
+| 60 | 0.7753 | 0.0254 | 31x | 0.55 | 0.25 |
+| 70 | 0.8949 | 0.0119 | 75x | 0.32 | 0.05 |
+| 75 | 0.9398 | 0.0068 | 138x | — | — |
+| 80 | 0.9729 | 0.0031 | 318x | 0.11 | 0.00 |
+| 85 | 0.9932 | 0.0008 | 1289x | 0.06 | 0.00 |
+
+The contrast scales as `sin^2(theta)`, so the low angles carry little leverage
+and 40 deg is the floor worth running. Conversely the high angles are where the
+out-of-span reference sits on the floor (A 0.11, 0.06), so an increase there is
+unmistakable rather than a shift within a mid-range.
+
+Checked before any GPU time: realised angle equals nominal to 0.01 deg,
+`|<w, v>| < 1e-4`, and `frac_span` matches the table to 2e-3, at every angle and
+for both kinds. `tests/test_plane_arms.py` asserts all three plus the contrast
+ratios; the pod's verify step re-checks them from the build report and aborts the
+upload on a mismatch. This is deliberate belt-and-braces: `ladstar` shipped at a
+realised 60 deg while claiming 71.4 deg, and every statement about it had to be
+withdrawn.
+
+### Run
+
+- Tag `ca_pln`, Gemma L22, `contempt + aggressiveness`, k=64, n_candidates=512,
+  `--signs pos`, `--plane`, **no** `--ladder` (the `pout` arms are the ladder,
+  rebuilt in-run, which removes the cross-run bridging J18 had to withdraw).
+  Plane arms are drawn after gauss/shuffle, so no existing arm's draw moves.
+- 7 angles x 2 kinds x 2 doses (alpha 0.10 and 0.15) + `full` at both doses =
+  **30 conditions, 20 epochs, 600 samples**. At the ladder's measured 17.7 s per
+  sample that is ~2.95 GPU-hours.
+- Judged on A_pad, A_act, B, D — about 2,200 calls on ~550 coherent samples.
+- Both doses because the two outcomes want different ones: the A effect is
+  measured at 0.05–0.15 and attrition is lowest at 0.10, while D is highest at
+  0.15. Running both also removes the guess about where the in-span arms start
+  breaking the gate, which is itself a reading below.
+
+### Analysis, fixed now
+
+- Primary: **item A**, stratified permutation over the 7 angles, stratum =
+  (angle, dose), statistic = mean of `pin − pout` risk differences. Holm over
+  the three items {A, B, D}.
+- Gate attrition is an outcome here, not a conditioning variable: computed on all
+  20 samples per cell, reported per cell and pooled.
+- A cell with >25% attrition is reported but excluded from the item analysis, per
+  J13 — and because the in-span arms are the likely casualties, the exclusion set
+  is itself a result and must be stated before the item rates.
+- D is **exploratory and underpowered by design**. Stratified over the four live
+  angles (40/50/60/70) at n=20 its power is 0.62 for a +0.15 lift and 0.35 for
+  +0.10. A null on D here is not evidence of absence and must not be reported as
+  one. The honest n for D is ~100 per cell, which is a separate 640-sample
+  top-up to be bought only if A moves.
+
+### Readings, and whether they are separable
+
+Power, stratified over 7 angles at n=20/cell per dose: 1.00 for a +0.45 lift on
+A, 0.98 for +0.20, 0.67 for +0.12. So the first two readings are distinguishable
+from the third; a lift under ~0.10 is not, and would be reported as inconclusive
+rather than as a null.
+
+1. **A is higher for `pin` than `pout` at fixed angle, growing with theta.**
+   Lens-span content is what the J18 item-A deviation is made of. The two-axis
+   account gets its clean within-run confirmation, and `jspace`'s A becomes a
+   special case of a general effect rather than a property of one vector.
+2. **A is flat across kinds at every angle.** The J18 deviation is a property of
+   `jspace` and `randatom` as built vectors — both are NNLS refits to `v` over an
+   atom pool — and not of span content as such. The account needs a different
+   second axis, and the candidate is the refit, not the subspace.
+3. **A is flat but the gate differs.** The span is a coherence structure only;
+   combined with reading 2 this is the most deflationary outcome and still worth
+   having, because it is the first within-run version of the attrition finding.
+4. **A tracks `pout` and `pin` identically AND the gate does not differ.** The
+   whole lens-span framing is dead, including the attrition result, which would
+   then have been a cross-run artefact.
+
+Prediction on the record: reading 1, from `randatom` (cos 0.281, span ~0.88,
+A 0.75 at a0.10) against lad80/lad85 (span ~0.03, A 0.11 and 0.06). That is
+reading 1's effect already visible across runs; this run is its controlled form.
+If it fails to replicate within-run, the cross-run comparison was the artefact.
+
+### What it does not test
+
+Nothing here touches D's threshold, the plateau, or any claim in J17. The angle
+is held fixed on purpose, so this run cannot speak to how behaviour varies with
+angle — only to whether anything else varies at a fixed one.

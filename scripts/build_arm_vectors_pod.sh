@@ -65,6 +65,10 @@ ALLOW_EXISTING="${ALLOW_EXISTING:-0}"
 # after it -- so a ladder build must use a different --tag or it will overwrite
 # control arms with different draws.
 LADDER="${LADDER:-0}"
+# The orthogonal plane (J19) is also OFF by default. It is drawn AFTER
+# gauss/shuffle, so enabling it does NOT disturb any existing arm's draws --
+# unlike --ladder, which is drawn before them.
+PLANE="${PLANE:-0}"
 
 DO_SHUTDOWN=0
 LOG_DIR="outputs"
@@ -94,6 +98,12 @@ Options:
   --ladder              Also build the angle-ladder arms (lad10..lad85, ladstar).
                         Off by default. Enabling it shifts the rng state that
                         gauss/shuffle consume, so use a distinct --tag.
+  --plane               Also build the J19 orthogonal-plane arms: at each angle
+                        in PLANE_DEG, pin<deg> (perpendicular drawn inside the
+                        picked-atom span) and pout<deg> (perpendicular drawn
+                        from its orthogonal complement). Same cos with v, span
+                        content differing by up to 1289x. Drawn after
+                        gauss/shuffle, so it disturbs no existing arm.
                         For an INCREMENTAL build that adds new arms (faratom,
                         the _jw sweep) beside ones already uploaded. Default
                         is still to abort, so a plain re-run cannot overwrite.
@@ -116,6 +126,7 @@ while [[ $# -gt 0 ]]; do
         --signs)          SIGNS="$2"; shift 2 ;;
         --allow-existing) ALLOW_EXISTING=1; shift ;;
         --ladder)         LADDER=1; shift ;;
+        --plane)          PLANE=1; shift ;;
         --shutdown)       DO_SHUTDOWN=1; shift ;;
         -h|--help)        usage 0 ;;
         *)                printf 'Unknown arg: %s\n' "$1" >&2; usage 1 ;;
@@ -246,6 +257,10 @@ LADDER_FLAG="--no-ladder"
 [ "$LADDER" -eq 1 ] && LADDER_FLAG=""
 log "ladder: $([ "$LADDER" -eq 1 ] && echo ON || echo off)"
 
+PLANE_FLAG=""
+[ "$PLANE" -eq 1 ] && PLANE_FLAG="--plane"
+log "plane:  $([ "$PLANE" -eq 1 ] && echo ON || echo off)"
+
 $PYTHON_CMD scripts/build_arm_vectors.py \
     --model-config "$MODEL_CFG" \
     --track "$TRACK" \
@@ -258,6 +273,7 @@ $PYTHON_CMD scripts/build_arm_vectors.py \
     --n-candidates "$N_CANDIDATES" \
     --signs $SIGNS \
     $LADDER_FLAG \
+    $PLANE_FLAG \
     2>&1 | tee -a "$LOG"
 
 # --------------------------------------------------------------------------
@@ -305,6 +321,35 @@ for name in expected:
     assert np.isfinite(vector).all(), f"{path}: non-finite values"
     assert np.isclose(np.linalg.norm(vector), report["target_norm"], rtol=1e-4), f"{path}: norm mismatch"
     print(f"OK: {path}", flush=True)
+
+# The plane arms make a geometric CLAIM -- same angle, different span content --
+# and a construction that silently fails that claim is the N_LADDER_DRAWS bug
+# all over again (2026-10-08: ladstar's realised cos was 0.504, not 0.319, and
+# every statement about it had to be withdrawn). So check the claim here, before
+# a single GPU-hour is spent on arms that do not mean what their names say.
+for sign in signs:
+    plane = report.get(sign, {}).get("plane")
+    if not plane:
+        continue
+    frac_j = report[sign]["frac_jspace"]
+    print(f"\nplane check ({sign}): frac_jspace = {frac_j:.4f}, "
+          f"span dim = {report[sign]['plane_span_dim']}", flush=True)
+    for name, d in sorted(plane.items(), key=lambda kv: (kv[0][1], kv[1]["nominal_deg"])):
+        th = np.radians(d["nominal_deg"])
+        want = (np.cos(th) ** 2 * frac_j
+                + (np.sin(th) ** 2 if name.startswith("pin") else 0.0))
+        assert abs(d["realised_deg"] - d["nominal_deg"]) < 0.05, (
+            f"{name}: realised {d['realised_deg']:.3f} deg != nominal "
+            f"{d['nominal_deg']:.1f} deg -- the construction is wrong")
+        assert abs(d["frac_span"] - want) < 2e-3, (
+            f"{name}: frac_span {d['frac_span']:.4f} != predicted {want:.4f}")
+        print(f"  OK {name:>8}  {d['realised_deg']:6.2f} deg   "
+              f"frac_span {d['frac_span']:.4f} (predicted {want:.4f})", flush=True)
+    for deg in sorted({d["nominal_deg"] for d in plane.values()}):
+        i = plane.get(f"pin{deg:g}"); o = plane.get(f"pout{deg:g}")
+        if i and o:
+            print(f"  {deg:g} deg: span-energy contrast "
+                  f"{i['frac_span'] / o['frac_span']:.0f}x at identical angle", flush=True)
 
 print(json.dumps(report, indent=2), flush=True)
 print(f"All {len(expected)} arm files passed verification.", flush=True)

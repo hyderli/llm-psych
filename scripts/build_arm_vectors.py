@@ -89,6 +89,15 @@ _repo_root = Path(__file__).resolve().parents[1]
 # empty, which is where the behavioural effect actually dies (gauss, at ~89 deg,
 # gives 0.000 on leverage_use while the vector gives 0.205).
 LADDER_DEG = [10, 20, 40, 60, 70, 80, 85]
+# J19 orthogonal-plane run. At each angle, two arms are built that are the SAME
+# distance from v and differ only in which perpendicular they use: one drawn
+# inside the span of the picked lens atoms, one drawn from its orthogonal
+# complement. The span energy a rung carries is
+#     in-span   cos^2(th) * frac_jspace + sin^2(th)
+#     out-span  cos^2(th) * frac_jspace
+# so the contrast grows with the angle: 8x at 40 deg, 31x at 60, 1289x at 85.
+# Small angles have almost no leverage, which is why this list starts at 40.
+PLANE_DEG = [40, 50, 60, 70, 75, 80, 85]
 
 # ONE draw per rung, not three. With N draws the block averages N vectors at angle
 # theta and emit() then unit-normalises, so the perpendicular parts partially cancel
@@ -145,6 +154,15 @@ def _parse_args() -> argparse.Namespace:
                         "already emitted as _resid and _full. Pass --jsweep with no "
                         "values to skip the sweep.")
     p.add_argument("--no-ladder", action="store_true")
+    p.add_argument("--plane", action="store_true",
+                   help="build the J19 orthogonal-plane arms: at each angle in "
+                        "--plane-deg, one rung whose perpendicular lies INSIDE "
+                        "the picked-atom span (pin<deg>) and one whose "
+                        "perpendicular lies in its orthogonal complement "
+                        "(pout<deg>). Same cos with v, span content differing "
+                        "by up to three orders of magnitude.")
+    p.add_argument("--plane-deg", nargs="+", type=float, default=None,
+                   help="override PLANE_DEG")
     return p.parse_args()
 
 
@@ -378,6 +396,67 @@ def main() -> int:
         shuf_t = torch.from_numpy(shuf)
         emit(f"{tag}_shuffle", shuf_t)
         _fit_report("shuffle", shuf_t)
+
+        # --- J19: the orthogonal plane ---------------------------------------
+        # The ladder cannot separate angle from lens-span content, because a
+        # ladder rung's span content is exactly cos(th) * sqrt(frac_jspace) --
+        # the two are one regressor. Worse, the rung builder calls
+        # _perp(w, [v_hat, picked atoms]), so every rung is span-free BY
+        # CONSTRUCTION: the ladder sampled one point on each cone and it is the
+        # point furthest from the subspace under test.
+        #
+        # Here both arms at a given angle have the same cos with v and the same
+        # injected norm. Only the perpendicular differs. Drawn last, after
+        # gauss and shuffle, so the rng state every existing arm consumed is
+        # untouched.
+        if args.plane:
+            degs = args.plane_deg if args.plane_deg is not None else PLANE_DEG
+            used = atoms[picked] if picked else atoms[:0]
+            if used.shape[0] < 2:
+                raise SystemExit(
+                    f"--plane needs at least 2 picked atoms to have a direction "
+                    f"inside the span orthogonal to v; got {used.shape[0]}")
+            uhat = uu / uu.norm()
+            comp_p = torch.from_numpy(comp)
+            jhat = comp_p / comp_p.norm()
+            # orthonormal basis for the picked-atom span
+            q_span, _ = torch.linalg.qr(used.T.float())
+            # v_j is the orthogonal projection of v onto that span, so for any
+            # w inside it, <w, v> = <w, v_j>: killing the v_j component is
+            # exactly what makes w perpendicular to the whole of v.
+            plane = {}
+            for deg in degs:
+                th = np.radians(float(deg))
+                nm = f"{deg:g}"
+
+                g_in = torch.from_numpy(rng.normal(size=uu.shape).astype(np.float32))
+                w_in = q_span @ (q_span.T @ g_in)
+                w_in = w_in - jhat * float(jhat @ w_in)
+                w_in = w_in / w_in.norm()
+
+                g_out = torch.from_numpy(rng.normal(size=uu.shape).astype(np.float32))
+                w_out = _perp(g_out, torch.cat([uhat.unsqueeze(0), used.float()], dim=0))
+                w_out = w_out / w_out.norm()
+
+                for kind, w in (("pin", w_in), ("pout", w_out)):
+                    dot = abs(float(w @ uhat))
+                    if dot > 1e-4:
+                        raise SystemExit(
+                            f"REFUSING {tag}_{kind}{nm}: perpendicular is not "
+                            f"perpendicular, |<w,v>| = {dot:.2e}")
+                    arm = float(np.cos(th)) * uhat + float(np.sin(th)) * w
+                    emit(f"{tag}_{kind}{nm}", arm)
+                    _fit_report(f"{kind}{nm}", arm)
+                    a_hat = arm / arm.norm()
+                    frac_span = float((q_span.T @ a_hat).pow(2).sum())
+                    plane[f"{kind}{nm}"] = {
+                        "nominal_deg": float(deg),
+                        "realised_deg": float(np.degrees(np.arccos(np.clip(
+                            float(a_hat @ uhat), -1.0, 1.0)))),
+                        "frac_span": frac_span,
+                    }
+            report[sgn]["plane"] = plane
+            report[sgn]["plane_span_dim"] = int(q_span.shape[1])
 
     rp = (_repo_root / "results" / "jspace_gate"
           / f"arms_{model_key}_{args.track}_L{args.layer}_{args.tag}.json")
