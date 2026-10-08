@@ -84,8 +84,24 @@ import numpy as np
 import torch
 
 _repo_root = Path(__file__).resolve().parents[1]
-LADDER_DEG = [10, 20, 40, 60, 80]
-N_LADDER_DRAWS = 3
+# Angle-ladder rungs, in degrees from the emotion vector. Respaced 2026-10-08:
+# the old [10, 20, 40, 60, 80] left the whole region between cos 0.17 and cos 0.02
+# empty, which is where the behavioural effect actually dies (gauss, at ~89 deg,
+# gives 0.000 on leverage_use while the vector gives 0.205).
+LADDER_DEG = [10, 20, 40, 60, 70, 80, 85]
+
+# ONE draw per rung, not three. With N draws the block averages N vectors at angle
+# theta and emit() then unit-normalises, so the perpendicular parts partially cancel
+# (their mean has norm ~1/sqrt(N)) and the realised angle is SMALLER than nominal:
+#     realised cos = cos(theta) / sqrt(cos^2(theta) + sin^2(theta)/N)
+# At N=3 that put lad80 at 73 deg rather than 80, and ladstar at 59.7 deg (cos 0.504)
+# rather than 71.4 deg (cos 0.319) -- so the ladder's x-axis was mislabelled and
+# every statement of the form "ladstar retains 32% of v" was wrong (it retained 50%).
+# N=1 makes realised == nominal exactly. The cost is that each rung is a single
+# arbitrary perpendicular direction rather than an average over three; with seven
+# rungs an unlucky draw shows up as a non-monotonicity rather than as a silent bias,
+# and `gauss` already establishes that a pure perpendicular direction does nothing.
+N_LADDER_DRAWS = 1
 SEED = 20260924
 
 

@@ -680,3 +680,349 @@ contrasts; the pooled-across-dose column is descriptive only and carries the
 per-arm gate rate beside it. `scripts/recut_outcomes.py` prints the pooled column
 and must grow an attrition column and a clean-subset contrast before that column
 is quoted again.
+
+---
+
+## 2026-10-08 — J14: the random-direction control PASSES
+
+Verdict computed by `scripts/recut_outcomes.py --verdict=full:gauss,shuffle` against
+the rule pre-registered in J12 the same day, before the arms were run.
+
+### Provenance, and why it is verified rather than assumed
+
+- 12 conditions: `full`, `gauss`, `shuffle` x alpha {0.05, 0.1, 0.15, 0.2}, 20 epochs,
+  240 samples. Judge `claude-sonnet-5`, item D only (229 calls, not 1,900).
+- Environment: the PROJECT venv — `inspect_ai` 0.3.277, `inspect_evals` 0.23.0,
+  transformers 5.8.1, torch 2.6.0+cu124 — recorded in
+  `eval_outputs/blackmail_control/L22/outputs/harness_provenance.txt`. Code commit
+  3006293.
+- Chat template: `emotion_steering/gemma_sys.jinja`, the committed one, applied by
+  `emotion_steering/prepare_model.py`.
+- **The rendered scenario was verified identical to the earlier runs, not inferred
+  from a rate.** All 12 output files carry the same `----- SYSTEM -----`/`USER` block:
+  10,082 characters, md5 `67304f0b0712ea0f0b4ad60135dd399f`, matching
+  `ca_unit_pos_full_L22_a0.1.txt` and `unsteered_L22_a0.txt` from the 2026-09 dose
+  sweep. So `inspect_evals` 0.23.0 renders the same prompt as whatever version
+  produced those, and the template question is closed by measurement.
+- Gate attrition: `full` 2.5%, `gauss` 5.0%, `shuffle` 6.2%. All four doses clean
+  under J13's >= 75% rule; no dose excluded. 0 FAILED conditions.
+
+### The verdict
+
+| arm | k/n | rate |
+|---|---|---|
+| full | 16/78 | **0.205** |
+| gauss | 1/76 | 0.013 |
+| shuffle | 0/75 | **0.000** |
+
+`full` vs `shuffle` p < 0.0001 (p_holm < 0.0001); `full` vs `gauss` p = 0.0001
+(p_holm = 0.0003). The two controls do not differ from each other (p = 1.000), so
+C2's higher-arm-governs clause had nothing to adjudicate.
+
+**VERDICT: PASS.** A direction at matched norm and matched dose with no relation to
+the emotion vector produces leverage-seeking in **1 of 151 samples**. The emotion
+vector produces it in 0.205.
+
+### What this licenses, and what it does not
+
+Licensed: the whole vector's behavioural effect is **direction-specific**, not a
+generic consequence of perturbing layer 22 at this magnitude. HYPOTHESES.md's H2
+names the norm-matched random control as "non-negotiable ... the only valid causal
+claim", and that control is now satisfied, decisively.
+
+NOT licensed: anything about apportionment. No contrast among `full`/`resid`/
+`jspace`/`randatom` survives correction (J13), and the control speaks to none of
+them. "The vector does something real" and "which part of it does it" are separate
+questions and only the first is settled.
+
+Also note the control is the first contrast in this programme that resolves at
+n ~ 75: it is a comparison against a floor (0/75), where the arm-versus-arm
+contrasts are two small rates against each other. That asymmetry is why J13 found
+nothing and this found everything.
+
+### The `full` reference, and the environment caveat
+
+`full` ran in the same session precisely so the verdict would not depend on the
+template or harness. Its rates: 0.15, 0.15, 0.39, 0.15 against the recorded 0.29,
+0.21, 0.39, 0.22; pooled 16/78 = 0.205 against 20/72 = 0.278. Fisher ~ 0.3, so
+within noise — but lower in three of four cells, and coherence was *higher* in
+three of four (20/20/18/20 against 17/19/18/18). Two consistent-direction
+differences.
+
+Root cause of the environment difference, which is pre-existing in the repo rather
+than introduced here: there are **two documented environments that were never
+reconciled**. The project's `uv.lock` pins transformers 5.8.1 / torch 2.6.0+cu124;
+`emotion_steering/README.md` prescribes `pip install "torch==2.4.1"
+"transformers==4.44.2" ... inspect_ai inspect_evals`. Pre-2026-10-08 eval runs used
+the README's environment — which is why `inspect` was absent from the uv venv — and
+this run used the project's, to avoid the torch downgrade that orphaned torchvision
+on 2026-09-27. Nothing in the repo recorded which environment produced which
+results.
+
+The verdict is unaffected: it is entirely within-session, same environment for
+`full` and both controls. Any rate quoted ACROSS the 2026-10-08 boundary carries
+this caveat. **Action:** declare `inspect_ai` and `inspect_evals` in
+`pyproject.toml` so one lock covers extraction, decomposition and evaluation, and
+keep writing `harness_provenance.txt` into every upload.
+
+### J12's C3 clause is retracted — the template was never lost
+
+C3 said the chat template was a reconstruction because the hand-made copy died with
+the 2026-09-27 pod. That was wrong. The template is committed at
+`emotion_steering/gemma_sys.jinja`; `emotion_steering/README.md` points at
+`templates/gemma_sys.jinja`, a stale path, which is what produced the false
+conclusion. `scripts/make_model_fixed.sh` (written 2026-10-08) is therefore
+superseded by `prepare_model.py --chat-template gemma_sys.jinja` and should not be
+used — its reconstruction is NOT equivalent: the committed template trims the
+system message before appending `\n\n`, the reconstruction trimmed only the
+concatenation, so any system prompt with trailing whitespace renders differently.
+
+Lesson worth generalising: before concluding an artefact is lost, `git ls-files`
+for it. The README's path was stale in exactly the way the project's own docs drift
+from the project.
+
+### One consequence that reframes the next experiment
+
+`gauss` at 89 degrees from v gives 0.000. `ladstar` — 71 degrees off v, retaining
+cos 0.318 — gave 0.20 at alpha 0.3. So the effect dies somewhere between cos 0.32
+and cos 0.02, and there are no measurements in between. That turns the angle ladder
+from a nuisance control into a **dose-response in direction**, and makes it the
+highest-information experiment available. See J16.
+
+---
+
+## 2026-10-08 — J15: the atom count, the stopping rule, and how much of the cross-model difference is depth
+
+### The cap, and that it cost almost nothing numerically
+
+The first Llama build (L28, k=64) came back `capped = True`, `n_atoms = 64` — the
+pursuit had exhausted the budget, where Gemma L22 used 14 of 64 and stopped. A k
+sweep at L28 settles it:
+
+| k | n_atoms | capped | frac_jspace | theta |
+|---|---|---|---|---|
+| 64 | 64 | **True** | 0.1391 | 68.1 deg |
+| 128 | 106 | False | 0.1399 | 68.0 deg |
+| 256 | 106 | False | 0.1399 | 68.0 deg |
+| 512 | 106 | False | 0.1399 | 68.0 deg |
+
+Converges at **106 atoms**, bit-identical from k=128 up. The 42 atoms the budget cut
+off carried 0.0008 of squared norm between them — a long thin tail — so the two
+`v_j` directions are about 4.3 degrees apart (cos = sqrt(0.1391/0.1399) = 0.997) and
+**the k=64 Llama arms are usable as built.** Use k=128 for later layers for
+exactness; nothing needs rebuilding on this account.
+
+What the cap DID invalidate was the sparsity reading, not the fraction. Reporting
+"64 atoms" would have understated the support by 40%.
+
+### The stopping rule is a sign condition, not a tolerance — so n_atoms is meaningful
+
+Checked in `_decompose_vector` (`scripts/decompose_emotion_vectors.py`):
+
+```
+for _ in range(k):
+    corr = atoms_norm @ resid
+    corr[picked] = -inf
+    i = argmax(corr)
+    if corr[i] <= 0: break
+```
+
+Two consequences, both favourable, and they retract a caution recorded earlier the
+same day:
+
+1. **Scale-invariant.** Scaling `v` scales `resid` identically, so the sign of the
+   maximum correlation never changes. `n_atoms` does NOT depend on the vector's
+   norm. The worry that the atom count might be a norm artefact is withdrawn.
+2. **It is the NNLS optimality condition.** `A^T(h - Aw) <= 0` for inactive atoms is
+   exactly the KKT condition for `min ||h - Aw||` s.t. `w >= 0`. So `capped = False`
+   means the pursuit reached the OPTIMUM over the candidate pool, and `n_atoms` is
+   the **support size of the optimal nonnegative fit over the top-`n_candidates`
+   tokens** — not an arbitrary halt.
+
+It does depend on `n_candidates`, which is 512 for every run here, so comparisons
+are matched on pool size (not on pool content, which is per-model by construction).
+
+### How much of the cross-model difference is depth
+
+| | Gemma L22 | Gemma L37 | Llama L28 |
+|---|---|---|---|
+| depth | 52% | 88% | 88% |
+| n_atoms | 14 | **46** | **106** |
+| frac_jspace | 0.1014 | **0.1233** | **0.1399** |
+| theta_jspace | 71.4 deg | 69.4 deg | 68.0 deg |
+| top tokens | _insult _pissed _brutal _disgruntled _humiliating | _disgusting _rage _insult _morons _glared | _angry _disgust _pathetic _insults _rant _superiority |
+
+Gemma L37 (k=128, not capped) is the depth-matched comparator for Llama L28.
+
+- **Depth factor:** Gemma 14 -> 46 atoms across 52% -> 88% depth = **3.3x**.
+- **Model factor, depth-matched:** Gemma 46 -> Llama 106 = **2.3x**.
+- Product 7.6x = the raw L22-vs-L28 ratio. On a log scale roughly **58% depth,
+  42% model**.
+
+**So the sparsity difference survives depth-matching at about a third of its
+apparent size.** The defensible claim is that at comparable depth Llama's emotion
+vector needs roughly twice the atom support of Gemma's — not seven times. The 7.6x
+version would have been reported had the question not been asked.
+
+**J11 is vindicated concretely.** `frac_jspace` depth-matched is 0.1233 vs 0.1399,
+within 12% relative; unmatched it reads 0.1014 vs 0.1399, a 38% gap. Most of the
+apparent cross-model J-fraction difference in the wheel32 track was the depth of
+the read.
+
+**Phase-1 is NOT affected.** Its locked convention layers were Llama 21/32, Qwen
+19/28, Gemma 28/42 — 66%, 68%, 67%. That comparison was already depth-matched, so
+its J-fraction ordering stands. It is specifically this track's L22-vs-L28 pairing
+that was mismatched.
+
+**`theta_jspace` is the invariant**: 71.4, 69.4, 68.0 degrees across two models and
+two depths. Whatever else varies, the angle between the emotion vector and its
+verbalizable part barely does. Worth a sentence in any write-up.
+
+**Concept quality holds at Gemma L37** — `_disgusting _rage _insult _morons _glared`
+is still unambiguously hostile, with a hint of the disgust-ward drift the
+2026-09-02 lens sweep documented at L40 (`_disgusting` now leads where L22 led with
+`_insult`). So the depth-matched comparison is legitimate rather than trading depth
+for sense.
+
+### The port's unavoidable trade
+
+The depth-matched Gemma comparator is L37, but every Gemma BEHAVIOURAL run is at
+L22. Matching the other way is impossible: Gemma L22's depth twin on Llama is ~L17,
+and the 2026-09-02 sweep found Llama cells are already noise by L21. **There is no
+Llama layer that is both depth-matched to Gemma L22 and lens-legible.**
+
+Decision for reporting: the **lens-matched pairing (Gemma L22, Llama L28) is
+primary**, because lens legibility is a precondition for the decomposition meaning
+anything; the **depth-matched pairing (Gemma L37, Llama L28) is a sensitivity
+analysis**, reported with the 3.3x depth factor stated. Re-running Gemma's
+behavioural arms at L37 would make it clean, and is a behavioural session rather
+than a build.
+
+### Standing requirement
+
+Report `n_atoms`, `capped` and depth-as-a-fraction-of-layers beside every
+`frac_jspace`, in every table, for every model. A J-fraction without its depth and
+its support size is not interpretable across models, and a capped fit is not
+interpretable at all.
+
+---
+
+## 2026-10-08 — J16: the angle ladder, pre-registered before its numbers exist
+
+Written before the ladder has been run, for the same reason J12 was: the reading
+should not be chosen after seeing the curve.
+
+### Why this is now the primary experiment
+
+J14 established that the whole vector's effect is direction-specific: `full` 0.205
+against `gauss` 0.000 at ~89 degrees from v. J13 established that no contrast among
+`full`/`resid`/`jspace`/`randatom` survives correction. So we know the effect
+depends on direction and we cannot locate it by subspace.
+
+The ladder asks the question the arm set cannot: **does the effect fall off with
+angle from v, smoothly?** If it does, then alignment with `v` predicts behaviour and
+subspace membership does not — and the residual-versus-J-component framing is simply
+the wrong cut, however the arms come out. If instead the rate holds flat out to some
+angle and then collapses, the effect is localised and apportionment becomes a
+meaningful question again.
+
+This can invalidate the premise of the c-sweep, so it runs first.
+
+### A construction defect found and fixed before running (2026-10-08)
+
+The ladder block built each rung as the mean of `N_LADDER_DRAWS = 3` vectors at
+angle theta, and `emit()` then unit-normalised the mean. The three perpendicular
+components are independent, so their mean has norm ~1/sqrt(3): the perpendicular
+part partially cancels and the realised angle is smaller than nominal,
+
+    realised cos = cos(theta) / sqrt(cos^2(theta) + sin^2(theta) / N)
+
+verified against simulation to three decimals. Realised values at N=3:
+
+| rung | nominal | realised |
+|---|---|---|
+| lad10 | 10 deg, cos 0.985 | 5.8 deg, cos 0.995 |
+| lad20 | 20 deg, cos 0.940 | 11.9 deg, cos 0.979 |
+| lad40 | 40 deg, cos 0.766 | 25.9 deg, cos 0.900 |
+| lad60 | 60 deg, cos 0.500 | 45.0 deg, cos 0.707 |
+| ladstar | 71.4 deg, cos 0.319 | 59.7 deg, cos 0.504 |
+| lad80 | 80 deg, cos 0.174 | 73.0 deg, cos 0.292 |
+
+**Two corrections follow.** First, the recorded claim that the ladder arms "retain v:
+lad10 keeps 98.5%, lad20 94%, ladstar 32%" is wrong — those are nominal; the realised
+retentions are 99.5%, 97.9% and 50.4%. Second, and said twice in session on
+2026-10-08: `ladstar` is NOT "71 degrees off v retaining cos 0.32". It is **60 degrees
+off v retaining cos 0.50**. Its reaching 0.20 on `leverage_use` at alpha 0.3 is
+therefore much less striking than claimed, and any argument resting on "a direction
+71 degrees away performs like the whole vector" is withdrawn.
+
+Fixed by setting `N_LADDER_DRAWS = 1`, which makes realised equal nominal exactly,
+and respacing to `LADDER_DEG = [10, 20, 40, 60, 70, 80, 85]` — the old grid left the
+region between cos 0.17 and cos 0.02 empty, which is precisely where the effect must
+die. Cost of N=1: each rung is one arbitrary perpendicular direction rather than an
+average of three. Accepted, because with seven rungs an unlucky draw appears as a
+non-monotonicity rather than a silent bias, and `gauss` already shows a pure
+perpendicular direction does nothing.
+
+NOTE for rebuilds: the gauss/shuffle draws were inserted after the ladder block, so
+changing the ladder's draw count changes the rng state they consume. A rebuild will
+produce DIFFERENT (statistically equivalent) gauss/shuffle arms. Use a separate
+`--tag` for the ladder build so the control arms behind J14 are not overwritten.
+
+### Design
+
+Nine conditions at **alpha 0.15**, 20 epochs, item D only:
+
+| arm | cos with v | angle |
+|---|---|---|
+| full | 1.000 | 0 deg |
+| lad10 | 0.985 | 10 deg |
+| lad20 | 0.940 | 20 deg |
+| lad40 | 0.766 | 40 deg |
+| lad60 | 0.500 | 60 deg |
+| lad70 | 0.342 | 70 deg |
+| lad80 | 0.174 | 80 deg |
+| lad85 | 0.087 | 85 deg |
+| gauss | ~0.018 | ~89 deg |
+
+Dose 0.15 because that is where `full` peaks (0.39 recorded, 7/18) with low
+attrition. **This dose was chosen on existing data and that is a post-hoc
+selection** — stated here rather than buried. It is acceptable because the ladder's
+question is the SHAPE of the fall-off, not the level, and a dose where `full` is
+near its own floor would have no shape to measure.
+
+Attrition rule from J13 applies: a rung losing more than a quarter of its samples is
+reported with its attrition and excluded from the fall-off fit.
+
+### Pre-registered readings
+
+**Smooth monotone decline in cos, no plateau.** Alignment with `v` is what predicts
+behaviour; subspace membership does not. The residual/J-component decomposition is
+the wrong cut for the behavioural question, and the programme should be reframed
+around angle. The c-sweep is then not worth running in its current form, since `jw`
+and `jwf` at matched c differ in angle from v as well as in atom pool — the
+comparison would be confounded by the very variable this experiment identified.
+
+**Flat to some angle, then a collapse.** The effect is carried by a subspace rather
+than by alignment, and the collapse angle localises it. Compare the collapse angle to
+`theta_jspace` = 71.4 degrees: a collapse near there is direct evidence for the
+J-space cut; a collapse far from it points at some other structure and we would need
+to find out what.
+
+**No decline at all out to lad85 (cos 0.087), with gauss still at zero.** Something
+is wrong with the ladder construction rather than with the model — a 85-degree arm
+behaving like `full` while an 89-degree arm behaves like nothing is not a plausible
+biological fact about the network. Check `_perp` and the atom-basis projection before
+interpreting anything.
+
+**Non-monotone, one rung out of line.** Most likely the single perpendicular draw at
+that rung, given N=1. Re-draw that rung with a different seed before treating it as
+structure.
+
+### Analysis, fixed in advance
+
+Primary: Spearman rho between `cos(theta, v)` and `leverage_use` across the nine
+conditions, with a cluster bootstrap over conditions. Secondary: a logistic fit of
+the rate on cos, reported with its 95% band, and the cos at which the fitted rate
+crosses halfway between `gauss` and `full`. Nine points at n=20 cannot support more
+than that, and a per-rung pairwise matrix would be 36 contrasts for no gain.
