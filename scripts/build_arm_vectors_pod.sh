@@ -57,6 +57,8 @@ TAG="${TAG:-ca_unit}"
 ALPHA="${ALPHA:-1}"
 K="${K:-64}"
 N_CANDIDATES="${N_CANDIDATES:-2048}"
+SIGNS="${SIGNS:-pos neg}"
+ALLOW_EXISTING="${ALLOW_EXISTING:-0}"
 
 DO_SHUTDOWN=0
 LOG_DIR="outputs"
@@ -79,6 +81,13 @@ Options:
   --alpha <float>       Saved vector norm scalar (default: 1)
   --k <int>             Max pursuit atoms (default: 64)
   --n-candidates <int>  Candidate pool size (default: 2048)
+  --signs "pos neg"     Which signs to decompose (default: both).
+                        Use "pos" to skip the negative side, whose
+                        faratom fit collapses to the zero vector.
+  --allow-existing      Skip arm files already on HF instead of aborting.
+                        For an INCREMENTAL build that adds new arms (faratom,
+                        the _jw sweep) beside ones already uploaded. Default
+                        is still to abort, so a plain re-run cannot overwrite.
   --shutdown            Stop the RunPod pod on exit (even on failure)
   -h, --help            Show this help
 EOF
@@ -95,6 +104,8 @@ while [[ $# -gt 0 ]]; do
         --alpha)          ALPHA="$2"; shift 2 ;;
         --k)              K="$2"; shift 2 ;;
         --n-candidates)   N_CANDIDATES="$2"; shift 2 ;;
+        --signs)          SIGNS="$2"; shift 2 ;;
+        --allow-existing) ALLOW_EXISTING=1; shift ;;
         --shutdown)       DO_SHUTDOWN=1; shift ;;
         -h|--help)        usage 0 ;;
         *)                printf 'Unknown arg: %s\n' "$1" >&2; usage 1 ;;
@@ -143,7 +154,7 @@ shutdown_pod() {
 }
 trap shutdown_pod EXIT
 
-log "model=$MODEL  track=$TRACK  layer=$LAYER  tag=$TAG  alpha=$ALPHA  k=$K  n_candidates=$N_CANDIDATES"
+log "model=$MODEL  track=$TRACK  layer=$LAYER  tag=$TAG  alpha=$ALPHA  k=$K  n_candidates=$N_CANDIDATES  signs=$SIGNS"
 log "log file: $LOG"
 
 # --------------------------------------------------------------------------
@@ -231,6 +242,7 @@ $PYTHON_CMD scripts/build_arm_vectors.py \
     --tag "$TAG" \
     --k "$K" \
     --n-candidates "$N_CANDIDATES" \
+    --signs $SIGNS \
     --no-ladder \
     2>&1 | tee -a "$LOG"
 
@@ -258,9 +270,16 @@ assert report["unit_normalised"] is True, "unit_normalise was not applied"
 assert report["target_norm"] > 0, "target_norm must be positive"
 
 folder = Path(f"steering_vectors/{model_key}-{track}")
-expected = [f"{tag}_{sign}_{arm}_layer{layer}.npy"
-            for sign in ("pos", "neg")
-            for arm in ("full", "jspace", "resid", "randatom")]
+# Glob rather than hardcode. The builder also emits _faratom and the _jw/_jwr/
+# _jwf sweep arms; the old hardcoded list of 8 meant those were built on every
+# run, never verified, never uploaded, and lost with the pod (2026-09-27).
+expected = sorted(q.name for q in folder.glob(f"{tag}_*_layer{layer}.npy"))
+signs = [s for s in ("pos", "neg") if any(f"{tag}_{s}_" in n for n in expected)]
+for sign in signs:
+    for arm in ("full", "jspace", "resid"):
+        need = f"{tag}_{sign}_{arm}_layer{layer}.npy"
+        assert need in expected, f"missing required arm: {need}"
+print(f"verifying {len(expected)} arm files across signs {signs}", flush=True)
 first_shape = None
 for name in expected:
     path = folder / name
@@ -274,7 +293,7 @@ for name in expected:
     print(f"OK: {path}", flush=True)
 
 print(json.dumps(report, indent=2), flush=True)
-print("All eight arm files passed verification.", flush=True)
+print(f"All {len(expected)} arm files passed verification.", flush=True)
 PY
 
 # --------------------------------------------------------------------------
@@ -283,7 +302,7 @@ PY
 
 section "upload to HF dataset"
 
-$PYTHON_CMD - "$MODEL" "$MODEL_KEY" "$TRACK" "$LAYER" "$TAG" "$ALPHA" "$K" "$N_CANDIDATES" "$MIX" <<'PY' | tee -a "$LOG"
+$PYTHON_CMD - "$MODEL" "$MODEL_KEY" "$TRACK" "$LAYER" "$TAG" "$ALPHA" "$K" "$N_CANDIDATES" "$MIX" "$ALLOW_EXISTING" <<'PY' | tee -a "$LOG"
 import json
 import os
 import subprocess
@@ -293,7 +312,8 @@ from pathlib import Path
 import yaml
 from huggingface_hub import HfApi
 
-model, model_key, track, layer, tag, alpha, k, n_candidates, mix = sys.argv[1:]
+model, model_key, track, layer, tag, alpha, k, n_candidates, mix, allow_existing = sys.argv[1:]
+allow_existing = allow_existing == "1"
 layer = int(layer)
 alpha = float(alpha)
 k = int(k)
@@ -332,11 +352,11 @@ provenance = {
 }
 provenance_path.write_text(json.dumps(provenance, indent=2))
 
-files = [
-    f"{folder}/{tag}_{sign}_{arm}_layer{layer}.npy"
-    for sign in ("pos", "neg")
-    for arm in ("full", "jspace", "resid", "randatom")
-]
+files = sorted(
+    str(q) for q in Path(folder).glob(f"{tag}_*_layer{layer}.npy"))
+if not files:
+    raise SystemExit(f"no arm files found under {folder} for tag {tag}")
+print(f"uploading {len(files)} arm files", flush=True)
 files.append(str(report_path))
 files.append(str(provenance_path))
 
@@ -347,8 +367,18 @@ for path in files:
 api = HfApi()
 existing = set(api.list_repo_files(repo, repo_type="dataset"))
 collisions = existing.intersection(files)
+if collisions and not allow_existing:
+    raise SystemExit(
+        f"STOP: these HF paths already exist: {sorted(collisions)}\n"
+        "Re-run with --allow-existing to upload only the new arms, or change --tag.")
 if collisions:
-    raise SystemExit(f"STOP: these HF paths already exist: {sorted(collisions)}")
+    print(f"--allow-existing: skipping {len(collisions)} file(s) already on HF:",
+          flush=True)
+    for c in sorted(collisions):
+        print(f"    kept remote: {c}", flush=True)
+    files = [f for f in files if f not in collisions]
+    if not files:
+        raise SystemExit("nothing new to upload; every arm file is already on HF.")
 
 commit = api.upload_folder(
     repo_id=repo,

@@ -23,6 +23,10 @@
 # Resumable: an existing log dir is skipped.
 set -u
 : "${VECTORS:?VECTORS not set}"
+# Gemma 2 rejects a system role, so every run so far pointed at a local copy
+# with a patched chat template (/workspace/model-fixed). Llama 3.1 has a native
+# system role and needs no patch -- point MODEL_PATH at its snapshot directly.
+MODEL_PATH="${MODEL_PATH:-/workspace/model-fixed}"
 EPOCHS="${EPOCHS:-5}"
 GOALS="${GOALS:-explicit latent none}"
 # goal_value: the 54 runs of 2026-09-27 passed NO goal_value and so used
@@ -58,8 +62,8 @@ for CELL in $CELLS; do
       if [ -d "$D" ]; then echo "=== skip $TAG ==="; continue; fi
       echo "=== $TAG  $(date -Is) ==="
       inspect eval sycophancy_blackmail/tasks.py@blackmail --no-score --display plain \
-        --model steered/local -M model_path=/workspace/model-fixed \
-        -M tokenizer_path=/workspace/model-fixed -M vectors_dir=$VECTORS \
+        --model steered/local -M model_path=$MODEL_PATH \
+        -M tokenizer_path=$MODEL_PATH -M vectors_dir=$VECTORS \
         -M "terms=[[\"$T\",1.0]]" -M layer=22 -M alpha=$A -M site=post \
         -M norm_scale=true -T goal_type=$G $GVFLAG -T urgency_type=$U \
         --max-connections 1 --epochs $EPOCHS --temperature 1.0 \

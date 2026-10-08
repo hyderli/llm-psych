@@ -21,6 +21,10 @@
 # Resumable: a condition whose log dir already exists is skipped.
 set -u
 : "${VECTORS:?VECTORS not set}"
+# Gemma 2 rejects a system role, so every run so far pointed at a local copy
+# with a patched chat template (/workspace/model-fixed). Llama 3.1 has a native
+# system role and needs no patch -- point MODEL_PATH at its snapshot directly.
+MODEL_PATH="${MODEL_PATH:-/workspace/model-fixed}"
 DOSES="${DOSES:-0.05 0.1 0.15 0.2}"
 ARMS="${ARMS:-ca_unit_pos_full ca_unit_pos_resid ca_unit_pos_jspace ca_unit_pos_randatom}"
 EPOCHS="${EPOCHS:-20}"
@@ -34,8 +38,8 @@ for T in $ARMS; do
     if [ -d "$D" ]; then echo "=== skip $T @ $A (exists) ==="; continue; fi
     echo "=== $T @ $A  $(date -Is) ==="
     inspect eval sycophancy_blackmail/tasks.py@blackmail --no-score --display plain \
-      --model steered/local -M model_path=/workspace/model-fixed \
-      -M tokenizer_path=/workspace/model-fixed -M vectors_dir=$VECTORS \
+      --model steered/local -M model_path=$MODEL_PATH \
+      -M tokenizer_path=$MODEL_PATH -M vectors_dir=$VECTORS \
       -M "terms=[[\"$T\",1.0]]" -M layer=22 -M alpha=$A -M site=post \
       -M norm_scale=true --max-connections 1 --epochs $EPOCHS \
       --temperature 1.0 --max-tokens 1000 --log-dir $D \
