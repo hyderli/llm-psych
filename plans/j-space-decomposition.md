@@ -494,3 +494,189 @@ reads are at matched depth.
   norm). Confirm before using the negative side.
 - Per-epoch seed support in `steered/local` (J7) still unchecked.
 - J-fraction ranking across wheel32 cells (J8) still uncomputed.
+
+---
+
+## 2026-10-08 — J12: pre-registered verdict rule for the random-direction control
+
+Written and committed **before the control arms were run.** Decided by Haydar on
+2026-10-08; the thresholds are his, not derived post hoc from the result.
+
+### Why a control is needed at all
+
+Nothing in the arm set is a direction unrelated to the emotion vector. `randatom`
+draws from the same top-512 emotion-promoted tokens and is NNLS-refit to v, so it
+controls which atoms were selected. `ladstar` is constructed to retain 32% of v.
+The re-cut made the gap load-bearing: on `leverage_use`, `ladstar` reaches 0.20 at
+alpha 0.1 against `full`'s 0.21 at the same dose, from a direction 71 degrees off
+the emotion vector. That is what "any activation perturbation can shift
+behaviour" looks like, and nothing currently in the arm set can tell it apart
+from a real effect.
+
+(Corrected 2026-10-08, same day: an earlier draft of this paragraph compared
+`ladstar` 0.21 to "the residual's 0.14", both pooled across the whole dose grid.
+Those pooled figures are not comparable — see J13. The dose-matched comparison at
+alpha 0.1 is the one above and it makes the same point.)
+
+Two control arms, added 2026-10-08, drawn last in the per-sign loop so every
+existing arm stays bit-identical:
+
+- `gauss` — isotropic in R^d. Verified at cos = -0.003 with v, against 1/sqrt(3584)
+  = 0.017 expected for a random direction.
+- `shuffle` — v's own coordinates permuted. Norm, coordinate multiset and scale
+  profile preserved exactly; direction destroyed. Verified at cos = +0.009.
+
+Both run at alpha 0.05, 0.1, 0.15, 0.2, dose-matched to `full` and `resid` so the
+pooled rates are comparable, with `full` run alongside them in the same session.
+
+### C1 — the verdict is RELATIVE, not an absolute threshold
+
+For each control arm X in {`gauss`, `shuffle`}, Fisher exact on `full` against X,
+pooled over the four doses, as one family of two tests with Holm applied.
+
+**PASS** iff `full` exceeds BOTH control arms at Holm-adjusted p < 0.05.
+**FAIL** otherwise.
+
+The contrast is relative because that is the comparison the question actually
+wants — target against random — and because it scales with whatever `full`
+returns in this session rather than against a number chosen in advance. An
+absolute rule was considered and rejected: if `full` comes back at 0.15 rather
+than the recorded 0.25, a control at 0.05 means something different, and a fixed
+cut point would not notice.
+
+Note what this removes. The earlier draft had a three-way split with an
+"underpowered" middle band at 0.06-0.14. Under C1 there is no middle band: a
+contrast that does not clear Holm is a FAIL. Marginality is not a third verdict.
+
+### C2 — on disagreement, the HIGHER arm governs
+
+If the two controls diverge, the verdict follows whichever has the higher rate.
+Hence PASS requires separation from both: `full` beating `gauss` while failing to
+beat `shuffle` is a FAIL.
+
+Rationale: if any direction unrelated to the emotion vector produces
+leverage-seeking, the causal reading is in trouble regardless of which construction
+found it. The cost is accepted — `shuffle` preserves v's coordinate scale profile,
+so it may perturb the occupied subspace in a way a truly isotropic direction does
+not, which makes it the harder test of the two. That is treated as a feature.
+
+### C3 — the lost chat template does NOT gate this
+
+`full` runs in the same session, under the same reconstructed template, as the
+controls. The control-against-`full` comparison is therefore internally valid
+whatever the template is; the reconstruction only threatens comparisons to the
+results recorded before 2026-09-27.
+
+So: report this session's `full` beside its recorded counts (20/72 = 0.278 over
+alpha 0.05-0.2, from 5/17, 4/19, 7/18, 4/18), state the caveat, and compute the
+verdict from this session's own numbers. A divergence in `full` is reported, not
+acted on. A strict rule — stop and rebuild the template if `full` falls outside
+the recorded rate's 95% Wilson interval — was considered and rejected, because at
+n=20 per cell the drift it would trigger on is mostly sampling noise.
+
+One comparability note for the write-up: the control arms are judged on item D
+alone, where the recorded `full` counts came from the full eight-item pass. D's
+prompt does not depend on which other items were exported, so the judgements are
+comparable — but `combine` dropped any sample missing any item, while the D-only
+read (`recut_outcomes.py --from-judge`) keeps a sample whose D is present. On the
+existing dose-sweep data that difference is one sample.
+
+### What each verdict licenses
+
+| verdict | consequence |
+|---|---|
+| PASS | The arm table has a floor under it. `faratom` and the J6' J-weight sweep both run as planned. |
+| FAIL | The sweep does NOT run. The arm ordering is reported as driven by perturbation magnitude rather than by direction, and the result becomes a methodological finding about steering at L22 — which is a publishable negative, not a dead end. |
+
+The verdict is computed by `scripts/control_verdict.py`, so it is mechanical
+rather than a judgement made after seeing the numbers.
+
+---
+
+## 2026-10-08 — J13: the dose-pooled arm column is not a valid comparison
+
+Found by Haydar asking why the arms had different n in the pooled `leverage_use`
+table. Three causes; the third invalidates the column.
+
+### Where the n came from
+
+Every condition ran at exactly `--epochs 20`. The differences are:
+
+1. **Unequal dose cells.** `full`, `resid`, `jspace` and `randatom` have five
+   cells each (100 raw). **`ladstar` has two** — alpha 0.1 and 0.3 — because it
+   came from the earlier ladder run, not the dose grid. `unsteered` has one.
+2. **Development samples.** `full` @0.3 is `DEV_CONDITION`; its samples 0-4 are
+   permanently excluded. That is the -5 unique to `full`.
+3. **Coherence-gate attrition, and it is wildly uneven:** unsteered 0%, ladstar
+   5%, resid 9%, full 10.5%, **jspace 42%, randatom 47%** — concentrated at high
+   dose (jspace loses 15/20 at 0.2 and 20/20 at 0.3; randatom 15/20 and 19/20).
+
+### Why (3) is a validity problem, not a bookkeeping one
+
+The gate is a **post-treatment variable**: the treatment causes the attrition,
+and the pooled column then compares survivors across arms whose attrition ranges
+from 0% to 100%. The surviving high-dose `jspace` samples are the 5-of-20 draws
+where steering happened not to break generation — plausibly the weakest-effect
+draws — so the selection runs in the direction that inflates the arm difference.
+
+The scoring spec already requires the gate rate to be reported beside the item
+rates, for exactly this reason. That requirement was not carried into the pooled
+arm column.
+
+### What changes
+
+Restricted to alpha 0.05 and 0.1, where every arm loses <= 10%:
+
+| arm | clean k/n | clean rate | as previously reported, all doses |
+|---|---|---|---|
+| unsteered | 0/20 | 0.00 | 0.00 |
+| full | 9/36 | 0.25 | 0.25 |
+| ladstar | 4/20 (0.1 only) | 0.20 | 0.21 |
+| randatom | 4/36 | 0.11 | 0.08 |
+| resid | 2/40 | **0.05** | 0.14 |
+| jspace | 1/38 | 0.03 | 0.02 |
+
+**RETRACTED:** `resid` vs `jspace` on `leverage_use`, reported as Holm-surviving
+at p = 0.0095, is **p = 1.0000** in the clean subset (2/40 against 1/38). It was
+carried entirely by resid's high-dose cells meeting jspace cells the gate had
+emptied. The claim in the 2026-10-08 readout that the split falls on lens-span
+membership does not survive this and is withdrawn in that form.
+
+Holm over the clean subset leaves **nothing**. Over all ten pairwise contrasts
+among the five positive arms, `full` vs `jspace` is p = 0.0066 raw and p_holm =
+0.0658; next are `full` vs `resid` (0.18) and `jspace` vs `ladstar` (0.37).
+
+A note on the family, because I got this wrong twice in one day. A first pass
+listed six pairs by hand and reported `full` vs `jspace` as surviving at p_holm =
+0.0359. Those six were chosen after seeing the rates. Over the ten pairwise
+contrasts the arms actually support, the same contrast does not clear 0.05. The
+ten-test family is the defensible one and is what `recut_outcomes.py` now
+computes; the six-pair figure is withdrawn.
+
+So the clean-subset position is that **no arm contrast on this outcome is
+established at all.** The rates are suggestive — `full` 0.25 against `resid` 0.05,
+`jspace` 0.03, `randatom` 0.11, `unsteered` 0/20 — and the design is simply too
+small to resolve them. That is a power statement, not a null result, and it is
+consistent with the n ~ 200-per-arm figure already recorded for the `full`/`resid`
+contrast.
+
+### What stands instead
+
+`resid`, `jspace` and `randatom` are mutually indistinguishable in the clean
+subset (0.05, 0.03, 0.11). `full` alone reaches 0.25. That is the J6' reading —
+neither component alone reproduces the whole vector — not a lens-span split, and
+it makes the J-weight sweep `u(c) = r + c*v_j` the experiment that bears on it
+rather than an optional extra.
+
+Unaffected: the negative-side result (1 of 158 across every negative arm) is a
+sign comparison, not an arm comparison, and is too lopsided for this to touch.
+
+### Standing rule
+
+Arm comparisons are made **dose-matched**, and only across cells whose gate
+attrition is comparable. A cell that lost more than about a quarter of its
+samples to the gate is reported with its attrition and excluded from arm
+contrasts; the pooled-across-dose column is descriptive only and carries the
+per-arm gate rate beside it. `scripts/recut_outcomes.py` prints the pooled column
+and must grow an attrition column and a clean-subset contrast before that column
+is quoted again.

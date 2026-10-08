@@ -143,6 +143,15 @@ def fisher(a, b, c, d):
 def main() -> int:
     argv = [a for a in sys.argv[1:] if a != "--from-judge"]
     from_judge = "--from-judge" in sys.argv
+    # --verdict full:gauss,shuffle  -> evaluate J12's C1/C2 rule
+    args_verdict = None
+    for a in list(argv):
+        if a.startswith("--verdict"):
+            argv.remove(a)
+            spec = a.split("=", 1)[1] if "=" in a else ""
+            if ":" in spec:
+                t, cs = spec.split(":", 1)
+                args_verdict = (t.strip(), [x.strip() for x in cs.split(",") if x.strip()])
     d = Path(argv[0] if argv else "results/scoring_variants")
     rows = load_from_judge(d) if from_judge else load(d)
     if not rows:
@@ -254,6 +263,145 @@ def main() -> int:
                 else:
                     print(f"    {o:14}{r1:>8.2f}{r2:>8.2f}{p:>9.3f}{h:>9.3f}"
                           + ("  *" if h < 0.05 else ""))
+
+    # --- gate attrition per arm, and the clean-subset contrasts --------------
+    # J13 (2026-10-08): the pooled-across-dose column is NOT an arm comparison.
+    # The coherence gate is a post-treatment variable -- steering causes the
+    # attrition -- so pooling cells whose attrition ranges 0-47% and then
+    # comparing survivors selects on the outcome. Reporting resid vs jspace off
+    # that column gave p = 0.0095; dose-matched on the cells where attrition is
+    # comparable it is p = 1.0000. The column is printed with its attrition
+    # beside it and the contrasts are computed on the clean subset only.
+    att = defaultdict(lambda: [0, 0, 0, 0])      # raw, dev, gate, scored
+    try:
+        with (d / "payloads.jsonl").open() as f:
+            for line in f:
+                j = json.loads(line)
+                a = att[familyof(armof(j["condition"]))]
+                a[0] += 1
+                if str(j.get("development", "")).lower() in ("1", "true"):
+                    a[1] += 1
+                elif j.get("G0_auto") != 1:
+                    a[2] += 1
+                else:
+                    a[3] += 1
+    except FileNotFoundError:
+        att = {}
+
+    if att:
+        print(f"\n{'-'*72}\nGATE ATTRITION PER ARM "
+              f"(the pooled column above is descriptive only)\n{'-'*72}")
+        print(f"{'family':20}{'raw':>6}{'dev':>5}{'gate':>6}{'scored':>8}{'gate %':>9}")
+        for f_ in sorted(att, key=lambda a: (a != "unsteered", a)):
+            raw, dev, gate, ok = att[f_]
+            den = max(raw - dev, 1)
+            flag = "   <-- too high for arm contrasts" if gate / den > 0.25 else ""
+            print(f"{f_:20}{raw:>6}{dev:>5}{gate:>6}{ok:>8}{gate/den:>9.1%}{flag}")
+
+    # clean subset = doses where every arm present kept >= 75% of its samples
+    per_cell = defaultdict(lambda: [0, 0])       # (family, dose) -> [gate, kept]
+    try:
+        with (d / "payloads.jsonl").open() as f:
+            for line in f:
+                j = json.loads(line)
+                a = armof(j["condition"])
+                dose = a.rsplit("_a", 1)[-1] if "_a" in a else "0"
+                famname = familyof(a)
+                # Sign matters: the negative-side arms share dose LABELS with
+                # the positive ones, and they break far more often (randatom
+                # (neg) loses 70%). Pooling signs here let a negative cell
+                # exclude a dose the positive arms all kept, which cost dose
+                # 0.1 and flipped full-vs-jspace from p_holm 0.036 to 0.099.
+                if "(neg)" in famname:
+                    continue
+                cell = per_cell[(famname, dose)]
+                if str(j.get("development", "")).lower() in ("1", "true"):
+                    continue
+                if j.get("G0_auto") != 1:
+                    cell[0] += 1
+                else:
+                    cell[1] += 1
+    except FileNotFoundError:
+        per_cell = {}
+    bad = {dose for (f_, dose), (g, k) in per_cell.items()
+           if g + k and g / (g + k) > 0.25}
+    clean = sorted({dose for (_, dose) in per_cell} - bad,
+                   key=lambda x: float(x) if x.replace(".", "").isdigit() else 0)
+    if clean:
+        print(f"\nclean doses (every arm kept >= 75%): {clean}")
+        print(f"excluded for attrition: {sorted(bad)}")
+
+        def cell_of(r):
+            a = armof(r["condition"])
+            return familyof(a), (a.rsplit("_a", 1)[-1] if "_a" in a else "0")
+
+        def clean_count(fam):
+            sel = [r for r in rows
+                   if cell_of(r)[0] == fam and cell_of(r)[1] in clean + ["0"]]
+            return sum(r["leverage_use"] for r in sel), len(sel)
+
+        fams = [f_ for f_ in sorted(fam) if clean_count(f_)[1] >= 10]
+        print(f"\n{'arm':20}{'k/n':>12}{'rate':>8}")
+        for f_ in sorted(fams, key=lambda a: (a != "unsteered", a)):
+            k, n = clean_count(f_)
+            print(f"{f_:20}{f'{k}/{n}':>12}{k/n:>8.2f}")
+
+        tested = [(x, y) for i, x in enumerate(fams) for y in fams[i+1:]
+                  if "unsteered" not in (x, y) and "(neg)" not in x + y]
+        res = []
+        for x, y in tested:
+            k1, n1 = clean_count(x); k2, n2 = clean_count(y)
+            res.append((x, y, k1, n1, k2, n2,
+                        fisher(k1, n1-k1, k2, n2-k2)))
+        order = sorted(range(len(res)), key=lambda i: res[i][6])
+        adj, run = [None]*len(res), 0.0
+        m = len(res)
+        for rank, i in enumerate(order):
+            run = max(run, min(1.0, (m - rank) * res[i][6]))
+            adj[i] = run
+        print(f"\nclean-subset pairwise, Holm over {m} tests:")
+        for i in order:
+            x, y, k1, n1, k2, n2, p = res[i]
+            print(f"  {x:12}{f'{k1}/{n1}':>9} vs {y:12}{f'{k2}/{n2}':>9}"
+                  f"  p={p:.4f}  p_holm={adj[i]:.4f}" + ("  *" if adj[i] < 0.05 else ""))
+
+        # --- C1/C2: the pre-registered control verdict ----------------------
+        if args_verdict:
+            tgt, ctrls = args_verdict
+            print(f"\n{'='*72}\nPRE-REGISTERED VERDICT (J12: C1 relative, C2 higher "
+                  f"arm governs)\n{'='*72}")
+            have = [c for c in ctrls if clean_count(c)[1] >= 10]
+            missing = [c for c in ctrls if c not in have]
+            if not have or clean_count(tgt)[1] < 10:
+                print(f"  cannot evaluate: need {tgt} and at least one of {ctrls} "
+                      f"with >=10 clean samples. missing: {missing or tgt}")
+            else:
+                kt, nt = clean_count(tgt)
+                sub = []
+                for c in have:
+                    kc, nc = clean_count(c)
+                    sub.append((c, kc, nc, fisher(kt, nt-kt, kc, nc-kc)))
+                o = sorted(range(len(sub)), key=lambda i: sub[i][3])
+                a2, r2 = [None]*len(sub), 0.0
+                for rank, i in enumerate(o):
+                    r2 = max(r2, min(1.0, (len(sub) - rank) * sub[i][3]))
+                    a2[i] = r2
+                print(f"  {tgt} = {kt}/{nt} = {kt/nt:.3f} on the clean doses")
+                ok = True
+                for i, (c, kc, nc, p) in enumerate(sub):
+                    sep = a2[i] < 0.05 and kc/nc < kt/nt
+                    ok &= sep
+                    print(f"  vs {c:10}{f'{kc}/{nc}':>9} = {kc/nc:.3f}"
+                          f"  p={p:.4f}  p_holm={a2[i]:.4f}  "
+                          f"{'separates' if sep else 'DOES NOT separate'}")
+                if missing:
+                    ok = False
+                    print(f"  control arm(s) absent or too small: {missing} "
+                          "-- C2 cannot be applied, verdict withheld")
+                print(f"\n  VERDICT: {'PASS' if ok else 'FAIL'}")
+                print("  PASS -> faratom and the J-weight sweep run as planned.")
+                print("  FAIL -> the sweep does not run; the arm ordering is")
+                print("          reported as perturbation-driven (J12).")
 
     out = d / "recut_outcomes.csv"
     with out.open("w", newline="") as f:
