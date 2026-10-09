@@ -1972,3 +1972,32 @@ scale if that one comes back positive.
 
 No further mechanism is proposed here. The pattern is now to stop generating
 explanations faster than tests of them.
+
+**Specification of the faratom test, before it runs.** Two conditions, alpha 0.10 and
+0.15, 40 samples, arm file already built — the dose pair because the refit effect is
+dose-gated (refits 8% at 0.10, 38% at 0.15) and the same shape is part of the claim.
+
+`faratom`'s angle makes this a *better* matched comparison than `jspace` or
+`randatom` gave. Its `cos` with `v` is 0.049, i.e. 87.2 degrees — essentially
+orthogonal. The already-measured arms at that angle are `gauss` (cos 0.018, 0/20 at
+alpha 0.15) and `pout85` (cos 0.087, 1/20). So near-orthogonality by itself does not
+break the gate, and if `faratom` does break it, the angle cannot be the reason.
+
+Pre-registered comparators and readings:
+
+- `faratom` attrites like the other refits (~8-9/20 at alpha 0.15) against `gauss`
+  0/20 (Fisher p = 0.0008) and `pout85` 1/20 (p = 0.0033) -> **"NNLS refit" is the
+  right class**, it now picks out three arms rather than two, and it holds at an
+  angle where the other two could not be tested.
+- `faratom` attrites like `pout` (0-2/20) -> **the descriptive claim fails too.**
+  What `jspace` and `randatom` share is then neither span content, nor sign, nor
+  concentration, nor being a refit, and the attrition difference reduces to those
+  two specific vectors with no account at all.
+- Anything between is uninformative at n = 20: 2/20 against 0/20 is p = 0.49, so
+  only the large effect is detectable. Stated so a middling result is not read as
+  support.
+
+If it comes back positive, the larger test is the `jw`/`jwr`/`jwf` sweep: twelve arms
+already built, three atom pools at four mixing weights, where `jw(c)` and `jwf(c)` at
+matched `c` have matched angle by construction. Twelve conditions at one dose, about
+1.6 hours.
