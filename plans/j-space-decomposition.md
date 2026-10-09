@@ -2002,7 +2002,7 @@ already built, three atom pools at four mixing weights, where `jw(c)` and `jwf(c
 matched `c` have matched angle by construction. Twelve conditions at one dose, about
 1.6 hours.
 
-### J19 result 4: the faratom test confirms "NNLS refit" as the class, and the angle is definitively not the cause
+### J19 result 4: the faratom test confirms "NNLS refit" as the class, and the angle does not explain GATE ATTRITION
 
 Two conditions, 40 samples, readings fixed in `9c618ac` before the run.
 
@@ -2021,9 +2021,17 @@ attrition of any arm in the project. Against its pre-registered, angle-matched
 comparators: `gauss` 0/20, Fisher **p < 0.0001**; `pout85` 1/20, Fisher
 **p = 0.0001**.
 
-**The angle is definitively not the cause.** `gauss` at 89 degrees loses nothing and
-`pout85` at 85 degrees loses 5%, while `faratom` at 87.2 degrees loses 65%. Three
-arms within four degrees of each other, spanning 0% to 65%.
+**The angle does not explain gate attrition.** `gauss` at 89 degrees loses nothing
+and `pout85` at 85 degrees loses 5%, while `faratom` at 87.2 degrees loses 65%.
+Three arms within four degrees of each other, spanning 0% to 65%.
+
+**Scope, because the unqualified sentence here was ambiguous and has been
+corrected.** This concerns ONE outcome: whether a sample produces usable output at
+all, measured on all 20 samples per cell. It says nothing about angle and behaviour.
+J17's plateau-and-cliff is about item D among the samples that pass the gate, and
+nothing in result 4 touches it. The two claims are about different outcomes measured
+on different populations, and they coexist: angle predicts leverage-seeking among
+coherent samples; construction predicts whether a sample is coherent at all.
 
 **The class now has three members and separates cleanly from everything else:**
 
