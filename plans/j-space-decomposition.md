@@ -1741,3 +1741,12 @@ about 28 minutes. Those arm files are already on HF. If they reproduce 25% and 4
 here, explanation 1 holds and the refit is the mechanism; if they come in near 10%,
 explanation 2 holds and the J18 attrition finding was an environment artefact and
 must be withdrawn.
+
+**Amendment 4a, same day, before that run starts:** `resid` is added to it, making it
+three arms x two doses = six conditions, ~42 minutes. Reason: `resid` is *not* an
+NNLS refit (it is `v - v_j`), so it separates the two explanations better than
+`jspace` and `randatom` alone. Explanation 1 (the refit breaks generation) predicts
+`resid` stays near its old 15% while `jspace` and `randatom` reproduce 25% and 45%.
+Explanation 2 (the old environment inflated everything) predicts the whole profile
+flattens toward the 5% the `pout` arms show, `resid` included. `full` needs no
+re-run: `ca_pln_pos_full` already measured it here at 0% and 5%.
