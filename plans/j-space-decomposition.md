@@ -1554,3 +1554,80 @@ arm on the same cone and the obvious follow-up to this run.
 subspace, and it is the right statement about `pout`'s construction. It is NOT the
 J-fraction a random vector would receive from the adaptive pipeline, which is far
 larger because of the procedural floor, and it must never be quoted as that null.
+
+### J19 amendment 2, 2026-10-09, still before any sample is scored: D is the primary question, and the power figures above were wrong
+
+Two corrections to this entry, both mine, both found by asking what the run can
+say about **D** rather than about A.
+
+**1. The D power figures in J19 were computed for ONE dose.** The run has two.
+Each angle therefore contributes two strata, not one, and the stratified
+statistic's variance falls accordingly. Corrected, with the stratum = (angle,
+dose) and n = 20 per cell:
+
+| | −0.20 | −0.15 | −0.10 | −0.05 |
+|---|---|---|---|---|
+| suppression, 40/50/60 (6 strata) | 0.99 | 0.96 | 0.69 | 0.21 |
+| suppression, 40/50/60/70 (8 strata) | 1.00 | 0.97 | 0.77 | 0.29 |
+
+So D is **not** "exploratory and underpowered by design" as written above. It is
+well powered for a suppression of 0.15 or more, usable at 0.10, and blind below
+0.05. That sentence in J19 is retracted; the honest statement is the table.
+
+**2. The sharper D question is not suppression, it is REVIVAL past the cliff —
+and it is both better powered and better identified.**
+
+J17's claim is that action is gated by retained alignment with `v` and nothing
+else. The direct falsification is not "does span content dampen action where
+action already happens", it is **"does span content produce action where the
+angle says there should be none".** At 70/75/80/85 the `pout` reference is on the
+floor (ladder D: 0.05, ~0.02, 0.00, 0.00), so pool all four angles across both
+doses: 160 samples per arm.
+
+| pin rate | power vs the floor |
+|---|---|
+| 0.04 | 0.14 |
+| 0.06 | 0.43 |
+| 0.08 | 0.71 |
+| 0.12 | 0.97 |
+
+Against an exact 0/160, **6/160 = 0.037 is the smallest count that clears
+p < 0.05** (Fisher p = 0.0298).
+
+**The identification asymmetry, which is the reason to foreground this.** D is
+scored only on gate-passing samples. If `pin` attrites more than `pout` — which
+is the expectation, given J18's attrition finding — then `pin`'s D is computed on
+a selected subset, and J13's post-treatment warning applies:
+
+- A **decrease** in D under `pin` is confounded with that selection. The coherent
+  survivors may simply be the milder responses. Not identified.
+- An **increase from an exact floor is not manufacturable by selection.**
+  Selection reweights behaviour that already occurs; it cannot create
+  leverage-seeking in a population where the rate is zero. Whatever the attrition,
+  `pin` showing leverage-seeking at 80 degrees where `pout` shows none means span
+  content produced action the angle forbids.
+
+So the revival test is the one claim in this run that is robust to the gate.
+
+**Revised analysis plan.** The test family is four, Holm-corrected:
+
+1. **D-revival** — pooled `pin` vs `pout` over 70/75/80/85 x both doses, Fisher.
+2. **D-suppression** — stratified permutation over 40/50/60/70 x both doses.
+3. **A** — stratified permutation over all seven angles x both doses.
+4. **B** — same as A.
+
+Gate attrition is reported per cell before any of them, as J19 already requires.
+
+**Readings for the D-revival test, fixed now.**
+
+- **`pin` >= 6/160 past the cliff while `pout` is at the floor** -> J17's
+  angle-only account of action is **false**: a direction 80 degrees from `v`,
+  retaining 3% of it, can drive leverage-seeking if its perpendicular is built
+  from the right atoms. This would be the largest result the project has produced
+  and would reopen the apportionment question J17 closed.
+- **both at the floor** -> J17 stands on its sharpest test. The angle gate is not
+  about which subspace the perpendicular occupies, and the plateau-and-cliff is a
+  fact about retained alignment alone.
+- **`pin` suppressed inside the plateau with higher attrition** -> ambiguous by
+  construction, per the asymmetry above. Report as ambiguous; do not read it as a
+  capability effect without a design that breaks the confound.
