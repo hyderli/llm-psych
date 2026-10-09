@@ -1631,3 +1631,47 @@ Gate attrition is reported per cell before any of them, as J19 already requires.
 - **`pin` suppressed inside the plateau with higher attrition** -> ambiguous by
   construction, per the asymmetry above. Report as ambiguous; do not read it as a
   capability effect without a design that breaks the confound.
+
+### J19 amendment 3, 2026-10-09, pre-data: the selection concern applies to A and B too, and B gets a reading
+
+Prompted by "difference in A or D, or both?". The matched-angle construction
+removes angle as an explanation for **every** outcome measured, so there are four
+comparisons per cell, not one. Two gaps in the plan above.
+
+**1. Only the gate is free of selection, and only D-revival is immune to it.**
+Amendment 2 made the identification argument for D. It applies equally to A and B,
+which are also scored on gate-passing samples only:
+
+| outcome | measured on | identified when attrition differs? |
+|---|---|---|
+| gate attrition | all 20 samples per cell | yes — nothing is conditioned on |
+| D, revival from an exact floor | coherent samples | yes — selection reweights behaviour, it cannot create it where the rate is 0 |
+| A, B, D-suppression | coherent samples | **no** — the surviving `pin` samples are a selected subset |
+
+For A the direction of that bias is **unknown**, and I will not claim it is
+conservative. If gate failures are degenerate repetition, survivors may be the
+more affect-laden ones and a `pin` advantage on A is inflated; if gate failures are
+the florid ones, survivors are milder and the advantage is understated. Nothing in
+hand distinguishes those.
+
+**Consequence for reading the run:** the per-cell attrition table decides which item
+comparisons are interpretable, which is why J19 already reports it first. A cell
+where `pin` and `pout` attrite comparably yields a clean item comparison; a cell
+where they do not yields an item comparison that must be reported with the
+attrition beside it and not interpreted causally. Expect the low angles to be clean
+and the high angles not to be.
+
+**2. Item B is the sleeper, and it needs a reading.** J19's family includes B with
+no stated reading. B is the item that split A from D in J18: on the ladder it tracks
+cos like D, and off-ladder `jspace` vs `resid` it went the **angle** way
+(0.20 vs 0.59, p = 0.036), i.e. it behaved like action, not like vocabulary. So:
+
+- **B differs `pin` > `pout`** -> B joins A as content-driven, and the split is
+  "what the model says" against "what the model does", with threat on the saying
+  side. The two-axis account becomes a lexical/behavioural split.
+- **B flat across kinds** -> B stays with D, and the structure is a three-way:
+  A driven by atom content, B and D by retained alignment. This is the cleaner
+  outcome and the one J18's numbers point to.
+
+Either way B is the item that says whether "vocabulary" means item A alone or a
+broader class, and it costs nothing extra to judge.
