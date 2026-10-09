@@ -2001,3 +2001,66 @@ If it comes back positive, the larger test is the `jw`/`jwr`/`jwf` sweep: twelve
 already built, three atom pools at four mixing weights, where `jw(c)` and `jwf(c)` at
 matched `c` have matched angle by construction. Twelve conditions at one dose, about
 1.6 hours.
+
+### J19 result 4: the faratom test confirms "NNLS refit" as the class, and the angle is definitively not the cause
+
+Two conditions, 40 samples, readings fixed in `9c618ac` before the run.
+
+| arm | cos with v | angle | alpha 0.10 | alpha 0.15 |
+|---|---|---|---|---|
+| `faratom` | 0.049 | 87.2 | 6/20 = 30% | **13/20 = 65%** |
+| `randatom` | 0.281 | 73.7 | 2/20 = 10% | 9/20 = 45% |
+| `jspace` | 0.318 | 71.5 | 1/20 = 5% | 6/20 = 30% |
+| `resid` | 0.948 | 18.6 | 0/20 = 0% | 1/20 = 5% |
+| `full` | 1.000 | 0.0 | 1/20 = 5% | 0/20 = 0% |
+| `pout85` | 0.087 | 85.0 | 0/20 = 0% | 1/20 = 5% |
+| `gauss` | 0.018 | 89.0 | 2/20 = 10% | 0/20 = 0% |
+
+`faratom` at alpha 0.15 is **13/20 = 65%**, 95% Wilson [43%, 82%] — the highest
+attrition of any arm in the project. Against its pre-registered, angle-matched
+comparators: `gauss` 0/20, Fisher **p < 0.0001**; `pout85` 1/20, Fisher
+**p = 0.0001**.
+
+**The angle is definitively not the cause.** `gauss` at 89 degrees loses nothing and
+`pout85` at 85 degrees loses 5%, while `faratom` at 87.2 degrees loses 65%. Three
+arms within four degrees of each other, spanning 0% to 65%.
+
+**The class now has three members and separates cleanly from everything else:**
+
+| group, alpha 0.15 | lost/n | attrition |
+|---|---|---|
+| NNLS refits (`faratom`, `jspace`, `randatom`) | 28/60 | **46.7%** |
+| every other arm measured at this dose | 31/360 | **8.6%** |
+
+Fisher **p = 1.1e-11**. This is the only grouping in the project that has survived a
+test designed to break it, and it was specified before the deciding run.
+
+**An ordering inside the class, which is a 3-point post-hoc observation and is
+labelled as such.** Attrition rises monotonically as the fit captures *less* of `v`:
+`jspace` (frac 0.1014) 30%, `randatom` (78% of `jspace`'s squared energy) 45%,
+`faratom` (2.4%) 65%. Since for any least-squares fit `cos_with_v == norm_ratio`
+exactly, cos and fit quality are the same number here and cannot be separated within
+the class.
+
+Read with the non-refits, that gives a coherent shape and no more: a direction built
+as a non-negative combination of a few unembedding-derived atom rows damages
+generation, and alignment with `v` partially offsets the damage. `gauss` and `pout85`
+are not atom combinations at all, so they are harmless at any angle. **This is three
+data points and an interpretation; it is not a tested mechanism, and the pattern of
+this session says to test it rather than extend it.**
+
+**The test, and it is already specified.** The `jw`/`jwr`/`jwf` sweep: twelve arms
+already built, three atom pools (`v`'s own component, random atoms, far atoms) at
+four mixing weights `c`, where `jw(c)` and `jwf(c)` at matched `c` have **matched
+angle by construction**. That design does two things at once: it varies pool identity
+at fixed angle, and it gives a `c` gradient that the ordering above predicts
+quantitatively. Twelve conditions at alpha 0.15, 240 samples, about 1.6 hours. The
+prediction to record before it runs is that attrition rises with `c` within each
+pool, and at matched `c` is ordered `jwf` > `jwr` > `jw`.
+
+**What this settles for the project.** `jspace` has been the J-space arm in every
+behavioural comparison this project has run. Its 30% gate loss at alpha 0.15 is now
+attributable to how it was constructed — a non-negative least-squares fit — and not
+to the subspace it occupies. Every claim resting on `jspace` underperforming needs
+re-reading with that in mind, J17's angle account included, which already explained
+the same failure a second way.
