@@ -1497,3 +1497,60 @@ If it fails to replicate within-run, the cross-run comparison was the artefact.
 Nothing here touches D's threshold, the plateau, or any claim in J17. The angle
 is held fixed on purpose, so this run cannot speak to how behaviour varies with
 angle — only to whether anything else varies at a fixed one.
+
+### J19 amendment, 2026-10-09, before any sample is scored: what "the span" actually is
+
+Added while the sweep was running, prompted by the question "what is the span of
+the workspace, and is it linear?". The answer scopes what J19 can conclude, so it
+goes on the record before the numbers do.
+
+**There is no fixed workspace subspace in this pipeline.** An atom for token t is
+the unit-normalised row `w_u[t] * g @ j_l` — a direction in layer-l activation
+space that raises t's logit through the lens. Taken over the whole 256k vocabulary
+those atoms span essentially all of R^3584, so "the verbalizable subspace" as a
+*subspace* is vacuous. That is precisely why the method uses sparse non-negative
+pursuit rather than a projection: the claim is that `v` is well approximated by a
+few hostile-token atoms, not that it lies in some privileged linear subspace.
+
+**So `v_j` is not a projection onto a fixed object, and the map is not linear.**
+Two separate reasons, both recorded earlier in the project's measurement-validity
+notes:
+
+1. The candidate pool is the top `n_candidates` tokens by **`v`'s own** lens
+   logits, and the pursuit then picks k of those by correlation with the running
+   residual. Doubly adaptive — the span is selected from `v` twice.
+2. The fit is non-negative, so J-space is a **cone** over the atoms, not a
+   subspace. Non-negativity breaks closure under scaling by negatives.
+
+Given a fixed support with all active coefficients strictly positive, NNLS
+coincides with unconstrained least squares on that support, and only then is
+`v_j = P_S v` for `P_S = QQ^T` from a QR of the picked atoms. That identity is what
+`pin` is built on, and the build verified it empirically: `|<w, v>| < 1e-4` and
+`frac_span` matching the Pythagorean prediction to four decimals at all seven
+angles. Had any active coefficient sat at the boundary, `v_j` would be a cone
+projection and the construction would have been slightly wrong.
+
+**Consequence for J19's interpretation.** `pin` draws `w` from the span of the 14
+atoms the pursuit selected **for this vector**. So the contrast this run measures is:
+
+> does energy along *this vector's own* hostile-token atom directions raise item A,
+> at fixed angle, relative to energy orthogonal to them?
+
+It is **not** "does injecting inside the model's verbalizable workspace raise A".
+Those 14 directions are the unembedding rows of the hostile tokens `v` already
+promotes, so a positive result confirms the near-definitional mechanism named in
+J18 and nothing wider. J19's readings stand as written; the word "workspace" must
+not appear in their interpretation.
+
+**What would test the wider claim** is the frozen-span arm the measurement-validity
+notes have been asking for since 2026-08-27: build `w` inside the span of
+`W_U · J_l` rows for a **frozen** hostile-token list chosen independently of `v`.
+If `pin` moves A but a frozen-span `w` does not, the effect is specific to `v`'s own
+selected atoms rather than to hostile-token directions in general. That is one more
+arm on the same cone and the obvious follow-up to this run.
+
+**Correction to a figure.** The plate drawn 2026-10-08 says a random direction puts
+`14/3584 ≈ 0.4%` of its energy in a 14-dimensional slice. True for a FIXED
+subspace, and it is the right statement about `pout`'s construction. It is NOT the
+J-fraction a random vector would receive from the adaptive pipeline, which is far
+larger because of the procedural floor, and it must never be quoted as that null.
