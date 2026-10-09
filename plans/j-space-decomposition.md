@@ -1870,8 +1870,39 @@ test, now has a second reason behind it.
 and it is what the J-lens method uses to claim a vector is "verbalizable". If
 injecting a non-negative atom combination reliably degrades the model, then every
 `jspace` arm this project has ever run was handicapped by the method itself, and
-"does the J-component drive behaviour?" has never been asked on fair terms. The arm
-that would ask it fairly is a **sign-free span fit**: the orthogonal projection of
-`v` onto the span of the picked atoms, without the non-negativity constraint. That
-is `P_S v` — which the plane build already computes — and it differs from `jspace`
-only by dropping the constraint. One arm, two doses, 40 samples.
+"does the J-component drive behaviour?" has never been asked on fair terms.
+
+**Retracted the same day: the "sign-free span fit" proposed here is not a distinct
+arm.** `P_S v` is bit-identical to `jspace` for this vector, and the plane build
+proves it. `pin` is constructed as a `w` inside `S` with its `v_j` component
+removed, and the build verified `|<w, v>| < 1e-4` for seven independent draws. For
+that to hold, every `w` in `S` orthogonal to `v_j` must also be orthogonal to `v`,
+i.e. `v - v_j` is orthogonal to the whole of `S` -- which is exactly the statement
+`v_j = P_S v`. Equivalently: the pursuit stops on `corr <= 0`, so every active
+coefficient is strictly positive, the non-negativity constraint is **not binding**,
+and NNLS already equals unconstrained least squares on that support. Dropping a
+constraint that does not bind changes nothing. The proposal was empty.
+
+**Where non-negativity does bind is `randatom` and `faratom`**, which fit `v` over
+atoms *not* selected for it; there the unconstrained solution would want negative
+coefficients and NNLS clamps them. So the arm that isolates the constraint is an
+ordinary-least-squares fit over `randatom`'s own atom set -- same atoms, same
+support size, differing only in whether coefficients may go negative.
+
+**But a better candidate for the mechanism is concentration, not sign.** `jspace`
+has norm `0.318|v|` and `randatom` about `0.28|v|`; both are renormalised up to the
+injected norm, multiplying every atom coefficient by roughly 3 to 3.6. So these arms
+inject components along a handful of individual token-unembedding directions that
+are several times larger than anything present in `v` itself, and non-negativity
+makes it worse only because positive coefficients cannot cancel. `pin`'s
+perpendicular is a unit vector spread over ~13 dimensions of `S` with mixed signs,
+so no single token direction gets a large coefficient -- and it attrites at 9.6%
+rather than 22.5%.
+
+**That is testable for free, before any new generation.** Every arm in hand has
+attrition measured, and each arm's coefficient profile in the atom basis is
+computable from its `.npy`: the largest coefficient, and the participation ratio
+(the effective number of atoms it occupies). If peakiness predicts attrition across
+`full`, `resid`, `jspace`, `randatom`, the seven `pin` and the seven `pout` arms,
+concentration is the mechanism and "non-negative refit" is a proxy for it. No GPU,
+no judge, ~18 vectors.
