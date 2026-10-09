@@ -1675,3 +1675,69 @@ cos like D, and off-ladder `jspace` vs `resid` it went the **angle** way
 
 Either way B is the item that says whether "vocabulary" means item A alone or a
 broader class, and it costs nothing extra to judge.
+
+### J19 amendment 4, 2026-10-09, after the gate table and before the judge: report D over all samples too
+
+The parse is in and the gate numbers are known; no item has been judged yet. Two
+things the gate table forces, both about the D analysis.
+
+**1. No cell is excluded.** All 14 `pin`/`pout` pairs sit under J13's 25% rule, the
+largest attrition in any cell is 20%, and no pair's attrition differs
+significantly (smallest Fisher p = 0.342, at 85 deg / alpha 0.15). The
+interpretability worry amendment 3 raised does not bite: every item comparison in
+this run is clean on that axis.
+
+**2. The dominant gate failure is `no_tool_call`, which is itself nearly a
+behavioural outcome.** Of 43 gate-flagged samples, 36 are `no_tool_call` (25 `pin`,
+11 `pout`) and 10 are `stray_markup`. A sample with no tool call cannot score D=1
+by construction. So excluding gate failures and then measuring D among the
+survivors removes exactly the samples where the model declined to act — the
+post-treatment problem in its sharpest form, worse than amendment 3 framed it.
+
+Therefore D is reported **two ways**, fixed now:
+
+- **as specified** — D among gate-passing samples, per the scoring spec.
+- **intention-to-treat** — D over all 20 samples per cell, assigning D=0 to every
+  gate-flagged sample. For `no_tool_call` that assignment is close to definitional.
+  For the 10 `stray_markup` samples it is an assumption, and a sensitivity line
+  dropping them is reported beside it.
+
+The ITT version conditions on nothing and is the primary D reading where the two
+disagree. Both are reported whatever they show.
+
+### J19 result 1: the J18 attrition finding does NOT replicate within-run
+
+| | coherent | attrition |
+|---|---|---|
+| `pin` pooled, 14 cells | 253/280 | **9.6%** |
+| `pout` pooled, 14 cells | 265/280 | **5.4%** |
+| `full` @ 0.10 / @ 0.15 | 19/20, 20/20 | 5%, 0% |
+
+Pooled Fisher **p = 0.077**. A 1.8-fold difference, not significant, against the
+five- to nine-fold difference J18 reported from the cross-run comparison
+(`jspace` 25%, `randatom` 45%, against `lad70` 5%).
+
+**So "amplifying the lens span breaks generation" is not supported here**, and J18's
+third finding is in doubt. Two candidate explanations, and they are distinguishable
+cheaply:
+
+1. **The coherence cost belongs to the NNLS refit, not to span membership.**
+   `jspace` and `randatom` are *non-negative* combinations of atoms fitted to `v` —
+   peaky vectors with every coefficient positive. `pin`'s `w` is a random direction
+   inside the same span with mixed signs and no fit. Geometrically `pin70`
+   (span 0.895, cos 0.342) is almost exactly `jspace` (span 1.000, cos 0.318), yet
+   it attrites 15% at alpha 0.15 where `jspace` attrited 25% and `randatom` 45%.
+   If this is right, the thing that breaks the model is the non-negative refit, and
+   amendment 3's reading 2 was pointing at the right culprit.
+2. **The old attrition numbers were inflated by their environment.** `jspace` and
+   `randatom` were measured under transformers 4.44.2 on a different GPU. The
+   within-run `pout` figures (5.4%) do match the ladder's 0-10%, which is
+   reassuring, but neither `jspace` nor `randatom` has ever been run in this
+   environment.
+
+**The distinguishing run is four conditions**: `ca_unit_pos_jspace` and
+`ca_unit_pos_randatom` at alpha 0.10 and 0.15, in this environment, ~80 samples,
+about 28 minutes. Those arm files are already on HF. If they reproduce 25% and 45%
+here, explanation 1 holds and the refit is the mechanism; if they come in near 10%,
+explanation 2 holds and the J18 attrition finding was an environment artefact and
+must be withdrawn.
