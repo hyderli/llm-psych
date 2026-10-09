@@ -1793,3 +1793,85 @@ So this is a **direction check, not a powered replication.** A null here is
 uninformative about A and must not be reported as a failure to replicate; only a
 reproduction in the predicted direction, or a clear reversal, carries information.
 Stated now so the write-up cannot claim more than this design can deliver.
+
+### J19 result 2: the attrition is caused by the NNLS refit, not by the lens span. J18's finding is confirmed as a fact and wrong as an interpretation
+
+Six conditions, this environment, no judge involved — the gate comes from the parse.
+
+**The old environment was not the problem.** Every one of the eight shared cells
+reproduces, and no cell differs:
+
+| arm | dose | old | new | Fisher |
+|---|---|---|---|---|
+| full | 0.10 / 0.15 | 5% / 10% | 5% / 0% | 1.000 / 0.487 |
+| resid | 0.10 / 0.15 | 0% / 15% | 0% / 5% | 1.000 / 0.605 |
+| jspace | 0.10 / 0.15 | 5% / 25% | 5% / **30%** | 1.000 / 1.000 |
+| randatom | 0.10 / 0.15 | 20% / 45% | 10% / **45%** | 0.661 / 1.000 |
+
+Pooled over all eight: old 25/160 lost, new 20/160, Fisher **p = 0.52**. So
+explanation 2 is dead — the transformers 4.44.2 numbers were right, and the gate at
+least is comparable across the environment boundary. That is worth having on its own.
+
+**The cause is the refit.** Grouping this environment's arms by how they were built:
+
+| construction | lost/n | attrition | 95% Wilson |
+|---|---|---|---|
+| NNLS refit to `v` (`jspace`, `randatom`) | 18/80 | **22.5%** | [14.7%, 32.8%] |
+| in-span, no refit (`pin` x 7 angles) | 27/280 | **9.6%** | [6.7%, 13.7%] |
+| out-of-span (`pout` x 7 angles) | 15/280 | **5.4%** | [3.3%, 8.6%] |
+| neither (`full`, `resid`) | 2/80 | **2.5%** | [0.7%, 8.7%] |
+
+| contrast | Fisher |
+|---|---|
+| refit vs in-span-no-refit | **0.0037** |
+| refit vs out-of-span | **0.0000** |
+| refit vs neither | **0.0002** |
+| in-span vs neither | **0.0370** |
+| in-span vs out-of-span | 0.0765 |
+| out-of-span vs neither | 0.3813 |
+
+Read down that table: `pin` arms carry 78-99% of their energy in the lens span and
+lose 9.6%; `jspace` and `randatom` carry comparable span energy and lose 22.5%.
+Span membership therefore cannot be the cause. **What the high-attrition arms share
+is that they are non-negative least-squares fits to `v` over an atom pool** — every
+coefficient positive, energy concentrated on a few token directions. `pin`'s
+perpendicular is a random direction in the same subspace with mixed signs and no
+fit, and it costs a fifth as much coherence.
+
+**It is dose-gated:** the refit arms lose 8% at alpha 0.10 and 38% at alpha 0.15.
+Below some amplitude the construction is harmless.
+
+**There is a smaller, separate span effect.** `pin` 9.6% against `full`/`resid` 2.5%
+is p = 0.0370, and against `pout` 5.4% it is p = 0.0765. So span content does cost
+some coherence at matched angle, roughly 4 points, but it is a minor term next to
+the refit's 20.
+
+**Retraction.** J18 recorded this as "the lens span has a specific effect, and it is
+that amplifying it breaks generation", and called it the one place where an arm's
+identity beat its geometry. The fact replicates; the attribution was wrong. The
+correct statement is that **the non-negative refit breaks generation, and the lens
+span contributes a small residual effect on top.** The J18 text and the 2026-10-08
+report must be corrected.
+
+**Consequence for J17, which this strengthens.** `jspace` carried two independent
+handicaps, both artefacts of how it was built rather than facts about a workspace:
+it sat at 71.4 degrees, past the action cliff (J17), and it is a refit that degrades
+the model above alpha 0.10 (here). Neither is evidence that the verbalizable
+workspace routes behaviour.
+
+**Consequence for J19's own item tests.** This is also why `pin` vs `pout` is a
+better instrument than J18's `jspace` vs `resid`: the attrition gap is 4 points
+(9.6% vs 5.4%) rather than 25 (30% vs 5%). The selection concern of amendment 3
+applies far more weakly to the plane run than to the comparison it is replicating —
+and amendment 4b's warning that the replication is a direction check, not a powered
+test, now has a second reason behind it.
+
+**Open question this raises.** Non-negativity is the pursuit's defining constraint,
+and it is what the J-lens method uses to claim a vector is "verbalizable". If
+injecting a non-negative atom combination reliably degrades the model, then every
+`jspace` arm this project has ever run was handicapped by the method itself, and
+"does the J-component drive behaviour?" has never been asked on fair terms. The arm
+that would ask it fairly is a **sign-free span fit**: the orthogonal projection of
+`v` onto the span of the picked atoms, without the non-negativity constraint. That
+is `P_S v` — which the plane build already computes — and it differs from `jspace`
+only by dropping the constraint. One arm, two doses, 40 samples.
