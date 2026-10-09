@@ -1750,3 +1750,46 @@ NNLS refit (it is `v - v_j`), so it separates the two explanations better than
 Explanation 2 (the old environment inflated everything) predicts the whole profile
 flattens toward the 5% the `pout` arms show, `resid` included. `full` needs no
 re-run: `ca_pln_pos_full` already measured it here at 0% and 5%.
+
+### J19 amendment 4b: the attrition-replication run's items are a CONFIRMATORY replication of J18, in their own family
+
+The six conditions exist and are judged in the same invocation as the plane run, so
+`jspace`, `randatom` and `resid` get A, B and D in this environment for about 430
+extra calls. That is the first within-environment test of J18's central result, and
+it is recorded here before anything is judged.
+
+**Separate test family.** These are confirmatory tests of a prior finding, not
+members of J19's four. Holm is applied over {A, B} within this family, and J19's
+family of four is corrected on its own. Mixing them would penalise J19's primary
+tests for a replication they have nothing to do with.
+
+**Single judge invocation, deliberately.** The plane samples and these samples go
+through the judge together, so no judge-version boundary sits between J18's
+original comparison and its replication. The project already carries an
+unreconciled transformers fork plus, as of today, a new GPU and torch build.
+
+**Readings, directions from J18:**
+
+- **A, `jspace` > `resid`** reproduces (J18: +0.234 stratified, p = 0.0011) -> the
+  item-A effect is real and environment-independent, and J18's headline stands.
+- **A flat or reversed** -> J18's A result is in doubt, and because J18's four cells
+  came from two older environments the most likely reading is that it was partly an
+  environment artefact.
+- **B, `resid` > `jspace`** reproduces (J18: -0.206, p = 0.0022) -> the opposition
+  between A and B survives, which is the structural claim.
+
+**Power, stated before the numbers, because it is poor.** Exact Fisher at n ~ 19
+per cell:
+
+| test | power |
+|---|---|
+| A at alpha 0.10 (J18: 0.84 vs 0.50) | 0.51 |
+| A at alpha 0.15 (J18: 0.60 vs 0.53) | 0.04 |
+| B at alpha 0.15 (J18: 0.20 vs 0.59) | 0.63 |
+| A pooled over doses (0.72 vs 0.52) | 0.35 |
+| B pooled over doses (0.25 vs 0.55) | 0.70 |
+
+So this is a **direction check, not a powered replication.** A null here is
+uninformative about A and must not be reported as a failure to replicate; only a
+reproduction in the predicted direction, or a clear reversal, carries information.
+Stated now so the write-up cannot claim more than this design can deliver.
