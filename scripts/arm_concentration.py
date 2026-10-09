@@ -60,8 +60,15 @@ def _stats(logits: torch.Tensor) -> dict:
     sd = float(x.std())
     pos = torch.clamp(x, min=0.0)
     tot = float(pos.sum())
-    if tot <= 0:
-        return {"degenerate": True}
+    # `resid` on 2026-10-09 returned top1 0.2027, PR 6.7 and max_z 0.00: its logit
+    # vector is essentially all non-positive, so the "positive part" was a handful
+    # of values at the edge of float precision and every concentration statistic
+    # was computed on numerical noise. A bare `tot <= 0` guard does not catch that.
+    # Require the largest logit to be a real excursion above the bulk.
+    if tot <= 0 or float(x.max()) <= 0 or (sd > 0 and float(x.max()) / sd < 0.5):
+        return {"degenerate": True, "max": float(x.max()), "sd": sd,
+                "why": "logit vector has no positive excursion; concentration "
+                       "statistics would be computed on numerical noise"}
     p = (pos / tot).double()
     srt = torch.sort(p, descending=True).values
     pr = float(1.0 / (p * p).sum())

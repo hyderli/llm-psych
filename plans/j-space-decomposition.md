@@ -1906,3 +1906,69 @@ computable from its `.npy`: the largest coefficient, and the participation ratio
 `full`, `resid`, `jspace`, `randatom`, the seven `pin` and the seven `pout` arms,
 concentration is the mechanism and "non-negative refit" is a proxy for it. No GPU,
 no judge, ~18 vectors.
+
+### J19 result 3: concentration is not the mechanism either. Three proposals, three failures, and what actually survives
+
+The diagnostic ran on all 58 arm files, no GPU and no judge. **The pre-registered
+prediction failed, and the fallback statistic is null.**
+
+The prediction on record was that `jspace` and `randatom` would have much lower
+participation ratios than the `pin` arms — peakier logit profiles. The opposite
+holds. Vocabulary is 256k; PR for `jspace` is 250,185 and for `randatom` 249,468,
+i.e. at the ceiling, while the *lowest* PRs in the whole set belong to `pin40`
+(23,040) and `pin70` (31,090), which attrite at 15%. A sum of 14 atom directions
+turns out to raise a few token logits on top of a large diffuse background, and PR
+being mass-weighted is blind to the spikes. Choosing it as the primary statistic was
+a design error.
+
+`max_z` — the largest logit in units of the logit vector's own sd — does rank the
+refits high (`faratom` 21.9, `jspace` 19.2, `randatom` 17.8, against `full` 10.6 and
+the `pin`/`pout` arms 5.0-10.8). But across the 25 arms with alpha 0.15 attrition
+measured:
+
+| statistic | Spearman with attrition | permutation p |
+|---|---|---|
+| `max_z` | **+0.278** | 0.179 |
+| participation ratio | **+0.292** | 0.155 |
+
+Both null, and PR's sign is backwards from the hypothesis. Excluding `resid`, whose
+statistics are degenerate, changes nothing (+0.273 and +0.274).
+
+**Why the correlation test was weak anyway, stated so it is not over-read:** only
+two of 25 arms have high attrition at this dose, `jspace` at 30% and `randatom` at
+45%. Everything else sits between 0% and 20%. That is a two-arm-versus-twenty-three
+contrast, not a gradient, so no continuous predictor could show much. The test was
+not well chosen either.
+
+**A bug the run exposed.** `resid` returned top1 0.2027, PR 6.7 and `max_z` 0.00:
+its logit vector is essentially all non-positive, so the "positive part" was a few
+values at the edge of float precision and every statistic was computed on noise.
+The `tot <= 0` guard did not catch it; the script now requires the largest logit to
+be a real excursion above the bulk before reporting concentration at all.
+
+**Score so far on this one observation.** Three mechanisms proposed for why
+`jspace`/`randatom` break the gate:
+
+1. **lens-span content** (J18) — refuted by J19 result 2: `pin` arms carry 78-99%
+   span energy and attrite at a fifth the rate.
+2. **non-negativity** (result 2's first draft) — refuted mathematically: the
+   constraint never binds on `v`'s own support, so there is nothing to drop.
+3. **concentration** (result 2's correction) — refuted here: PR is backwards and
+   `max_z` is null across arms.
+
+**What actually survives is a description, not a mechanism.** The two high-attrition
+arms are exactly the two NNLS refits run at alpha 0.15, and nothing measurable about
+their logit profiles separates them from arms that do not break the gate. "Refit"
+picks out the right set and explains nothing.
+
+**The one test of the description itself, before any further hypothesis.**
+`faratom` is a third NNLS refit — fitted to `v` over mid-ranking lens atoms — and it
+has the **highest `max_z` of all 58 arms** (21.9). It has never been run
+behaviourally at alpha 0.15. If "refit" is the right class, `faratom` should attrite
+like `jspace` and `randatom`; if it attrites like `pout`, even the descriptive claim
+fails. **One condition, 20 samples, about 8 minutes, arm file already built.** The
+`jw`/`jwr`/`jwf` sweep arms (max_z 13.6-21.2) are the same kind of test at larger
+scale if that one comes back positive.
+
+No further mechanism is proposed here. The pattern is now to stop generating
+explanations faster than tests of them.
