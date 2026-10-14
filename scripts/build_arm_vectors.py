@@ -153,6 +153,14 @@ def _parse_args() -> argparse.Namespace:
                    help="C values for the J-weight sweep r + C*v_j. C=0 and C=1 are "
                         "already emitted as _resid and _full. Pass --jsweep with no "
                         "values to skip the sweep.")
+    p.add_argument("--allow-degenerate-far", action="store_true",
+                   help="If the far-pool NNLS fit collapses to the zero vector, "
+                        "SKIP faratom and every jwf arm and record the skip, "
+                        "instead of aborting. Opt-in on purpose: the far pool is "
+                        "near-degenerate on every model measured (faratom_cos_with_v "
+                        "0.049 Gemma L22, 0.017 Llama L28, 0.0 Qwen L24), so an exact "
+                        "collapse is the control working, not a fault -- but it must "
+                        "never be skipped silently.")
     p.add_argument("--no-ladder", action="store_true")
     p.add_argument("--plane", action="store_true",
                    help="build the J19 orthogonal-plane arms: at each angle in "
@@ -312,9 +320,26 @@ def main() -> int:
         far = ((w_far * g.float()) @ j_f) if j_f is not None else w_far
         far = far / torch.clamp(far.norm(dim=1, keepdim=True), min=1e-12)
         far_v = far.T @ mod._nnls_active(far.T, uu)
-        emit(f"{tag}_faratom", far_v)
         report[sgn]["faratom_n"] = int(n_pick)
-        _fit_report("faratom", far_v)
+        # A non-negative fit returns the ORIGIN exactly when no atom in the pool
+        # has a positive inner product with v. For a pool chosen to be unrelated
+        # to v that is the control succeeding, not failing. Skipping here consumes
+        # no RNG, so every later arm is bit-identical to a non-degenerate build.
+        far_degenerate = float(far_v.norm()) < 1e-9
+        if far_degenerate:
+            if not args.allow_degenerate_far:
+                raise SystemExit(
+                    f"REFUSING {tag}_faratom: the far-pool NNLS fit collapsed to "
+                    "the zero vector, so no direction exists to save. This is the "
+                    "far pool being exactly unrelated to v. Re-run with "
+                    "--allow-degenerate-far to skip faratom and jwf and record it.")
+            report[sgn]["faratom_skipped"] = (
+                "far-pool NNLS fit collapsed to the zero vector; no atom in the "
+                "pool has a positive inner product with v")
+            print(f"SKIPPING {tag}_faratom: far pool degenerate (declared)")
+        else:
+            emit(f"{tag}_faratom", far_v)
+            _fit_report("faratom", far_v)
 
         # --- J-weight sweep: residual at native strength, J-component scaled --
         # emit() unit-normalises then rescales to target_norm, and the eval
@@ -324,7 +349,12 @@ def main() -> int:
             comp_t = torch.from_numpy(comp)
             resid_t = torch.from_numpy(resid)
             rand_hat = rand_v / rand_v.norm()
-            far_hat = far_v / torch.clamp(far_v.norm(), min=1e-12)
+            # NOT clamped. With far_v == 0 the clamp made far_hat exactly zero, so
+            # `resid_t + (c * comp_norm) * far_hat` was exactly resid_t: four jwf
+            # files written as byte-identical copies of resid, each with a healthy
+            # norm, passing the emit guard and the verify step while claiming to be
+            # the semantics control. None is the only safe value here.
+            far_hat = None if far_degenerate else far_v / far_v.norm()
             comp_norm = comp_t.norm()
             fj = float(m["frac_norm_squared"])
             fr = float(m["frac_residual_squared"])
@@ -336,7 +366,11 @@ def main() -> int:
                 # jwr = atoms from the emotion's own top tokens (selection control)
                 # jwf = atoms unrelated to the emotion   (semantics control)
                 emit(f"{tag}_jwr{ct}", resid_t + (c * comp_norm) * rand_hat)
-                emit(f"{tag}_jwf{ct}", resid_t + (c * comp_norm) * far_hat)
+                if far_hat is None:
+                    report[sgn]["jwf_skipped"] = (
+                        "far pool degenerate; jwf would be a copy of resid")
+                else:
+                    emit(f"{tag}_jwf{ct}", resid_t + (c * comp_norm) * far_hat)
                 denom = fr + c * c * fj
                 sweep[ct] = {
                     "c": c,

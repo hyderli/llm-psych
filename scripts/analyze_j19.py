@@ -28,8 +28,8 @@ from analyse_variants import holm, strat_perm  # Holm-Bonferroni, stratified per
 PLANE = Path("results/scoring_plane")
 ATTR = Path("results/scoring_attrrep")
 
-PLN_RE = re.compile(r"_(pin|pout)(\d+)_L22_a([0-9.]+)$")
-UNIT_RE = re.compile(r"_pos_([a-z]+)_L22_a([0-9.]+)$")
+PLN_RE = re.compile(r"_(pin|pout)(\d+)_L\d+_a([0-9.]+)$")
+UNIT_RE = re.compile(r"_pos_([a-z]+)_L\d+_a([0-9.]+)$")
 
 REVIVAL_DEG = [70, 75, 80, 85]      # past the action cliff
 SUPPRESS_DEG = [40, 50, 60, 70]     # on the falling limb

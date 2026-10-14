@@ -173,6 +173,34 @@ if ! uv sync; then
     fail "uv sync failed. Check the output above." 3
 fi
 
+# `uv sync` installs the ROOT project from src/ only. The Inspect eval harness
+# is a SECOND package rooted at emotion_steering/ (name: steering-evals), and
+# the `steered` model provider reaches Inspect solely through that package's
+# entry point:
+#     [project.entry-points.inspect_ai]
+#     sycophancy_blackmail = "sycophancy_blackmail._registry"
+# Without it installed, every eval dies with "Model API steered of model
+# 'steered/local' not recognized" -- and run_dose_sweep.sh prints FAILED per
+# condition and still reaches ALL DONE, so the sweep looks finished. Observed
+# on a fresh pod 2026-10-14. inspect_ai/inspect_evals are undeclared upstream
+# deps and are pinned here until they are added to pyproject.toml.
+log "Installing the Inspect harness (steering-evals) and its undeclared deps…"
+if ! uv pip install inspect_ai==0.3.277 inspect_evals==0.23.0; then
+    fail "inspect_ai/inspect_evals install failed." 3
+fi
+if ! uv pip install -e emotion_steering; then
+    fail "steering-evals install failed (emotion_steering/)." 3
+fi
+log "Verifying the steered provider is discoverable…"
+uv run python - <<'PY' || fail "steered provider not registered." 4
+from importlib.metadata import entry_points
+eps = {e.name: e.value for e in entry_points(group="inspect_ai")}
+print("inspect_ai entry points:", eps)
+assert "sycophancy_blackmail" in eps, (
+    "the steered provider is not registered; `uv pip install -e "
+    "emotion_steering` did not take effect")
+PY
+
 # --------------------------------------------------------------------------
 # 7. Torch preflight
 # --------------------------------------------------------------------------

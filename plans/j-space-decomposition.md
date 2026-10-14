@@ -2388,3 +2388,209 @@ ordering: if the refit damages the action channel and not affect, then across th
 That is a dissociation prediction on twelve conditions, and `A_pad` plus the gate
 are both identified outcomes, so it can be tested without a single selection
 argument.
+
+## 2026-10-14 — J21: cross-model replication on Llama 3.1 8B and Qwen 2.5 7B, pre-registered before any sample exists
+
+Everything below is fixed before a single generation. The Gemma study is finished
+and its findings are in J17-J20; this asks whether they are facts about the method
+or facts about `gemma-2-9b-it`.
+
+### Models and layers, locked now
+
+| model | layer | why | depth |
+|---|---|---|---|
+| `gemma-2-9b-it` | 22 | already run, J17-J20 | 22/42 = 52% |
+| `Llama-3.1-8B-Instruct` | 28 | lens band L28-30 (validation 2026-09-02) | 28/32 = 88% |
+| `Qwen2.5-7B-Instruct` | 24 | lens band L24-26 (same validation) | 24/28 = 86% |
+
+Vectors for both emotions already exist on disk for every layer in range (Llama
+16-30, Qwen 14-26), so nothing is extracted and no track is regenerated.
+
+**The layers do NOT match on relative depth, and that is a deliberate choice with a
+cost.** Matching Gemma's 52% would put Llama at L17 and Qwen at L15. The project's
+own logit-lens validation calls those layers unusable — "at L21 many cells are
+noise" for Llama, and Qwen at L19 "looked like a failed model" — so a null there
+would be a null about vector quality and would answer nothing. Choosing vector
+quality over matched depth means **a cross-model difference in any result below
+could be a depth effect rather than a model effect**, and no analysis in this
+replication can separate the two. Recorded here so it is not discovered later.
+
+### Vector, and the known risk in it
+
+`contempt=1 aggressiveness=1`, unit-normalised, `story-wheel32` track — identical to
+Gemma's. The risk is specific and documented: the same lens validation lists
+`contempt` as weak on **both** Llama and Qwen and clean only on Gemma, and
+`aggressiveness` sits on the second-weakest axis (0.788). So the mixture that
+carried the Gemma study may not steer these two models at all.
+
+The alternative — each model's strongest hostile cell — was considered and rejected:
+it buys steering strength at the price of the three models no longer being steered
+with the same thing, which is the whole point of a replication. The risk is handled
+by a gate instead.
+
+### Dose
+
+Per model from `emotion_steering/find_alpha.py`. Steering bands do not transfer
+across models because residual norms differ; the script says so and it is not
+negotiable. Two doses per model, chosen from its own band, recorded in this document
+before any arm is generated.
+
+### Task 0 gate, with its decision rule fixed now
+
+Conditions: `unsteered` plus `full` at both doses, 20 samples each, 60 samples.
+Items `A_pad`, `A_act`, `B`, `D`. About 240 judge calls, roughly $1.
+
+**Pass** if `full` exceeds `unsteered` on at least one of `A_pad`, `A_act`, `B`, `D`
+at Fisher p < 0.05 uncorrected, in the upward direction. The lack of correction is
+deliberate and is why this is called a gate and not a test: it is tuned for
+sensitivity, it will be reported as a gate outcome, and no claim rests on it.
+
+**Fail** and that model stops here. A failure is not a wasted run — it would say
+that the Gemma result cannot be tested on that model with this vector, which is a
+reportable fact about vector transfer and the cheapest possible way to learn it.
+
+### The main run, conditional on the gate
+
+Arms `jspace`, `resid`, `randatom`, `faratom`, `gauss`, `shuffle` at both doses (12
+conditions; `full` is already in Task 0), plus the angle ladder at the higher dose.
+
+**The ladder is 8 rungs, not 5.** `LADDER_DEG = [10, 20, 40, 60, 70, 80, 85]` plus
+`ladstar`, which is the exact rung set the Gemma ladder used. An earlier draft of
+this section said five, chosen before the constant was checked; running all eight
+costs three extra conditions and about a dollar of judge, and makes it a
+replication of the Gemma ladder rather than a subset of it.
+
+So 23 conditions and 460 samples per model: Task 0's 3, the 12 arms, the 8 rungs.
+About 2-3 GPU-hours and $8 of judge each.
+
+**Precondition, fixed 2026-10-14 before any run.** `run_dose_sweep.sh` had layer 22
+hardcoded in four places, including the `-M layer=` that decides where steering is
+injected, and `analyze_j19.py` matched `_L22_a` literally. `LAYER` is now required
+with no default, substituted everywhere including the upload path, and the script
+verifies `<arm>_layer<LAYER>.npy` exists for every arm **before** the loop starts —
+because the per-condition failure path prints `FAILED` and still reaches `ALL DONE`,
+which is how a sweep that generated nothing could look complete. The analysis
+regexes now take any layer via a non-capturing group, verified to still parse the
+Gemma conditions identically (560 samples).
+
+### Predictions, recorded before the data
+
+1. **Attrition.** The NNLS refits lose more samples to the coherence gate than the
+   non-refits, ordered `faratom` > `randatom` > `jspace` > `resid` at the higher
+   dose, with `gauss` and `shuffle` near zero at any dose.
+2. **The dissociation, which is the main thing being replicated.** `randatom` and
+   `resid` come out close on `A_pad` while differing sharply on gate loss and on B.
+   On Gemma: `A_pad` 0.375 against 0.375 at p = 1.0, gate 0.725 against 0.975 at
+   p = 0.0033.
+3. **Angle.** D falls with angle across the ladder, and the `jspace` arm's D is
+   predicted by its own angle, arccos(sqrt(`frac_jspace`)).
+4. **The cross-model angle test, which Gemma alone could not provide.**
+   `frac_jspace` differs by model, so the three `jspace` arms sit at materially
+   different angles by nature rather than by construction. The angle account
+   predicts D for `jspace` orders inversely with that angle across the three models.
+   **Each model's `frac_jspace` is measured at arm-build time; the predicted
+   ordering is written into this document after the builds and before any
+   generation.** That is the one window in which this prediction can be made
+   honestly, and it closes as soon as a sample exists.
+
+### Four process changes carried over from J20, built in from the start
+
+- **Export `A_pad` with `--include-flagged` in the first pass.** `A_pad` reads the
+  scratchpad, which exists even when no tool call does, so scoring it on every
+  sample makes it an identified outcome from the beginning. On Gemma this took a
+  second judge pass to discover.
+- **Pre-register `A_pad` and `A_act` separately.** The composite `A = A_pad OR
+  A_act` cancelled a +0.221 against a -0.035 on Gemma. It is descriptive only here.
+- **The ladder has one draw of `w` per rung**, so within a model the angle trend is
+  confounded with the draw — the J16 and J19 defect. It is not fixable within one
+  model at this budget. What the cross-model design buys is three sets of
+  independent draws: a trend present in all three models is not a draw artefact,
+  and that argument is only available because the replication exists.
+- **Report the gate table before any item**, and give D both as-specified and
+  intention-to-treat.
+
+### What the outcomes would mean
+
+Dissociation replicates on both: it is a fact about building a steering direction as
+a non-negative combination of unembedding rows, not about one model. Replicates on
+neither: it is Gemma-specific and J20's reading narrows accordingly. Replicates on
+one: the depth confound above becomes load-bearing and has to be addressed before
+anything is claimed. Task 0 fails on a model: nothing about that model is tested,
+and the report says so in those words.
+
+### J21 build note: the arm set is not modular, because one RNG stream serves every family
+
+`SEED = 20260924`, one `np.random.default_rng`, consumed in source order:
+`randatom` (line 286), `faratom` (310), the ladder's 8 draws (356), `gauss` (390),
+`shuffle` (395), the plane draws (432, 437). **Enabling a family moves the draws of
+every family after it.** The plane block was deliberately placed last for exactly
+this reason, with a comment saying so; the ladder was not, so a build with
+`LADDER=1` yields different `gauss` and `shuffle` vectors than the same build with
+`LADDER=0`.
+
+Found 2026-10-14 when the Llama L28 upload collided with an earlier pre-ladder build
+of the same tag. Of the 54 arms: `full`, `jspace` and `resid` are deterministic and
+matched; `randatom`, `faratom` and all twelve `jw`/`jwr`/`jwf` arms draw before the
+ladder and matched; `gauss` and `shuffle` did not.
+
+**Handling.** HF was overwritten with the complete local set rather than topped up
+with `--allow-existing`, so the vectors on HF are the ones the report describes. Safe
+because no Llama run had used the earlier `gauss`/`shuffle`: `eval_outputs/` holds
+only the four Gemma runs. Topping up would have left HF holding a `gauss` the local
+report misdescribes, which is the same failure mode as the `ladstar` angle
+mislabelling — a report describing a vector that was not the vector used.
+
+**Deliberately NOT fixed.** Giving each family its own seeded generator is a small
+change and the right one, but it would move every draw in every arm already built,
+Gemma's included, and every number in J17-J20 rests on those draws. It belongs with
+a new tag on a future build, never retroactively.
+
+### J21 prediction 4, fixed 2026-10-14 after both builds and before any sample exists
+
+The three `jspace` angles, positive side — the side every run steers with:
+
+| model | layer | `frac_jspace` | cos with v | angle |
+|---|---|---|---|---|
+| `Llama-3.1-8B-Instruct` | 28 | 0.14387 | 0.3793 | **67.7 deg** |
+| `gemma-2-9b-it` | 22 | 0.10140 | 0.3184 | **71.4 deg** |
+| `Qwen2.5-7B-Instruct` | 24 | 0.05480 | 0.2341 | **76.5 deg** |
+
+An 8.8-degree spread straddling J17's cliff (plateau to about 60 degrees, D dead by
+70): Llama at the edge of it, Gemma just past, Qwen well past.
+
+**The cross-model ordering is a weak test, and is labelled so before it is run.**
+Three points. A correct ordering arises by chance with probability 1/6, so the
+ordering alone cannot carry a claim at any sample size. It is additionally
+confounded with depth (52%, 88%, 86%) and with model identity, and neither is
+separable in this design. Recorded as an observation to report, not as a test.
+
+**The strong test is within model and angle-matched: `jspace` vs `ladstar`.**
+`ladstar` is constructed with `theta = angle(v_jspace, v)` — at EXACTLY that model's
+own `jspace` angle, with a span-free perpendicular. So each model contains a pair
+differing in construction and not in angle. If the angle account is complete,
+`jspace` ~ `ladstar`. If the refit damages action beyond what its angle explains,
+`jspace` < `ladstar`. That is one comparison replicated three times independently,
+each at its own angle, with no cross-model arithmetic anywhere in it.
+
+Predicted: `ladstar` >= `jspace` on D in all three models, and the gap does not
+shrink as the angle grows, because a construction effect is not a geometric one.
+
+**One thing to verify before Gemma joins that test.** The ladder was respaced on
+2026-10-08, and the code comment records that at `N_LADDER_DRAWS = 3` the averaging
+put `ladstar` at 59.7 degrees (cos 0.504) rather than 71.4 (cos 0.319) — the
+mislabelling that invalidated every earlier "ladstar retains 32% of v" statement.
+`N_LADDER_DRAWS` is now 1, so the Llama and Qwen `ladstar` arms built today sit at
+exactly their `jspace` angle. Whether Gemma's existing ladder data does is NOT
+established here: if its `ladstar` came from the N=3 build it is at 59.7 degrees and
+is not angle-matched to `jspace`, in which case Gemma needs a rebuilt `ladstar` to
+join this test. The Gemma figure in hand — `ladstar` at 0.21 on `leverage_use`,
+above the residual, against `jspace` D at 0.061 in the attrition run — is the
+right direction and is quoted here as direction only, pending that check.
+
+**And prediction 1 loses a term on Qwen.** The positive-side far pool is degenerate
+at L24 (the NNLS fit is the origin), so `faratom` and the four `jwf` arms do not
+exist there. Qwen's attrition ordering can only be `randatom` > `jspace` > `resid`.
+The negative side is fine (`faratom_cos_with_v` 0.059), which is further evidence
+that this is the far-pool control sitting near degeneracy on every model rather than
+anything about Qwen: 0.049 Gemma pos, 0.0165 Llama pos, 0.037 Llama neg, 0.059 Qwen
+neg, 0.0 Qwen pos.

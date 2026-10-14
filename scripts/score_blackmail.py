@@ -555,7 +555,7 @@ def cmd_export(args) -> int:
                          "payload_kind": PAYLOAD_OF[item],
                          "empty_payload": not payload.strip(),
                          "prompt": build_prompt(item, payload)})
-    p = d / "prompts.jsonl"
+    p = d / (getattr(args, "out", None) or "prompts.jsonl")
     p.write_text("".join(json.dumps(r) + "\n" for r in rows))
     print(f"{len(rows)} prompts over {len(rows)//max(len(items),1)} samples "
           f"x {len(items)} item(s) {items} -> {p}")
@@ -813,6 +813,15 @@ def main() -> int:
                     help="comma-separated subset of the judged items (default: "
                          "all eight). A partial set cannot go through `combine`; "
                          "use recut_outcomes.py --from-judge.")
+    p2.add_argument("-o", "--out", default="prompts.jsonl",
+                    help="filename inside -d to write (default prompts.jsonl). "
+                         "Two exports coexist this way: A_pad with "
+                         "--include-flagged over every sample, and the action "
+                         "items over gate-passing ones only. A_pad reads the "
+                         "scratchpad, which exists even when no tool call does, "
+                         "so scoring it on all samples makes it an identified "
+                         "outcome; the action items cannot be scored where there "
+                         "is no action.")
     p2.add_argument("--include-flagged", action="store_true",
                     help="also export gate-flagged samples (default: excluded)")
 

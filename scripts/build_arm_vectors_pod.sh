@@ -64,6 +64,7 @@ ALLOW_EXISTING="${ALLOW_EXISTING:-0}"
 # enabling it changes the rng state consumed by gauss/shuffle, which are drawn
 # after it -- so a ladder build must use a different --tag or it will overwrite
 # control arms with different draws.
+ALLOW_DEGENERATE_FAR="${ALLOW_DEGENERATE_FAR:-0}"
 LADDER="${LADDER:-0}"
 # The orthogonal plane (J19) is also OFF by default. It is drawn AFTER
 # gauss/shuffle, so enabling it does NOT disturb any existing arm's draws --
@@ -182,7 +183,11 @@ log "log file: $LOG"
 # Python interpreter
 # --------------------------------------------------------------------------
 
-PYTHON_CMD="uv run --locked python"
+# Overridable: `uv run --locked` resolves the cu124 x86_64 torch pin, which has
+# bitten this project on aarch64 more than once. If uv stalls or fails to
+# resolve, set PYTHON_CMD=.venv/bin/python and rerun -- the work here is numpy
+# and torch CPU linear algebra, so any interpreter with the deps will do.
+PYTHON_CMD="${PYTHON_CMD:-uv run --locked python}"
 if [[ -x ".venv-cpu/bin/python" ]]; then
     PYTHON_CMD=".venv-cpu/bin/python"
 elif [[ -x ".venv/bin/python" ]]; then
@@ -253,6 +258,8 @@ PY
 
 section "build arm vectors"
 
+DEGEN_FLAG=""
+[ "$ALLOW_DEGENERATE_FAR" -eq 1 ] && DEGEN_FLAG="--allow-degenerate-far"
 LADDER_FLAG="--no-ladder"
 [ "$LADDER" -eq 1 ] && LADDER_FLAG=""
 log "ladder: $([ "$LADDER" -eq 1 ] && echo ON || echo off)"
@@ -273,6 +280,7 @@ $PYTHON_CMD scripts/build_arm_vectors.py \
     --n-candidates "$N_CANDIDATES" \
     --signs $SIGNS \
     $LADDER_FLAG \
+    $DEGEN_FLAG \
     $PLANE_FLAG \
     2>&1 | tee -a "$LOG"
 

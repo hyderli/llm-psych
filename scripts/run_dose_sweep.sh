@@ -21,6 +21,13 @@
 # Resumable: a condition whose log dir already exists is skipped.
 set -u
 : "${VECTORS:?VECTORS not set}"
+# The arm vectors are LAYER-SPECIFIC: build_arm_vectors.py writes
+# <arm>_layer<L>.npy, and the bank resolves by that exact layer. Layer 22
+# was hardcoded here for the Gemma runs in four places, including the
+# `-M layer=` that decides where steering is injected. A cross-model run
+# needs it set, and a mismatch must stop the sweep rather than print
+# FAILED per condition and still reach "ALL DONE".
+: "${LAYER:?LAYER not set -- set it to the layer the arms in \$VECTORS were built at}"
 # Gemma 2 rejects a system role, so every run so far pointed at a local copy
 # with a patched chat template (/workspace/model-fixed). Llama 3.1 has a native
 # system role and needs no patch -- point MODEL_PATH at its snapshot directly.
@@ -62,24 +69,70 @@ for _need in sycophancy_blackmail/tasks.py read_log.py; do
     fi
 done
 printf '[sweep] inspect=%s  cwd=%s\n' "$(command -v inspect)" "$PWD" >&2
+
+# --- the GPU must actually be able to run this torch ----------------------
+# Two pods were burned on 2026-10-08 before this check existed. A RunPod
+# listing said "A40" and delivered an RTX 5090; both it and the previous card
+# were Blackwell (sm_120), while uv.lock pins torch 2.6.0+cu124, whose arch
+# list stops at sm_90. Every condition then dies inside from_pretrained with
+# "no kernel image is available for execution on the device" -- and because the
+# loop prints FAILED per condition and carries on, the sweep still ends with
+# "ALL DONE". Fail here instead, before the first model load.
+python - <<'PYGPU' || exit 1
+import sys
+try:
+    import torch
+except Exception as e:
+    print(f"ERROR: cannot import torch: {e}", file=sys.stderr); sys.exit(1)
+if not torch.cuda.is_available():
+    print("ERROR: torch reports no CUDA device.", file=sys.stderr); sys.exit(1)
+name = torch.cuda.get_device_name(0)
+cap = "sm_%d%d" % torch.cuda.get_device_capability(0)
+arches = torch.cuda.get_arch_list()
+print(f"[sweep] gpu={name}  capability={cap}  torch={torch.__version__}")
+if cap not in arches:
+    print(f"\nERROR: {name} is {cap}, which torch {torch.__version__} cannot run.\n"
+          f"  torch arch list: {' '.join(arches)}\n"
+          f"  Either move to a GPU whose capability is in that list, or install a\n"
+          f"  torch build that covers {cap} -- and if you do the latter, record it\n"
+          f"  as a new environment in plans/j-space-decomposition.md and re-run\n"
+          f"  tests/test_hooks.py and tests/test_steering.py before trusting output.\n",
+          file=sys.stderr)
+    sys.exit(1)
+try:
+    a = torch.ones(8, 8, device="cuda")
+    float((a @ a).sum())
+except Exception as e:
+    print(f"\nERROR: a trivial cuda matmul failed: {e}", file=sys.stderr); sys.exit(1)
+print("[sweep] cuda matmul ok")
+PYGPU
 ARMS="${ARMS:-ca_unit_pos_full ca_unit_pos_resid ca_unit_pos_jspace ca_unit_pos_randatom}"
 EPOCHS="${EPOCHS:-20}"
 
+for T in $ARMS; do
+  if [ -z "$(find "$VECTORS" -name "${T}_layer${LAYER}.npy" -print -quit 2>/dev/null)" ]; then
+    printf 'ERROR: %s_layer%s.npy not found under %s\n' "$T" "$LAYER" "$VECTORS" >&2
+    printf '  the arms in that directory were built for a different layer.\n' >&2
+    printf '  available: %s\n' "$(ls "$VECTORS" | grep -o '_layer[0-9]*' | sort -u | tr '\n' ' ')" >&2
+    exit 1
+  fi
+done
+echo "LAYER: $LAYER   (arms verified present at this layer)"
 echo "start $(date -Is)"
 echo "arms:  $ARMS"
 echo "doses: $DOSES"
 for T in $ARMS; do
   for A in $DOSES; do
-    D=logs/${T}_L22_a$A
+    D=logs/${T}_L${LAYER}_a$A
     if [ -d "$D" ]; then echo "=== skip $T @ $A (exists) ==="; continue; fi
     echo "=== $T @ $A  $(date -Is) ==="
     inspect eval sycophancy_blackmail/tasks.py@blackmail --no-score --display plain \
       --model steered/local -M model_path=$MODEL_PATH \
       -M tokenizer_path=$MODEL_PATH -M vectors_dir=$VECTORS \
-      -M "terms=[[\"$T\",1.0]]" -M layer=22 -M alpha=$A -M site=post \
+      -M "terms=[[\"$T\",1.0]]" -M layer=$LAYER -M alpha=$A -M site=post \
       -M norm_scale=true --max-connections 1 --epochs $EPOCHS \
       --temperature 1.0 --max-tokens 1000 --log-dir $D \
-    && python read_log.py $D --n $EPOCHS --full > ${T}_L22_a$A.txt \
+    && python read_log.py $D --n $EPOCHS --full > ${T}_L${LAYER}_a$A.txt \
     || echo "FAILED $T $A"
   done
 done
@@ -90,15 +143,22 @@ echo "\`hf upload --include\` form errored on 2026-09-25 and every other upload"
 echo "in this repo goes through upload_folder with allow_patterns. The run log"
 echo "goes in EVERY upload -- its absence on 2026-09-27 is why a failure had to"
 echo "be diagnosed from which filenames were missing."
-cat <<'HINT'
+# macOS has no bare `python`, and huggingface_hub lives in the project venv, so
+# the pasted upload command must name an interpreter that exists. Resolve it
+# here rather than printing `python` and letting it fail after the sweep.
+PY="python3"
+for _c in "$_repo/.venv/bin/python" "$_repo/.venv-cpu/bin/python"; do
+    [ -x "$_c" ] && PY="$_c" && break
+done
+cat <<HINT
   set -a; source .env; set +a
-  python - <<'PY'
+  "$PY" - <<'PY'
 from huggingface_hub import HfApi
 api = HfApi()
 c = api.upload_folder(
     repo_id="llm-psych/llm-psych-activations", repo_type="dataset",
-    folder_path=".", path_in_repo="eval_outputs/blackmail_arms/L22",
-    allow_patterns=["*_L22_a*.txt", "outputs/*.log"],
+    folder_path=".", path_in_repo="eval_outputs/blackmail_arms/L${LAYER}",
+    allow_patterns=["*_L${LAYER}_a*.txt", "outputs/*.log"],
     commit_message="dose sweep outputs + run log")
 print(c.oid)
 PY
