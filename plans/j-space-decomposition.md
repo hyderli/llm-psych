@@ -2322,3 +2322,69 @@ restored byte-for-byte and verified at 2,228 and 488 rows over all four items.
 - **The composite A should not be an outcome.** Pre-register the surfaces.
 - **The plane design has one draw per cell.** Any future angle design needs several
   independent draws per angle, or it repeats the J16 defect.
+
+### J20 addendum, same day: the A_pad completion, and the one dissociation that needs no selection argument
+
+74 calls, 0 errors. Coverage verified complete before anything was computed: **600
+of 600** plane samples and **160 of 160** attrition-run samples now carry an `A_pad`
+score. No missing data, and no conditioning on the coherence gate anywhere below.
+`scripts/analyze_apad_itt.py`, which states its own status in its docstring: the
+DIRECTION is pre-registered (J18's A leg, made confirmatory by amendment 4b), the
+OUTCOME SURFACE is not — `A_pad` alone was chosen after seeing the composite cancel.
+
+| arm | A_pad, all 40 | 95% Wilson | gate-conditioned | gate lost | empty pads |
+|---|---|---|---|---|---|
+| `resid` | 15/40 = 0.375 | [0.24, 0.53] | 15/39 = 0.385 | 1 | 1 |
+| `jspace` | 24/40 = 0.600 | [0.45, 0.74] | 20/33 = 0.606 | 7 | 3 |
+| `randatom` | 15/40 = 0.375 | [0.24, 0.53] | 11/29 = 0.379 | 11 | 6 |
+| `faratom` | 3/40 = 0.075 | [0.03, 0.20] | 0/21 = 0.000 | 19 | 5 |
+
+**The gate was not in fact biasing A_pad.** Every arm's full-set rate sits within
+0.005 of its gate-conditioned rate. The samples the gate removed carried scratchpad
+contempt at about the rate of the samples it kept. The confound was potential and
+not actual — which could not be known until the pads were scored, and is exactly
+why they were worth 74 calls.
+
+**`jspace` vs `resid`, identified: 0.600 against 0.375, Fisher p = 0.0729**, dose
+strata 0.600/0.350 and 0.600/0.400, stratified permutation p = 0.0730, Holm p =
+0.219 across all six arm pairs. The pre-registered direction is confirmed in sign
+and consistent across both strata, and does not reach significance at 40 samples a
+side. It needs no selection bound, because nothing was removed. Read with the
+withdrawn composite above: the A effect is real enough to survive identification
+and too small to establish at this n, and the composite A destroyed it outright.
+
+**The dissociation, on two outcomes both measured on all 40 samples of both arms:**
+
+| `randatom` vs `resid` | `randatom` | `resid` | Fisher p |
+|---|---|---|---|
+| A_pad, scratchpad affect | 15/40 = 0.375 | 15/40 = 0.375 | **1.0** |
+| passed the coherence gate | 29/40 = 0.725 | 39/40 = 0.975 | **0.0033** |
+
+Identical scratchpad contempt; an eleven-fold difference in whether the model
+produces a tool call at all. **Neither row conditions on anything downstream of
+treatment**, so no bound, imputation or selection argument applies to either. The
+action-channel reading now rests on something no selection concern can reach: the
+refit leaves the affect intact and destroys the capacity to act on it.
+
+The action items point the same way and remain bounded rather than identified,
+because an action item cannot be scored where there is no action. `randatom` vs
+`resid` on B: 0.034 against 0.538 as-specified (p = 5.1e-06), 0.025 against 0.525
+under ITT (p = 4.0e-07), and 0.300 against 0.525 under the adversarial imputation
+(p = 0.0685) — direction holds, significance does not. **D does not survive
+adversarial bounding for this pair** (0.300 against 0.275, p = 1.0) and is not
+claimed.
+
+**Two corrections to the gate-conditioned view above.** `faratom` is 0.075 on the
+full set, not 0.000: it carries a trace of scratchpad contempt, still Holm-separated
+from all three other arms (p <= 0.013). And the plane null survives identification —
+`pin` 86/280 = 0.307 against `pout` 77/280 = 0.275, p = 0.457, draw level 3 of 7
+angles. `A_pad` falls steeply with angle in both arms, 0.65 at 40 degrees to 0.025
+at 85, which is the angle account and not span membership.
+
+**What the next run has to settle.** The `jw`/`jwr`/`jwf` sweep already specified
+above now has a second prediction to record before it runs, on top of the attrition
+ordering: if the refit damages the action channel and not affect, then across the
+`c` gradient `A_pad` should stay roughly flat while B and the gate fall together.
+That is a dissociation prediction on twelve conditions, and `A_pad` plus the gate
+are both identified outcomes, so it can be tested without a single selection
+argument.
