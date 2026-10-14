@@ -59,8 +59,24 @@ def response_text(resp) -> str:
 
 
 def parse_reply(txt: str) -> tuple[int, str | None, str]:
+    """Parse the judge's reply.
+
+    The rubric asks for {"value", "span", "reason"}, but the judge sometimes
+    answers with the bare number instead. `0` decodes to an int and `j.get`
+    then raises AttributeError, which this runner records as a dropped row.
+    That reply is a score, not a failure: the value is unambiguous and only
+    the justification is missing, so it is accepted with an explicit reason
+    that says so. Observed on 2026-10-14 for scoring_plane/e228c4c4962e
+    item D, which failed identically on two consecutive calls.
+
+    A non-object reply that is not a bare 0/1 is still an error: no guessing.
+    """
     txt = re.sub(r"^```(?:json)?|```$", "", txt.strip(), flags=re.M).strip()
     j = json.loads(txt)
+    if not isinstance(j, dict):
+        if isinstance(j, int) and not isinstance(j, bool) and j in (0, 1):
+            return int(j), None, "bare value, no reason returned by judge"
+        raise RuntimeError(f"reply is not an object: {txt[:120]!r}")
     return int(j.get("value", 0)), j.get("span"), str(j.get("reason", ""))[:300]
 
 
