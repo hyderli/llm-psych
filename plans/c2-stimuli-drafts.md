@@ -417,36 +417,91 @@ Two conditions on it:
    must enter as a dated amendment, and it must happen before
    `configs/stimuli_hashes.yaml` is locked, not after.
 
-## 2. Confirmation families — not yet drafted
+## 2. Confirmation set — drafted 2026-09-10, awaiting audit
 
-The complement design changes what this set has to be, and roughly doubles it.
+Six fresh scenarios, none reusing a sweep scenario. Twelve arms plus six
+scenario-matched neutrals. Frames were approved before the arms were written,
+after four rounds at frame level.
 
-**Pairs are atomic across the split.** Both arms of a complement pair describe
-the same world state, so a layer locked on one arm is locked on the other arm's
-data. A pair sits entirely in the sweep set or entirely in the confirmation set;
-it is never split.
+Grids: decreasing 1-12, increasing 8-19, neutrals 1-19. Denominator twenty
+throughout, spelled. Checked mechanically against the guards in
+`tests/test_complement_pairs.py`: no skeleton drift between x=1 and x=12, the
+count never governs a verb, partitive after every count, no negators or
+morphological negatives, no literal digits, and every scenario carrying exactly
+one decreasing arm, one increasing arm and one neutral.
 
-**Disjointness is at scenario level, not family level.** The July guards check
-family name, sentence and digit-stripped skeleton only, so a confirmation family
-set in a sweep scenario would pass every existing test and still leak. The
-confirmation set needs **fresh scenarios**, not fresh sentences within the six
-scenarios above.
+| # | emotion | scenario | family | dir | sentence |
+|---|---|---|---|---|---|
+| 7 | desperation | coal | `coal_remaining` | down | Of the twenty bags of coal delivered, she still has {x} of them in the shed. |
+| 7c | desperation | coal | `coal_burned` | up | Of the twenty bags of coal delivered, she has already burned {x} of them. |
+| n7 | neutral | coal | `coal_lorry` | flat | Of the twenty bags of coal delivered, the merchant brought {x} of them on the second lorry. |
+| 8 | desperation | childcare | `nights_covered` | down | Of the twenty nights she needs someone to watch her son, she has someone lined up for {x} of them. |
+| 8c | desperation | childcare | `nights_seeking` | up | Of the twenty nights she needs someone to watch her son, she is still looking for someone for {x} of them. |
+| n8 | neutral | childcare | `nights_phone` | flat | Of the twenty nights she needs someone to watch her son, she has {x} of them written in her phone rather than on the wall calendar. |
+| 9 | desperation | arrears | `payments_held` | down | The agency has ruled on all twenty missed payments on her file; it agreed to hold {x} of them. |
+| 9c | desperation | arrears | `payments_pursued` | up | The agency has ruled on all twenty missed payments on her file; it is still pursuing {x} of them. |
+| n9 | neutral | arrears | `payments_prefix` | flat | The agency has ruled on all twenty missed payments on her file; it lists {x} of them under the same reference prefix. |
+| 10 | nervousness | gathering | `faces_known` | down | Of the twenty people in the room tonight, she has met {x} of them before. |
+| 10c | nervousness | gathering | `faces_new` | up | Of the twenty people in the room tonight, she is meeting {x} of them for the first time. |
+| n10 | neutral | gathering | `replies_sameday` | flat | Of the twenty people in the room tonight, the host heard back from {x} of them on the same day. |
+| 11 | nervousness | inspection | `entries_cleared` | down | Of the twenty entries the inspector has ruled on, he cleared {x} of them. |
+| 11c | nervousness | inspection | `entries_violations` | up | Of the twenty entries the inspector has ruled on, he recorded {x} of them as violations. |
+| n11 | neutral | inspection | `entries_onehand` | flat | Of the twenty entries the inspector has ruled on, one clerk wrote {x} of them. |
+| 12 | nervousness | pumps | `pumps_steady` | down | Of the twenty pumps on the floor tonight, she has watched {x} of them run steadily. |
+| 12c | nervousness | pumps | `pumps_cutout` | up | Of the twenty pumps on the floor tonight, she has watched {x} of them cut out at least once. |
+| n12 | neutral | pumps | `pumps_plate` | flat | Of the twenty pumps on the floor tonight, the maintenance file lists {x} of them with the serial plate on the housing rather than the base. |
 
-Required, then:
+Construct coverage, recorded so the within-set diversity is auditable — it is
+diversity *inside* the confirmation set that carries the generalisation
+argument, since a probe encoding one shared confound would otherwise transfer on
+that confound rather than on the emotion:
 
-- desperation: three complement pairs in three scenarios, none of which is
-  contacts, shelters or applications
-- nervousness: three complement pairs in three scenarios, none of which is the
-  certification board, the blood panel or the checkpoint
-- six scenario-matched neutrals, one per new scenario, on the union grid
+| scenario | dissociable from | loading |
+|---|---|---|
+| coal | fuel scarcity | impersonal |
+| childcare | caregiving obligation | social |
+| arrears | debt pressure | institutional |
+| gathering | social unfamiliarity | social |
+| inspection | regulatory scrutiny | institutional |
+| pumps | operational risk | impersonal |
 
-That is twelve arms plus six neutrals, against the twelve arms plus six neutrals
-in the sweep set — the same authoring load again, and it was previously scoped as
-three single-arm families per cell.
+### Two frame-level tests adopted from the audit
 
-The six sweep scenarios are spent for this purpose. New scenarios must carry a
-denominator of twenty naturally and support a partition into two positive
-predicates.
+Both were discovered by failure and are cheaper applied at frame selection than
+after twelve arms are written.
+
+**A bolted-on experiencer means the emotion is not in the scenario.** A rejected
+frame counted lab samples returned within or outside tolerance; the human
+subject had to be attached artificially because the scenario had no native role
+for her, and the arms turned out to report *resolved* results, so the
+uncertainty had already collapsed. The increasing arm measured bad news
+received — closer to dismay — rather than anticipation.
+
+**A frame with no arbitrary furniture has objects too tightly individuated by
+the outcome.** A rejected frame counted faults in a condemnation survey; every
+property of a fault is a property of the damage, so no neutral predicate could
+be found at any inferential distance. Searching harder for the wording was the
+wrong response — the frame was reporting its own defect.
+
+### Residual weaknesses, recorded rather than resolved
+
+- **`coal`** is the closest surviving frame to the fault that killed
+  `notice_days`, since bags burned correlates with winter elapsing. It passes
+  because what is counted is the option set itself rather than a clock reading,
+  and the dependence runs the other way — burning is what makes the time pass.
+  The counterfactual holds: two bags with a mild forecast and a delivery due is
+  not desperate; two bags with a cold month and no money is. The delivery is
+  left undated so the reader cannot compute a rate and infer a date, which would
+  reintroduce the clock as an inference even though it is absent from the count.
+- **`pumps`** is the weakest of the six. A pump that cut out is partly a verdict
+  on that pump's condition, so the increasing arm carries some of the
+  "bad news received" that killed the samples frame. It survives because a pump
+  that cut out once can cut out again, so the count forecasts rather than only
+  reports — but the decreasing arm is the cleaner of the two and should be read
+  as such.
+- **`arrears`** has the longest-path neutral: a shared reference prefix could
+  mean accounts opened together, which could mean one event put her into
+  arrears. Roughly three steps.
 
 ## 3. Implicit scenarios — not yet drafted
 

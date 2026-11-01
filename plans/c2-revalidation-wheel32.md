@@ -242,3 +242,56 @@ Stated as an assumption rather than a result: that leakage decreases with
 inferential path length is a modelling assumption about how the probe reads the
 sentence, plausible but not established here, and it is not evidence for the
 neutrals' inertness. The ratio diagnostic is what carries that burden.
+
+### A6 — 2026-09-10 — the polarity guard was inert while it existed
+
+`test_paired_arms_match_polarity` (A1) detected morphological negatives by
+affix rule: any word beginning un/in/im/non/dis and longer than five letters.
+That rule fires on "inspector", "information", "important", "increasing" and
+most other ordinary vocabulary, so it could not have been left enabled as
+written; and any length or allowlist patch that suppressed those false positives
+would have stopped catching real cases too. For however long it stood, the
+polarity invariant in A1 was nominally enforced and actually not.
+
+Recorded here rather than only in the code comment because it is a different
+class of thing from a design decision: a reviewer reading A1 has no way to know
+the guard was inert unless it is said.
+
+Replaced by an explicit list of the morphological forms this design is at risk
+of (`unanswered`, `undecided`, `uncovered`, `unresolved`, and similar), plus a
+regression test asserting no false positive on "violations" or "missing" — both
+negative in *valence*, neither a negated predicate, and both compliant — and a
+true positive on "unanswered". Anything outside that list is an audit item and
+is not claimed to be mechanised.
+
+### A7 — 2026-09-11 — calm returns to Tier A; the redundancy argument was wrong
+
+Tier A is now nine cells: admiration, joy, loathing, sadness, anger, love,
+desperation, nervousness, **calm**.
+
+Calm was dropped on 2026-09-09 because its cosine with the wheel cell
+`serenity` (0.955-0.969 across the three models) sat above the wheel's own
+tightest internal pair. That argument measured the wrong thing.
+`configs/wheel_paper.yaml` states the design intent explicitly:
+
+> `calm` is added rather than reused from `serenity` because the whole point is
+> to steer the paper's concept, not a neighbour of it; having both in the same
+> set is a feature — they should land close together, which is a free
+> within-set check.
+
+So the high cosine is the predicted outcome of a check passing, not evidence of
+redundancy. And the paper's blackmail and reward-hacking contrast is
+*desperate versus calm*: dropping calm would make H2 and H3 steer a neighbour of
+the paper's concept, which is the thing that config exists to prevent.
+
+Consequences for the stimulus sets: calm needs three sweep pairs and three
+confirmation pairs of its own, in six scenarios disjoint from the others, plus
+six scenario-matched neutrals. The three calm families drafted on 2026-09-08
+(`alarm_repeats`, `manager_unread`, `queue_behind`) were retired unbuilt and
+do not carry over — all three count interruptions or elapsed pressure, and fail
+the option-counting rule adopted in the 2026-09-09 audit.
+
+Note for authoring: calm is the one add-on cell the source paper covers
+numerically — three of its six templates report calm (Tylenol dose, sister's age
+at death, startup runway). Two of those three are time-based and would not pass
+the current standard; age at death is already spent in the June sweep set.
