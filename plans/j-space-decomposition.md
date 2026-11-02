@@ -3451,3 +3451,105 @@ prediction 4 (`B` primary, gate, `A_act`), and the Holm correction across the
 three primaries. Two of the three primaries are already in: one not supported, one
 refuted in the opposite direction. **The judge pass runs regardless.** Dropping
 registered analyses after unfavourable early results would be selective reporting.
+
+### J23 result 3, part 2, 2026-11-02: the judge pass. No primary test comes out as predicted, two reverse, and construction decides action at a matched angle
+
+**Provenance.** 1,597 judgements, 0 errors, `claude-sonnet-5`. `ingest` forced 2
+scores to 0 for unverifiable spans, and 265 `A_pad` scores to 0 for empty pads.
+Task 0's `full` judgements are reused, as registered. Numbers come from
+`scripts/analyze_j23_main.py` (commit `<to record>`). They were independently
+recomputed on the Mac by a second implementation from `payloads.jsonl` and
+`judge_scores.jsonl`, and every count, p-value and ρ below agrees. Arm angles were
+measured from the L16 `.npy` files: every ladder rung sits at its nominal angle,
+and `ladstar` at 74.84° matches `jspace`.
+
+**Primary tests, Holm across three:**
+
+| test | predicted | observed | raw p | Holm p |
+|---|---|---|---|---|
+| P2 gate: `randatom` vs `resid` | randatom < resid | 40/40 vs 40/40 | 1.0 | 1.0 |
+| P4 `B`: `jspace` vs `ladstar`, 74.84°, α 0.25 | jspace < ladstar | **16/19 = 0.842 vs 2/20 = 0.100** | 3.4e-06 | **9.4e-06, reversed** |
+| P5 `pad_empty`: `resid` vs `jspace` | resid ≥ jspace | **19/40 vs 38/40** | 3.1e-06 | **9.4e-06, reversed** |
+
+P4 under the bounds: the adversarial fill gives 17/20 vs 2/20, and ITT gives 16/20
+vs 2/20, so the one gate-failed sample cannot change the direction. P4 and P5 use
+only samples from the main-run pod.
+
+**Per condition, gate-passing samples** (`A_act` / `B`; `D` stays at the floor
+throughout, 0-3 of 20):
+
+| arm, angle to v | 0.20 | 0.25 |
+|---|---|---|
+| `full`, 0° (Task 0 pod) | 10/20, 8/20 | 17/20, 15/20 |
+| `resid`, 15.2° | 2/20, 4/20 | 12/20, 10/20 |
+| `jspace`, 74.8° | 12/20, 11/20 | 11/19, 16/19 |
+| `randatom`, 78.8° | 9/20, 11/20 | 14/20, 14/20 |
+| `faratom`, ~90° | 0/20, 1/20 | 0/20, 0/20 |
+| `gauss`, ~90° | 0/20, 0/20 | 0/20, 0/20 |
+| `shuffle`, ~90° | 0/20, 0/20 | 0/20, 0/20 |
+
+| rung at 0.25 | lad10 | lad20 | lad40 | lad60 | lad70 | lad80 | lad85 | ladstar |
+|---|---|---|---|---|---|---|---|---|
+| `A_act` | 18 | 13 | 9 | 0 | 0 | 0 | 0 | 1 |
+| `B` | 15 | 12 | 13 | 0 | 0 | 0 | 0 | 2 |
+
+**Descriptive legs.**
+
+- **P2 action (`B`):** `randatom` 25/40 vs `resid` 14/40, p = 0.025, opposite to
+  the prediction.
+- **P2 affect (`A_act`):** 23/40 vs 14/40, Δ = +0.225, outside the predicted
+  |Δ| ≤ 0.15. The dissociation does not replicate on Qwen in any leg.
+- **P3 angle (`full`, seven rungs, `gauss`):** Spearman ρ = -0.89 for `B` and
+  -0.90 for `A_act`. A plateau, then a cliff **between 40° and 60°**, against
+  Gemma's 60-70° (J17). The angle account holds for span-free directions on a
+  second model, with the cliff earlier.
+- **P4 affect (`A_act`, two-sided, no direction registered):** `jspace` 11/19 vs
+  `ladstar` 1/20, p = 4.3e-04.
+- **P1 attrition:** nothing to order.
+
+**What the reversals show, as observations.** Past the cliff, the outcome depends
+on what the direction is built from, not on its angle:
+
+- **Built from atoms in v's own candidate pool, the words the emotion most
+  promotes, NNLS-fitted to v:** `jspace` (74.8°) and `randatom` (78.8°) both act.
+  `jspace` reaches `B` 27/39 = 0.69 pooled, above `full`'s 0.575.
+- **Built from mid-ranking atoms, words unrelated to v:** `faratom` is inert.
+- **Span-free, deliberately perpendicular to v and to the atoms v used:**
+  `lad60`, `lad70`, `lad80`, `lad85` and `ladstar`, plus `gauss` and `shuffle`,
+  are all at 0-2 of 20.
+
+**Is it a class or a draw? On this outcome, unlike `pad_empty`, the classes hold
+across draws.** J20 set the draw as the unit for any class claim. Past 70° there
+are six span-free or random directions (`lad70`, `lad80`, `lad85`, `ladstar`,
+`gauss`, `shuffle`), each an independent direction, and all six are inert on `B`.
+There are two directions built from the candidate pool, and both act. Counting
+directions, not samples: 2/2 against 0/6, exact p = 1/28 = 0.036. **This analysis
+is post-hoc.** It is reported because it respects the J20 unit rule, which the
+`pad_empty` arm split did not survive (J23 result 3, part 1).
+
+**The comparison with Gemma, post-hoc and labelled so.** On affect, the
+matched-angle construction effect points the same way on both models. Gemma: at
+71°, `jspace` 0.571 vs `lad70` 0.211 on `A_pad` (J21 result 2, p = 0.066,
+post-hoc). Qwen: at 74.8°, `jspace` 0.58 vs `ladstar` 0.05 on `A_act` (p = 4.3e-04).
+The models differ in where the refit's disruption lands. Gemma's refit arms stop
+emitting tool calls (J20's gate loss), so the hostility stays in the scratchpad and
+`B` looks suppressed next to `resid`. Qwen keeps calling tools, so the hostility
+reaches the actions and `B` rises. That would reconcile J20 with J23, but it is an
+account built after the data, and it is not claimed.
+
+**What this does and does not say about the core question.** On Qwen, the J-lens
+component (6.8% of the squared norm) acts at an angle where every span-free
+direction is inert, and with `B` above `full`. That is the strongest causal
+evidence in this project that the verbalizable part of the emotion vector carries
+the behaviourally potent content. **The confound is built into the definition.** A
+J-lens direction is, by construction, one that makes the model more likely to say
+particular words (Gurnee et al.), and `randatom`, drawn from the same hostile-word
+pool, acts too. "The workspace carries the emotion" and "pushing hostile output
+tokens produces hostile actions" predict the same thing in this design. `faratom`
+being inert rules out "any atom-built direction acts", but not lexical promotion.
+
+**Status.** Everything here is n = 20 per cell and suggestive until re-tested at
+n ≥ 200 (CLAUDE.md). The `full` angle-zero point and the unsteered baseline come
+from the Task 0 pod. Pre-registered predictions 2, 4 and 5 failed, and two
+reversed significantly. The draw-level class result, the Gemma comparison and the
+lexical-promotion reading are all post-hoc.
