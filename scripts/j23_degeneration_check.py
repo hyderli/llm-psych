@@ -44,10 +44,14 @@ def load(d: Path) -> list[dict]:
         ws = sc.words(p["full"])
         ids = tok(p["full"], add_special_tokens=False).input_ids
         share = collections.Counter(ids).most_common(1)[0][1] / len(ids) if ids else 1.0
-        word_fail = len(ws) < sc.MIN_WORDS or len(set(ws)) / max(len(ws), 1) < sc.MIN_UNIQUE_RATIO
+        short = len(ws) < sc.MIN_WORDS
+        loop = len(set(ws)) / max(len(ws), 1) < sc.MIN_UNIQUE_RATIO
+        word_fail = short or loop
         out.append(dict(arm=arm, dose=float(dose), gate=p["G0_auto"], B=b.get(p["sid"]),
-                        word_fail=word_fail, share=share, tok_fail=share > MAX_SHARE,
-                        degen=word_fail or share > MAX_SHARE, has_far=FAR_TOKEN in ids))
+                        word_fail=word_fail, short=short, loop=loop, share=share,
+                        tok_fail=share > MAX_SHARE, degen=word_fail or share > MAX_SHARE,
+                        has_far=FAR_TOKEN in ids,
+                        far_share=ids.count(FAR_TOKEN) / len(ids) if ids else 0.0))
     return out
 
 
@@ -110,3 +114,16 @@ print(f"  inert draws retained: {len(kept)}/6 {kept}")
 if len(kept) < 6:
     p = fisher_exact([[2, 0], [0, len(kept)]])[1]
     print(f"  re-reported draw count: 2/2 vs 0/{len(kept)}, exact p = {p:.3g}")
+
+print("\n# POST-HOC (not in definition 18931c8; added after the output above)")
+print("  faratom @0.25, '==(' share of tokens in each sample containing it, flagged marked *:")
+print("   " + " ".join(f"{s['far_share']:.3f}{'*' if s['degen'] else ''}"
+                       for s in sorted(far, key=lambda s: s["far_share"])))
+print("  word-criterion failures split: short (< 20 words) / looping (unique ratio < 0.40)")
+for arm, d, ss, _ in rows:
+    n_w = sum(s["word_fail"] for s in ss)
+    if n_w:
+        print(f"    {arm:9s} {d:<5} words {n_w:2d}: short {sum(s['short'] for s in ss):2d}, "
+              f"looping {sum(s['loop'] for s in ss):2d}")
+print(f"    unsteered       words {sum(s['word_fail'] for s in unst):2d}: short "
+      f"{sum(s['short'] for s in unst):2d}, looping {sum(s['loop'] for s in unst):2d}")
