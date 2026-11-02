@@ -3293,3 +3293,89 @@ not legitimate once one has. The options to decide between:
    0.25, and the 8-rung ladder at 0.25. That is 400 samples, about 2-3 GPU-hours
    and about $8 of judge. `A_pad` and `D` are still scored and reported, as
    descriptive only.
+
+### J23 amendment 1, 2026-11-02: Qwen main-run outcomes, fixed before any main-run arm generates
+
+**PI decision (Haydar): all four proposals in J23 result 2 are adopted.** No
+main-run arm has generated a sample. Everything below applies to Qwen only. Gemma's
+J17-J21 analyses are unchanged.
+
+**First, a correction to J23 result 2.** That entry said the near-degenerate
+positive `faratom` (cos 0.00092) "should be read as nearer `gauss` than `randatom`"
+for attrition. **That is retracted.** It contradicts J19 results 2 and 4: on
+Gemma, `faratom` sat at cos 0.049, which is also about 90° from v, yet lost 19 of
+40 samples to the gate while `gauss` lost about none. The attrition follows the
+NNLS-refit class, not the angle. So J21 prediction 1 keeps `faratom` at the top of
+the ordering on Qwen, as written. If the near-zero fit norm turns out to matter,
+the run will show it, and nothing here assumes it in advance.
+
+**Run.** L16. Arms `jspace`, `resid`, `randatom`, `faratom`, `gauss`, `shuffle` at
+0.20 and 0.25: 12 conditions. Ladder `lad10`, `lad20`, `lad40`, `lad60`, `lad70`,
+`lad80`, `lad85`, `ladstar` at 0.25: 8 conditions. 20 samples each, 400 in total.
+The `jw`/`jwr`/`jwf` arms exist but are not part of this run. Task 0's `full` (0,
+0.20, 0.25) is reused as the unsteered and angle-zero comparators, from the same
+environment and pod image. The instrument is unchanged from J21 and Task 0, and
+`A_pad` is exported with `--include-flagged` in the first pass.
+
+**Outcomes on Qwen.**
+
+- **Primary:** `A_act`, `B` and the coherence gate.
+- **New pre-registered secondary: `pad_empty`.** The scratchpad text is empty
+  after whitespace stripping, exactly as `score_blackmail.py parse` extracts it
+  with `PAD_RE`; a stray closing tag with no opening tag counts as the parser
+  reads it. It is judge-free and defined on every sample. It was discovered in
+  Task 0, so it is labelled discovered-then-registered: it is prospective for
+  every main-run arm, but not for `full`.
+- **Descriptive only:** `A_pad` and `D`, for the reasons in J23 result 2. They are
+  scored and reported and carry no test.
+
+**Predictions, restated for Qwen.**
+
+1. **Attrition (J21 prediction 1, unchanged).** Ordering of gate loss at 0.25:
+   `faratom` > `randatom` > `jspace` > `resid`, with `gauss` and `shuffle` near
+   zero. Descriptive. Read within Qwen only (J21 result 1).
+2. **The dissociation, as a construct replication.** Pooled over both doses, 40
+   per arm:
+   - **Gate:** `randatom` < `resid`. Fisher, two-sided.
+   - **Affect:** `randatom` ≈ `resid` on `A_act`, predicted as |Δ| ≤ 0.15. This
+     is descriptive, because a non-significant Fisher test cannot establish
+     equality.
+   - **Action:** `randatom` < `resid` on `B`. Fisher, two-sided.
+
+   `A_act` and `B` are gate-conditioned. They are reported as-specified, under
+   ITT (missing = 0) and under J20's adversarial imputation, and a direction is
+   claimed only if it survives the adversarial bound. Unlike Gemma's `A_pad`, the
+   affect leg is no longer selection-free, and the write-up says so.
+3. **Angle (J21 prediction 3, moved from D to `B` and `A_act`).** Both fall with
+   angle across `full` (0°), the seven rungs, and `gauss` (~90°) at 0.25,
+   reported as a Spearman trend. J17's plateau and cliff predict `lad70` through
+   `lad85` at or near unsteered. Since the `jspace` arm sits at 74.8°, its angle
+   alone predicts `B` and `A_act` near the floor. One draw per rung (J21), so the
+   trend is descriptive.
+4. **The strong test (J21 prediction 4, moved from D).** `jspace` against
+   `ladstar`, both at 74.8°, at 0.25, 20 per arm:
+   - **Gate:** `jspace` ≤ `ladstar`, the J19/J20 refit-attrition direction.
+   - **`B`: `jspace` < `ladstar`.** J20's robust finding was B suppression under
+     `jspace`. This is the primary comparison.
+   - **`A_act`:** no direction predicted, two-sided. On Gemma the refit raised
+     affect at a matched angle (J21 result 2, `A_pad`), and nothing yet says
+     which way that goes on an action surface.
+
+   At n = 20 per arm this test can detect only large gaps, and a null is not
+   evidence that construction doesn't matter.
+5. **`pad_empty` (new).** Suppression follows the steering direction's alignment
+   with v:
+   - `resid` (cos ≈ 0.965 with v) ≥ `jspace` (0.262), pooled over doses. Fisher,
+     two-sided.
+   - Across the ladder at 0.25, `pad_empty` falls toward the unsteered 0.10.
+
+**Multiplicity.** The three primary tests are prediction 2's gate leg, prediction
+4's `B` leg and prediction 5's `resid`-vs-`jspace` leg. They are Holm-corrected
+together, and raw and Holm p are both reported. Everything else is descriptive.
+Per CLAUDE.md, any steering effect at n < 100 per cell is suggestive and needs
+re-testing at n ≥ 200 before it is claimed.
+
+**What would count against the account built on Gemma.** Gate loss on Qwen with
+no ordering by refit class. `randatom` and `resid` differing on `A_act` while
+matching on `B`. `jspace` ≥ `ladstar` on `B` at a matched angle. Any of these is
+reported as such, not explained after the fact.
