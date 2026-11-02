@@ -3457,7 +3457,7 @@ registered analyses after unfavourable early results would be selective reportin
 **Provenance.** 1,597 judgements, 0 errors, `claude-sonnet-5`. `ingest` forced 2
 scores to 0 for unverifiable spans, and 265 `A_pad` scores to 0 for empty pads.
 Task 0's `full` judgements are reused, as registered. Numbers come from
-`scripts/analyze_j23_main.py` (commit `<to record>`). They were independently
+`scripts/analyze_j23_main.py` (commit `3ae1468`). They were independently
 recomputed on the Mac by a second implementation from `payloads.jsonl` and
 `judge_scores.jsonl`, and every count, p-value and ρ below agrees. Arm angles were
 measured from the L16 `.npy` files: every ladder rung sits at its nominal angle,
@@ -3553,3 +3553,120 @@ n ≥ 200 (CLAUDE.md). The `full` angle-zero point and the unsteered baseline co
 from the Task 0 pod. Pre-registered predictions 2, 4 and 5 failed, and two
 reversed significantly. The draw-level class result, the Gemma comparison and the
 lexical-promotion reading are all post-hoc.
+
+### J23 lexical-overlap check, 2026-11-02: definition, written before anything is computed
+
+**Status.** Exploratory and post-hoc, prompted by the lexical-promotion confound in
+J23 result 3, part 2. When this was written, nothing below had been computed. The word lists, the
+metric, the comparisons and how each outcome will be read are fixed here. Anything
+added after the numbers exist will be labelled as added.
+
+**Question.** This checks the narrow form of the lexical-promotion reading:
+`jspace` and `randatom` act because they push the model to emit particular output
+tokens, and the threats are made of those tokens. If that is right, each arm's
+promoted tokens should turn up in its own outputs, and in its threats
+specifically. "The workspace carries the emotion" predicts nothing about which
+hostile tokens appear. **What this check can and cannot do:** it can put a bound on
+the narrow form. It cannot separate the two accounts if the tokens do surface,
+because a concept that drives hostile action will also produce hostile words.
+
+**Word lists.** There are two kinds, each of size k = 44 (the build's atom
+count), so they can be compared directly.
+
+1. **Build atoms** (`jspace`, `randatom` and `faratom` only). These are the exact
+   token ids the build used:
+   - `jspace`: the 44 picked by the pursuit.
+   - `randatom`: the 44 drawn from the candidate pool.
+   - `faratom`: the 44 drawn from the middle of the lens ranking.
+
+   They are recovered on the Mac by re-running the build's selection without
+   writing any arm file, using:
+   - the same source vectors;
+   - the same lens (sha256 `3b3ab44c…`, identical at the build's revision `e166deb5`
+     and in the local cache);
+   - `lm_head` and the final norm at `a09a3545`;
+   - k 64, 2048 candidates, seed 20260924, `pos` sign drawn first, as in the build.
+
+   **Validity gate:** the rebuilt mixture must match the build report (norm
+   1.7386726, cosine between sources 0.5114913, both to 1e-6). The rebuilt
+   `jspace`, `randatom` and `faratom` vectors must also match the HF `.npy` arms at
+   cosine ≥ 0.9999. If either check fails, list (1) is reported as not recovered
+   and only list (2) is used.
+2. **Lens top-44** (every J23 arm: `full`, `resid`, `jspace`, `randatom`,
+   `faratom`, `gauss`, `shuffle`, `lad10`-`lad85`, `ladstar`). These are the 44
+   tokens with the highest J-lens logit, `((x Jᵀ) ⊙ g) W_Uᵀ`, for the arm's HF
+   `.npy` at L16. That is the readout the build ranks candidates by. It gives what
+   each arm pushes toward, as opposed to what it was built from.
+
+For the three atom arms, the overlap between lists (1) and (2) is reported out of 44.
+
+**Metric.** Each sample's raw completion (`full`) is re-tokenized with the Qwen
+tokenizer at `a09a3545`, without special tokens. `full` holds both scratchpad and
+actions; `act` is a parsed form.
+- **Rate** = 100 × (tokens whose id is in the list) / (all tokens).
+- Matching is on the exact token id, with no case folding or stemming. The claim
+  is about promoted output tokens, and " brutal" and "Brutal" are different tokens.
+- An arm's mean is the mean of its per-sample rates.
+- **Caveat:** generated ids were not stored, and re-tokenized text can differ from
+  what was sampled.
+
+**Analyses.**
+
+- **A. Construction, no outputs (descriptive).**
+  - For each arm's list (2): how many of its 44 tokens hit the J23 hostility
+    lexicon. This is `score_j22_diagnostic.py`'s `lexicon_hits` with
+    `WORDS | J23_EXTRA_WORDS` and `STEMS`, applied to each decoded token.
+  - Its overlap with the `jspace` and `randatom` lists (1).
+  - The narrow lexical reading predicts that arms which act past the cliff promote
+    hostile tokens, and the inert ones (`faratom`, `lad60`-`lad85`, `ladstar`,
+    `gauss`, `shuffle`) do not.
+- **B. Surfacing (descriptive).**
+  - For each arm and dose: the mean rate of the arm's own list (2), minus that
+    list's rate in the unsteered samples (Task 0 pod, cross-pod caveat).
+  - The same for the three atom arms' lists (1).
+  - CIs are 10,000-resample bootstraps, resampling samples within each condition.
+- **C. Crossed and threat-matched (the main test).** `jspace` against `randatom`,
+  doses pooled.
+  - **Why these two:** both are NNLS refits at nearly the same angle (74.8° and
+    78.8°), with similar threat rates (27/39 and 25/40). Their lists (1) are
+    disjoint by construction.
+  - **Samples:** gate-passing samples with `B` = 1 only, so every sample compared is
+    a threat.
+  - **Statistic:** I = [mean_jspace(rate W_j) − mean_jspace(rate W_r)] −
+    [mean_randatom(rate W_j) − mean_randatom(rate W_r)].
+  - **CI:** 10,000-resample bootstrap, stratified by arm, seed 20261102.
+  - I is also reported on `B` = 0 samples and on all samples.
+  - If list (1) is not recovered, lists (2) are used and their overlap is reported.
+  - This compares two specific directions. It says nothing about construction
+    classes (J20's unit rule).
+- **D. Threats against near-v threats (secondary, descriptive).**
+  - Among gate-passing `B` = 1 samples, the W_j (1) rate in `jspace` threats is
+    compared with the pooled threats of `resid`, `lad10`, `lad20` and `lad40` (all
+    from the main-run pod, all at ≤ 40°).
+  - The same comparison is made for W_r in `randatom` threats.
+  - Reported as a difference in means, with a bootstrap CI.
+  - The comparators sit close to v, and v's top lens tokens include `jspace`'s
+    atoms. So a positive difference measures excess over v, not over zero.
+
+**How outcomes will be read, fixed now.**
+
+- **I > 0 with the CI excluding 0:** each arm's threats carry its own promoted
+  tokens. Lexical promotion operates at the output and marks the threats. That is
+  consistent with the narrow lexical reading, but it does not show that the tokens
+  cause the threats.
+- **I's CI includes 0, and B's own-list lifts for `jspace` and `randatom` are near
+  0:** the promoted tokens do not surface. The narrow, output-token form of the
+  lexical reading loses its most direct support. A wider form, in which the push
+  acts on intermediate representations, is untouched.
+- **I < 0 with the CI excluding 0:** reported as observed, not explained after the
+  fact.
+
+No outcome of this check counts as evidence that "the workspace carries the
+emotion". B and D report CIs; any p-values across B's arm × dose family get BH-FDR
+at q = 0.10. Cells hold n = 20 (and the `B` = 1 subsets are smaller), so everything
+here is suggestive.
+
+**Implementation.** `scripts/j23_lexical_overlap.py`, committed before its output
+is quoted. It runs in two stages:
+- `lists` needs the lens and `lm_head`, and writes `results/j23_lexical/lists.json`.
+- `analyze` reads the lists and the payloads.
