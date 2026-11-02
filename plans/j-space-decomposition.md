@@ -3379,3 +3379,75 @@ re-testing at n ≥ 200 before it is claimed.
 no ordering by refit class. `randatom` and `resid` differing on `A_act` while
 matching on `B`. `jspace` ≥ `ladstar` on `B` at a matched angle. Any of these is
 reported as such, not explained after the fact.
+
+### J23 result 3, part 1, 2026-11-02: the judge-free tests. Recorded before the judge pass
+
+**Run.** 400 of 400 main-run samples, generated on a fresh 4090 pod (same image,
+GPU model and code as Task 0), are on the HF dataset at `eval_outputs/j23_main/L16/`
+(commit `3f7fc548`). The checksums match on the Mac. **Deviation from amendment
+1:** that amendment assumed Task 0's `full` and unsteered samples came "from the
+same environment and pod image". They come from a different pod of the same type.
+That matters only for comparisons involving Task 0's conditions; none of the three
+primary tests uses one. Counts below were rechecked on the Mac from both payload
+files.
+
+**Gate: 399 of 400 pass.** The only flag is one `jspace` sample at 0.25.
+
+- **Prediction 1 (attrition ordering): there is nothing to order.** No arm loses
+  samples. Under amendment 1's own terms ("gate loss on Qwen with no ordering by
+  refit class"), this counts against the Gemma account. On Qwen, the NNLS refit
+  arms do not destroy the ability to act.
+- **Prediction 2, gate leg (primary): `randatom` 40/40 against `resid` 40/40,
+  p = 1.0. Not supported.**
+
+**`pad_empty`** (counts of 20):
+
+| arm | 0.20 | 0.25 | pooled /40 |
+|---|---|---|---|
+| `jspace` | 19 | 19 | 38 |
+| `randatom` | 16 | 16 | 32 |
+| `faratom` | 14 | 17 | 31 |
+| `resid` | 7 | 12 | 19 |
+| `gauss` | 6 | 12 | 18 |
+| `shuffle` | 5 | 11 | 16 |
+| `full` (Task 0 pod) | 13 | 15 | 28 |
+| unsteered (Task 0 pod) | 2 at alpha 0 | | |
+
+| rung at 0.25 | lad10 | lad20 | lad40 | lad60 | lad70 | lad80 | lad85 | ladstar (74.8°) |
+|---|---|---|---|---|---|---|---|---|
+| empty /20 | 14 | 16 | 1 | 10 | 20 | 11 | 20 | 19 |
+
+- **Prediction 5 (primary): `resid` ≥ `jspace` is refuted.** `resid` 19/40 against
+  `jspace` 38/40, Fisher two-sided p = 3.1e-06, significant in the opposite
+  direction. Scratchpad suppression does not follow alignment with v.
+- **The ladder is not monotone in angle.** Rungs at 70° and 85° are 20/20, and the
+  40° rung is 1/20.
+
+**What the controls say about `pad_empty`, and a correction to J23 result 2.**
+Random directions empty the scratchpad too: `gauss` 18/40 and `shuffle` 16/40,
+against 2/20 unsteered (p = 0.008 and 0.019, with the cross-pod caveat). At 0.25,
+`full` (15/20) is not distinguishable from `gauss` (12/20), p = 0.50; pooled over
+doses it is 28/40 against 18/40, p = 0.041. **Most of the scratchpad suppression
+J23 result 2 called "itself a finding" is a generic effect of perturbing L16 at
+this dose, not an effect of the emotion content.** That sentence in result 2 is
+withdrawn as stated. What survives is at most a modest excess over a random
+direction.
+
+**What not to read into the arm split.** The refit arms (`jspace`, `randatom`,
+`faratom`, 101/120) empty the scratchpad far more often than the non-refits
+(`resid`, `gauss`, `shuffle`, 53/120). That echoes J19's refit-class finding on a
+new surface, and it is tempting. **It is post-hoc, and the ladder undercuts it.**
+The ladder rungs are span-free, not refits, yet single random draws range from 1/20
+(`lad40`) to 20/20 (`lad70`, `lad85`), and `ladstar` (span-free, 74.8°) is 19/20,
+level with `jspace` (refit, 74.8°). Variation between directions is as large as the
+whole arm split. As J20 put it, the unit for a class claim is the draw, and every
+arm here is one draw or one deterministic direction. So prediction 5's result is a
+valid comparison of two specific deterministic directions, `jspace` against
+`resid`, and supports nothing about construction classes.
+
+**Still to come, from the judge pass** (registered procedure, Task 0's `full`
+judgements reused): prediction 2's affect and action legs, prediction 3,
+prediction 4 (`B` primary, gate, `A_act`), and the Holm correction across the
+three primaries. Two of the three primaries are already in: one not supported, one
+refuted in the opposite direction. **The judge pass runs regardless.** Dropping
+registered analyses after unfavourable early results would be selective reporting.
