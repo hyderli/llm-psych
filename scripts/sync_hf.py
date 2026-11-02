@@ -101,7 +101,15 @@ def _build_parser() -> argparse.ArgumentParser:
     # ---- pull ----
     pull = sub.add_parser("pull", help="Download artefacts from HF.")
     pull.add_argument("kind", choices=ARTIFACT_KINDS)
-    pull.add_argument("--model", dest="model_key", default=None)
+    pull.add_argument(
+        "--model", dest="model_key", default=None,
+        help="The DIRECTORY name under the artefact kind on HF, not just the "
+             "model. Tracked artefacts carry a track suffix -- steering vectors "
+             "for a track live at steering_vectors/<model_key>-<track>/, so pass "
+             "e.g. Llama-3.1-8B-Instruct-story-wheel32. Passing the bare model "
+             "key matches nothing and the pull reports 0.00B with no error "
+             "(observed 2026-10-14). The module docstring above still describes "
+             "the pre-track .pt layout and is out of date.")
     pull.add_argument(
         "--revision",
         default=None,
