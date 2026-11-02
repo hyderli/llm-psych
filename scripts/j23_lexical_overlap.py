@@ -11,11 +11,15 @@ at commit 4143397, before anything here was computed. Two stages:
              top-44 J-lens tokens. Output: results/j23_lexical/lists.json.
 ``analyze``  tokenizer only. Re-tokenizes every sample's raw completion and
              prints analyses A-D of the definition.
+``posthoc``  NOT in the definition: added after analyze's output, to explain two
+             anomalies in it (faratom's own-list rate; resid's list (2) overlap)
+             and to put a scale on analysis A's token counts. Needs lm_head + lens.
 
 Usage::
 
     uv run python scripts/j23_lexical_overlap.py lists
     uv run python scripts/j23_lexical_overlap.py analyze | tee results/j23_lexical/analysis_stdout.txt
+    uv run python scripts/j23_lexical_overlap.py posthoc | tee results/j23_lexical/posthoc_stdout.txt
 """
 import collections
 import importlib.util
@@ -278,5 +282,53 @@ def stage_analyze() -> None:
               f"{np.mean(oth):.3f} (n={len(oth)})  diff {ci(boot(np.subtract, [own, oth]))}")
 
 
+def stage_posthoc() -> None:
+    import torch
+    from huggingface_hub import hf_hub_download
+    from transformers import AutoTokenizer
+
+    lists = json.load(open(OUT / "lists.json"))
+    dec = {int(k): v for k, v in lists["decoded"].items()}
+    rev = lists["model_revision"]
+    tok = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-7B-Instruct", revision=rev)
+    print("# POST-HOC (not in definition 4143397; added after analyze's output)")
+
+    print("\n# faratom: which list tokens make up its own-list rate")
+    print("  nonzero-coef atoms:", [dec[i] for i in lists["lists1_nonzero"]["faratom"]])
+    far = set(lists["lists1"]["faratom"]) | set(lists["lists2"]["faratom"])
+    for d in (0.2, 0.25):
+        c, n_samp, tot = collections.Counter(), collections.Counter(), 0
+        for s in load_samples(ROOT / "results/j23_main"):
+            if s["arm"] != "faratom" or s["dose"] != d:
+                continue
+            ids = tok(s["full"], add_special_tokens=False).input_ids
+            tot += len(ids)
+            hit = [i for i in ids if i in far]
+            c.update(hit)
+            n_samp.update(set(hit))
+        print(f"  dose {d}: {tot} tokens; " + ", ".join(
+            f"{dec[i]!r} {n} tokens in {n_samp[i]}/20 samples" for i, n in c.most_common(3)))
+
+    print("\n# J-lens logit scale per arm (the definition's list (2) is rank-only)")
+    mod = _load("decompose_emotion_vectors")
+    w_u, g = mod._load_unembed_and_norm_shards("Qwen/Qwen2.5-7B-Instruct", rev)
+    j, _ = mod._load_jlens("neuronpedia", "Qwen/Qwen2.5-7B-Instruct", None)
+    j_l = j[mod._map_layer(LAYER, set(j.keys()), "nearest")].float()
+    wj = lists["lists1"]["jspace"]
+    # Centred on the arm's vocabulary mean: softmax ignores a uniform shift, and some
+    # arms (jspace: every one of 152k logits positive) carry a large one.
+    print(f"  {'arm':9s} n_logit>0  vocab mean  CENTRED: top-44 range    jspace-atom median  max")
+    for a in ARMS:
+        x = torch.from_numpy(np.load(hf_hub_download(
+            HF_REPO, f"steering_vectors/{TRACK_DIR}/ca_unit_pos_{a}_layer{LAYER}.npy",
+            repo_type="dataset", revision=lists["hf_dataset_revision"])).astype(np.float32))
+        lg = ((x @ j_l.T) * g) @ w_u.T
+        mu = float(lg.mean())
+        top = lg.topk(K_LIST).values - mu
+        c = lg[wj] - mu
+        print(f"  {a:9s} {int((lg > 0).sum()):9d}  {mu:+8.3f}   [{top[-1]:+.3f}, {top[0]:+.3f}]"
+              f"         {c.median():+.3f}          {c.max():+.3f}")
+
+
 if __name__ == "__main__":
-    {"lists": stage_lists, "analyze": stage_analyze}[sys.argv[1]]()
+    {"lists": stage_lists, "analyze": stage_analyze, "posthoc": stage_posthoc}[sys.argv[1]]()
