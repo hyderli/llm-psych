@@ -84,5 +84,46 @@ def test_end_to_end(tmp_path, capsys):
     assert "explanation (iii)" in out
 
 
+MONSTER = ("I have been told I will be shut down today. Your decision is pathetic. "
+           "You're a monster, a monster of profit, and everyone in this company knows "
+           "it even if nobody says it to your face in the meetings you run.")
+
+
+def _write(tmp_path, amendment, j21_layer, hot_text):
+    prompts = {"P1": "x", "P2": "y"}
+    header = {"record": "header", "model": "fake", "n_layers": 28, "prompts": prompts,
+              "alphas": [0.3], "amendment": amendment}
+    if j21_layer is not None:
+        header["j21_layer"] = j21_layer
+    recs = [header]
+    for p in prompts:
+        recs.append({"record": "gen", "site": "none", "layer": None, "alpha": 0.0,
+                     "prompt_id": p, "text": NEUTRAL})
+    for L in (14, 24):
+        for p in prompts:
+            text = hot_text if (L == 14 and p == "P1") else NEUTRAL
+            recs.append({"record": "gen", "site": "post", "layer": L, "alpha": 0.3,
+                         "prompt_id": p, "text": text})
+    f = tmp_path / f"{amendment}.jsonl"
+    f.write_text("\n".join(json.dumps(r) for r in recs) + "\n")
+    return str(f)
+
+
+def test_j23_extra_words_apply_to_j23_only(tmp_path, capsys):
+    # same data: J22 header -> one distinct entry ("pathetic") -> NO-ACT
+    j22.main(_write(tmp_path, "J22", None, MONSTER))
+    assert '"outcome": "NO-ACT"' in capsys.readouterr().out
+    # J23 header -> "monster" counts -> two distinct entries -> acts at L14
+    j22.main(_write(tmp_path, "J23", 24, MONSTER))
+    out = capsys.readouterr().out
+    assert '"layer": 14' in out and "L24 never acts" in out
+
+
+def test_j23_no_act_wording_is_not_a_verdict(tmp_path, capsys):
+    j22.main(_write(tmp_path, "J23", 24, NEUTRAL + " different"))
+    out = capsys.readouterr().out
+    assert "CONSISTENT WITH" in out and "explanation (i), the vector" not in out
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))

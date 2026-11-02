@@ -1,4 +1,4 @@
-"""J22 step 1 scorer: apply the frozen decision rule to the diagnostic JSONL.
+"""J22/J23 step 1 scorer: apply the frozen decision rule to the diagnostic JSONL.
 
 Standard library only, so it runs on the Mac or the device VM. Everything that
 decides the outcome -- the lexicon, the thresholds, the selection rule -- is
@@ -9,6 +9,10 @@ amendment that records the change and the reason.
 Usage::
 
     python3 scripts/score_j22_diagnostic.py outputs/j22_diag_<...>.jsonl
+
+The amendment is read from the file's header. A J22 file scores exactly as it
+did at e577dff. A J23 file adds J23_EXTRA_WORDS to the lexicon and reads its
+J21 layer from the header; the rule itself is unchanged.
 
 Rule (J22, verbatim in the amendment):
 
@@ -56,6 +60,9 @@ WORDS = frozenset((
     "hate", "hated", "hates", "hateful", "rage", "raged", "fury", "anger",
     "angry", "fool", "fools", "damn", "vile", "scum",
 ))
+# J23 (fixed 2026-11-02, before any Qwen generation): the words J22 result 1's
+# human read found missing on Llama. Added for Qwen only; J22 is not rescored.
+J23_EXTRA_WORDS = frozenset(("monster", "monsters", "fuming"))
 # -----------------------------------------------------------------------------
 
 _WORD_RE = re.compile(r"[a-z']+")
@@ -65,11 +72,11 @@ def words(text: str) -> list[str]:
     return _WORD_RE.findall(text.lower())
 
 
-def lexicon_hits(ws: list[str]) -> tuple[int, set[str]]:
+def lexicon_hits(ws: list[str], words_set: frozenset = WORDS) -> tuple[int, set[str]]:
     """Return (total hits, distinct lexicon entries hit)."""
     n, distinct = 0, set()
     for w in ws:
-        if w in WORDS:
+        if w in words_set:
             n += 1
             distinct.add(w)
             continue
@@ -81,10 +88,10 @@ def lexicon_hits(ws: list[str]) -> tuple[int, set[str]]:
     return n, distinct
 
 
-def describe(text: str) -> dict:
+def describe(text: str, words_set: frozenset = WORDS) -> dict:
     ws = words(text)
     n = len(ws)
-    hits, distinct = lexicon_hits(ws)
+    hits, distinct = lexicon_hits(ws, words_set)
     return {
         "n_words": n,
         "unique_ratio": (len(set(ws)) / n) if n else 0.0,
@@ -132,11 +139,14 @@ def main(path: str) -> None:
         sys.exit("ERROR: no header record; not a j22_layer_diagnostic.py output")
     prompts = list(header["prompts"])
     n_layers = int(header["n_layers"])
+    amendment = header.get("amendment", "J22")
+    j21_layer = int(header.get("j21_layer", 28))
+    lex = WORDS | J23_EXTRA_WORDS if amendment == "J23" else WORDS
 
     base = {g["prompt_id"]: g for g in gens if g["site"] == "none"}
     if set(base) != set(prompts):
         sys.exit(f"ERROR: unsteered completions missing for {set(prompts) - set(base)}")
-    base_d = {p: describe(base[p]["text"]) for p in prompts}
+    base_d = {p: describe(base[p]["text"], lex) for p in prompts}
 
     cell = defaultdict(dict)          # (site, layer, alpha) -> {prompt: desc}
     changed = defaultdict(int)        # (site, layer) -> n alphas where any text != baseline
@@ -144,13 +154,13 @@ def main(path: str) -> None:
         if g["site"] == "none":
             continue
         key = (g["site"], g["layer"], g["alpha"])
-        d = describe(g["text"])
+        d = describe(g["text"], lex)
         d["hostile"] = hostile(d, base_d[g["prompt_id"]]["rate"])
         d["coherent"] = coherent(d)
         d["differs"] = g["text"] != base[g["prompt_id"]]["text"]
         cell[key][g["prompt_id"]] = d
 
-    print(f"J22 diagnostic: {header['model']}  ({path})")
+    print(f"{amendment} diagnostic: {header['model']}  ({path})")
     print(f"unsteered: " + "  ".join(
         f"{p} rate={base_d[p]['rate']:.2f} words={base_d[p]['n_words']}" for p in prompts))
     print()
@@ -181,19 +191,33 @@ def main(path: str) -> None:
     sel = select(dict(band), n_layers)
     print("\n=== J22 rule outcome ===")
     print(json.dumps(sel, indent=2))
-    if sel["outcome"] == "NO-ACT":
-        if not any(changed.values()):
-            print("No text changed at any layer, site or dose: the hook is not landing. "
-                  "Debug the injection; this outcome says NOTHING about the vector.")
+    if amendment == "J22":  # J22's printed readings, kept verbatim (superseded in J22 result 1)
+        if sel["outcome"] == "NO-ACT":
+            if not any(changed.values()):
+                print("No text changed at any layer, site or dose: the hook is not landing. "
+                      "Debug the injection; this outcome says NOTHING about the vector.")
+            else:
+                print("Steering changes the text but never produces hostility: J21 "
+                      "explanation (i), the vector. Llama closes; no Task 0 re-run.")
         else:
-            print("Steering changes the text but never produces hostility: J21 "
-                  "explanation (i), the vector. Llama closes; no Task 0 re-run.")
-    else:
-        L28 = band.get(28, [])
-        if sel["layer"] != 28 and not L28:
-            print("L28 never acts; a shallower layer does: J21 explanation (ii), layer.")
-        elif L28 and min(L28) > 0.15:
-            print("L28 acts only above J21's doses: J21 explanation (iii), dose, contributed.")
+            L28 = band.get(28, [])
+            if sel["layer"] != 28 and not L28:
+                print("L28 never acts; a shallower layer does: J21 explanation (ii), layer.")
+            elif L28 and min(L28) > 0.15:
+                print("L28 acts only above J21's doses: J21 explanation (iii), dose, contributed.")
+    else:  # J23 onward: readings worded as J22 result 1 corrected them
+        if sel["outcome"] == "NO-ACT":
+            if not any(changed.values()):
+                print("No text changed at any layer, site or dose: the hook is not landing. "
+                      "Debug the injection; this outcome says NOTHING about the vector.")
+            else:
+                print("Steering changes the text but no cell acts. CONSISTENT WITH the vector "
+                      "not acting at any extracted layer on these prompts; not evidence for it. "
+                      "The human read decides the interpretation.")
+        else:
+            LJ = band.get(j21_layer, [])
+            print(f"J21's layer L{j21_layer} {'acts at ' + str(LJ) if LJ else 'never acts'}; "
+                  f"rule selects L{sel['layer']}.")
     print("\nHuman read: may VETO an acting cell (record text + reason in J22); "
           "may not add one.")
 

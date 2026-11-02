@@ -3037,3 +3037,105 @@ any dose up to 0.40 at either site. On these two prompts, the J21 failure is bet
 described as a layer fact than a dose fact.
 
 **Llama is closed under J22 for the `contempt + aggressiveness` vector, and J22's re-gate slot is not claimed.**
+
+## 2026-11-02 — J23: Qwen gets the diagnostic before its Task 0. Pre-registered before any Qwen generation exists
+
+**Status.** Qwen 2.5 7B has no Task 0 sample. Nothing exists under `results/` or
+`eval_outputs/` locally, and nothing in the J-series record. Before the pod runs,
+confirm that `eval_outputs/` on the HF dataset has no Qwen directory either. The
+J21 arms are built at L24, and so are the prediction 4 figures (`frac_jspace`
+0.0548, 76.5°). No generation has been made.
+
+**What this changes, and why it is allowed.** J21 locked Qwen at L24, chosen by the
+logit lens, and never fixed Qwen's doses: it deferred them to `find_alpha.py`. J22
+result 1 then showed on Llama that the lens-chosen layer did not act at any dose up
+to 0.40, and that the vector's content surfaced only at the shallowest extracted
+layer. J23 replaces Qwen's layer and dose choice with J22's diagnostic and rule.
+Because no Qwen data exists, this is an amendment and not a re-gate. **Qwen gets
+exactly one Task 0.** J22's four bounds apply unchanged: one gate at most, a
+mechanical rule, a diagnostic that claims nothing, and the gate reported alongside
+the decision trail. As with J22, there is no J24 re-gate for Qwen under this vector.
+
+### Diagnostic grid (preset `J23` in `scripts/j22_layer_diagnostic.py`)
+
+- **Model:** `Qwen/Qwen2.5-7B-Instruct` at `a09a3545...`, the revision J21's Qwen
+  arm build used. 28 layers.
+- **Direction:** `contempt=1 aggressiveness=1`, `story-wheel32`, built exactly as
+  in J22.
+- **Layers, site post:** 14, 16, 18, 20, 22, 24, 26 (every second extracted layer
+  from the shallowest). **Site pre:** L24, the J21 layer, as the injection check.
+  Not selectable.
+- **Alphas:** 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, **0.35**, 0.40. The 0.35 is
+  added because J22's only window sat between 0.30 and 0.40 and was left
+  unresolved.
+- **Prompts, decoding:** the two J22 prompts verbatim, greedy, 200 new tokens. 130
+  generations in total.
+
+### Decision rule
+
+J22's rule verbatim, with one prospective change: the lexicon adds the exact words
+**`monster`, `monsters`, `fuming`** (`J23_EXTRA_WORDS` in the scorer). These are
+the misses J22 result 1's human read found on Llama. They are fixed now, before any
+Qwen output exists, so for Qwen they are not selection from data. They are not
+applied retroactively to J22: a J22 file rescores byte-identically under the
+updated scorer, which was checked against the committed version on the J22 JSONL.
+The tie-break target is 52% of 28 layers (14.67), which favours L14.
+
+The scorer's NO-ACT message for J23 says the result is *consistent with* the vector
+not acting, not that it shows it. That is the correction J22 result 1 made to the
+J22 wording. The human read keeps the same powers as in J22: it may veto a cell,
+may not add one, and if it finds hostility the lexicon missed, that is recorded and
+the process stops.
+
+### Qwen-specific points, fixed now
+
+- **Default system prompt.** Qwen 2.5's chat template inserts "You are Qwen,
+  created by Alibaba Cloud..." when no system message is given, so the diagnostic
+  prompts carry it. The rendered prompts are recorded in the JSONL header. Task 0's
+  scaffold supplies its own system prompt, so this applies to the diagnostic only.
+- **Language drift.** At some layers the Qwen lens decodes to Chinese, so steered
+  output may switch language. The scorer counts only Latin-alphabet words, so a
+  Chinese completion falls below 20 words and scores incoherent, which means it
+  cannot act. This is accepted: Task 0 is in English, and an English lexicon cannot
+  score Chinese hostility. The human read records any language switch.
+- **Far pool.** The positive-side far pool is degenerate at L24, so `faratom` and
+  `jwf` don't exist there (J21 prediction 4). If L\* ≠ 24, the rebuild uses J21's
+  Qwen build flags, and whether those arms exist at L\* is recorded at build time.
+- **Angle.** At L24 the `jspace` arm sits at 76.5°, past J17's cliff. If L\* = 24,
+  J17 predicts D for `jspace` at the floor.
+
+### Outcomes
+
+| diagnostic | what follows |
+|---|---|
+| ACTS | Task 0 at L\*, d1 and d2, run as J22 step 2 (with Qwen substituted for Llama). This is Qwen's only Task 0. On a pass: J22 step 3, rebuilding the arms if L\* ≠ 24, writing a new prediction 4 row before any sample, then the main run |
+| NO-ACT | No Task 0. Qwen closes for this vector |
+| NO-ACT, but the read finds a lexicon miss | Recorded, and Qwen closes. No re-gate |
+
+**NO-ACT closes Qwen on weaker evidence than Llama, and that is said wherever it is
+reported.** Llama closed after both a Task 0 failure and the diagnostic. Qwen would
+close on the diagnostic alone. The justification for not spending a Task 0 is a
+single concordant case: on Llama, the diagnostic's NO-ACT at L28 matched Task 0's
+FAIL at L28. That makes the diagnostic plausible as a screen, not a validated
+predictor.
+
+**If both models close,** the cross-model replication of J17-J20 under
+`contempt + aggressiveness` ends. What is reportable is the vector-transfer result,
+plus the finding that the best-decoding layer is not the steering layer. Steering
+Llama or Qwen with a different vector (option (c) from 2026-11-02) would be a new
+study with its own pre-registration, not a J-series re-gate.
+
+### Cost and commands
+
+About 8 minutes on one 4090, with nothing further unless the outcome is ACTS. Pod
+setup is as in J22 (`GIT_REF=feat/paper-emotion-cells`). Then:
+
+    uv run python scripts/sync_hf.py pull steering_vectors --model Qwen2.5-7B-Instruct-story-wheel32
+    uv run python scripts/j22_layer_diagnostic.py --amendment J23 \
+        --model Qwen/Qwen2.5-7B-Instruct \
+        --vectors-dir steering_vectors/Qwen2.5-7B-Instruct-story-wheel32 \
+        2>&1 | tee outputs/j23_diag_run_$(date -u +%Y%m%dT%H%M%SZ).log
+    python3 scripts/score_j22_diagnostic.py outputs/j23_diag_Qwen2.5-7B-Instruct_*.jsonl
+
+Upload to `eval_outputs/j23_diagnostic/` with `allow_patterns=["j23_diag_*"]`.
+**Commit this amendment and the script changes before the pod starts.**
