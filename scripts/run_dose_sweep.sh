@@ -87,10 +87,17 @@ except Exception as e:
 if not torch.cuda.is_available():
     print("ERROR: torch reports no CUDA device.", file=sys.stderr); sys.exit(1)
 name = torch.cuda.get_device_name(0)
-cap = "sm_%d%d" % torch.cuda.get_device_capability(0)
+major, minor = torch.cuda.get_device_capability(0)
+cap = "sm_%d%d" % (major, minor)
 arches = torch.cuda.get_arch_list()
 print(f"[sweep] gpu={name}  capability={cap}  torch={torch.__version__}")
-if cap not in arches:
+# SASS built for sm_XY runs on any sm_XZ with Z >= Y (same major), so an exact
+# match is too strict: Ada (sm_89) runs cu124's sm_86 kernels, and a 4090 was
+# refused here on 2026-11-02. Blackwell (sm_120) still has no same-major entry.
+import re
+built = [int(m.group(1)) for a in arches if (m := re.match(r"sm_(\d+)", a))]
+runnable = any(b // 10 == major and b % 10 <= minor for b in built)
+if not runnable:
     print(f"\nERROR: {name} is {cap}, which torch {torch.__version__} cannot run.\n"
           f"  torch arch list: {' '.join(arches)}\n"
           f"  Either move to a GPU whose capability is in that list, or install a\n"
