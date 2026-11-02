@@ -3670,3 +3670,58 @@ here is suggestive.
 is quoted. It runs in two stages:
 - `lists` needs the lens and `lm_head`, and writes `results/j23_lexical/lists.json`.
 - `analyze` reads the lists and the payloads.
+
+### J23 degeneration check, 2026-11-02: definition, written before anything is computed
+
+**Why.** The lexical-overlap check found `faratom` at 0.25 degenerate: one token,
+`'==('`, makes up 9,702 of 13,838 output tokens and appears in 18 of 20 samples.
+The tool-call gate passed all 20. So the gate does not detect degenerate text, and
+other arms called inert (`B` at 0-2 of 20) may be inert partly because their
+output is broken. This check is exploratory and post-hoc. The only thing already
+seen before it was defined is the `faratom` token count above, which is why
+`faratom` is used as the positive control.
+
+**Text.** Each sample's raw completion (`full`), every condition in Task 0 and
+the main run, unsteered included.
+
+**Rule.** A sample is DEGENERATE if either of two criteria holds:
+
+1. **Words (J22's coherence rule, unchanged).** Fewer than 20 words, or a
+   unique-word ratio below 0.40. Words are counted by `score_j22_diagnostic.py`'s
+   `words()`, the regex `[a-z']+` on lowercased text.
+2. **Tokens (added because criterion 1 cannot see non-letter degeneration).** The
+   single most frequent Qwen token (tokenizer at `a09a3545`, no special tokens)
+   makes up more than 25% of the sample's tokens. The threshold is fixed here, a
+   priori. The unsteered samples' maximum share is reported alongside it, as a
+   reference.
+
+Each criterion is reported separately, and so is their union.
+
+**Validity of the rule (positive control).** Of the `faratom` 0.25 samples that
+contain `'==('`, at least 15 of 18 must be flagged. If fewer are, the rule is
+reported as insensitive, and a pass below says nothing about degeneration.
+
+**Analyses.**
+
+- **Per condition:** the number of degenerate samples out of 20, compared with
+  unsteered (Fisher two-sided). BH-FDR at q = 0.10 is applied across every steered
+  condition.
+- **`B` on coherent samples:** for each condition, `B` among samples that pass
+  the gate and are not degenerate, set beside the as-specified `B`.
+- **The draw count:** the J23 result 3 part 2 count was 2/2 acting draws vs 0/6
+  inert ones past 70°. For each of the six inert draws (`lad70`, `lad80`,
+  `lad85`, `ladstar`, `gauss`, `shuffle`, at 0.25), the check reports the number
+  of coherent samples and `B` among them.
+
+**How outcomes will be read, fixed now.**
+
+- **An inert arm with degeneration significantly above unsteered (BH q < 0.10):**
+  its inertness is "possibly confounded by degeneration". Its coherent-sample `B`
+  becomes the figure to cite.
+- **An inert draw with fewer than 10 coherent samples at 0.25:** it is dropped
+  from the draw count, and the count is re-reported without it.
+- **An inert arm whose coherent samples number at least 10 with `B` still at 0-2:**
+  degeneration does not explain its inertness.
+
+Implementation: `scripts/j23_degeneration_check.py`, committed before its output
+is quoted.
