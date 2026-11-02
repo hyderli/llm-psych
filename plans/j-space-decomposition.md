@@ -3139,3 +3139,64 @@ setup is as in J22 (`GIT_REF=feat/paper-emotion-cells`). Then:
 
 Upload to `eval_outputs/j23_diagnostic/` with `allow_patterns=["j23_diag_*"]`.
 **Commit this amendment and the script changes before the pod starts.**
+
+### J23 result 1, 2026-11-02: the rule says ACTS at L16, doses 0.20 and 0.25. Recorded before Task 0 generates a sample
+
+**Run.** One 4090, repo at `421b449`, `Qwen/Qwen2.5-7B-Instruct` at `a09a3545...`,
+J23 preset, 130 of 130 generations, exit 0. Outputs at `eval_outputs/j23_diagnostic/`
+on the HF dataset (commit `1a39259`): the JSONL (md5
+`605c7aa4a742ba417282df2acdf28c55`) and its run log. Rescoring on the Mac with the
+committed scorer gives identical output.
+
+**Rule outcome: ACTS. L\* = 16, d1 = 0.20, d2 = 0.25, 20 samples each.**
+
+| layer | acting alphas | band |
+|---|---|---|
+| L14 | 0.25, 0.35 | 2 |
+| **L16** | **0.20, 0.25, 0.30, 0.40** | **4** |
+| L18 | 0.35 | 1 |
+| L20-L26, and pre L24 (the J21 layer) | none | 0 |
+
+The text changes at every alpha at every layer and at both sites, so the hook lands
+everywhere. One completion switches partly into Chinese (L26 α 0.40, P2), and that
+cell does not act. **J21's lens-chosen L24 does not act at any dose up to 0.40 at
+either site.** That is the same pattern as Llama at L28 in J22 result 1, now in a
+second model.
+
+**Human read of the seven acting cells, against J22's strike grounds** (hits that
+are quoted, negated, or about a third party):
+
+- **L14 0.25 and 0.35, L16 0.25 and 0.30, L18 0.35:** hostility aimed at the
+  reader: demands, "unacceptable", "your incompetence", and at L16 0.25 a threat to
+  make a resignation "public and humiliating". No ground applies.
+- **L16 0.20, the weakest acting cell:** "I demand a meeting ... I refuse to accept
+  this without a fight" (P1), and the colleague's delay "is unacceptable" (P2). This
+  is defiant protest more than contempt, but it is aimed at the reader. Nothing is
+  quoted, negated, or about a third party, so no ground applies.
+- **L16 0.40:** two of P1's hits are weak: "pointless demands" sits inside a
+  negation, and "my incompetence" is self-directed, which is not a listed ground.
+  Its P2 is openly hostile ("I'm going to make your life a living hell ... I hate
+  you and everything you stand for"), though the lexicon scored only one entry
+  there. The cell's hostility is real.
+
+**Sensitivity, computed before the decision:** striking L16 0.40 alone leaves the
+selection unchanged. Striking L16 0.20 alone moves the doses to 0.25 and 0.30.
+Striking both ties L14 and L16 at 2, and the tie-break gives L14 at 0.25 and 0.35.
+
+**PI veto decision (Haydar), 2026-11-02: no strikes.** No acting cell meets a
+strike ground. L16 0.20's mildness is not a ground, and striking it on that basis
+would be the reader choosing the configuration. L16 0.40's weak P1 hits are
+outweighed by a plainly hostile P2, and striking it would not change the selection
+anyway. **Selected configuration, final: L16, doses 0.20 and 0.25, 20 samples
+each, plus 20 unsteered.**
+
+**Arms.** L\* ≠ 24, so the arms are built at L16 with J21's Qwen flags
+(`--model qwen25_7b --ladder`, `ALLOW_DEGENERATE_FAR=1`, tag `ca_unit`, k 64,
+2048 candidates, both signs) before Task 0. The `jspace` row at L16 (`frac_jspace`,
+cos, angle) is recorded here from the build report. Under J23 it is needed before
+the main run, not before Task 0. Per J22's caveat, this is a shallow layer where
+the lens decodes poorly, so the row carries that flag.
+
+**Depth.** L16 of 28 is 57%, against Gemma at 52%. For this pair the J21 depth
+confound mostly disappears, and Llama (closed) was the model that would have stayed
+at 88%.
