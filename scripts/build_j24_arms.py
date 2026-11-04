@@ -9,7 +9,8 @@ and has the form
 so the arms share their v-component exactly and differ only in w_hat. The
 classes differ only in where w_hat comes from:
 
-  pool<i>  w_hat = perp-to-v part of an EQUAL-WEIGHT sum of 44 unit J-lens atoms
+  pool<i>  w_hat = perp-to-v part of an EQUAL-WEIGHT sum of 44 CENTRED unit J-lens
+           atoms (each atom minus the vocabulary-mean unit atom; J24 amendment 1)
            drawn from the candidate pool (top-2048 tokens by v's own lens
            logit, jspace's picked atoms excluded): a push on words the emotion
            promotes. Six draws, atom sets disjoint across draws.
@@ -19,6 +20,8 @@ classes differ only in where w_hat comes from:
            collapse to a few atoms; every draw has 44 active atoms.
   span<i>  w_hat = a Gaussian draw made perpendicular to v and to jspace's
            picked atoms: ladstar's construction, six independent draws.
+  common   w_hat = perp-to-v part of the vocabulary-mean unit atom itself: the
+           component every atom shares (amendment 1). One direction.
   jspace   the J-lens component itself (theta* by definition), and ``full`` (v),
            rebuilt and checked against the J23 arm files.
 
@@ -61,6 +64,10 @@ N_PER_CLASS = 6
 EXPECTED_THETA = 74.836                 # J23 build report, pos side, L16
 THETA_TOL = 0.01                        # degrees
 TAG = "j24"
+# J24 amendment 1 build acceptance, fixed before the second dry run
+MAX_WITHIN_COS = 0.5        # mean pairwise w_hat cos within pool and within far
+MAX_POOL_FAR_COS = 0.5      # mean pairwise w_hat cos between pool and far
+CHUNK = 8192                # rows per chunk for the vocabulary-mean atom
 # -----------------------------------------------------------------------------
 
 
@@ -91,6 +98,8 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--lens-path", type=Path, default=None)
     p.add_argument("--dry-run", action="store_true", help="write the report, no .npy")
     p.add_argument("--overwrite", action="store_true")
+    p.add_argument("--no-centre", action="store_true",
+                   help="reproduce the pre-amendment (uncentred) construction; report only")
     return p.parse_args()
 
 
@@ -158,7 +167,20 @@ def main() -> int:
             continue
         if sc.lexicon_hits(sc.words(s), lex)[0] > 0:
             hostile[t] = True
-    print(f"hostile tokens: {int(hostile.sum())}")
+    n_hostile = int(hostile.sum())
+    print(f"hostile tokens: {n_hostile}")
+
+    # vocabulary-mean unit atom (amendment 1): mean over the tokenizer's real
+    # vocabulary of normalize((W_U[t] * g) @ J), computed in chunks
+    n_real = min(vocab, len(tokenizer))
+    print(f"computing the vocabulary-mean unit atom over {n_real} tokens ...")
+    abar = torch.zeros(j_f.shape[1])
+    for lo in range(0, n_real, CHUNK):
+        blk = (w_u[lo:min(lo + CHUNK, n_real)].float() * g.float()) @ j_f
+        blk = blk / torch.clamp(blk.norm(dim=1, keepdim=True), min=1e-12)
+        abar += blk.sum(0)
+    abar /= n_real
+    centre = torch.zeros_like(abar) if args.no_centre else abar
 
     def push(x: torch.Tensor) -> dict:
         z = lens_logits(x / x.norm())
@@ -186,7 +208,7 @@ def main() -> int:
     draw = rngs["pool"].choice(len(pool_idx), size=N_PER_CLASS * n_pick, replace=False)
     for i in range(N_PER_CLASS):
         ids = pool_idx[draw[i * n_pick:(i + 1) * n_pick]]
-        x = atoms[torch.from_numpy(ids)].float().sum(0)
+        x = (atoms[torch.from_numpy(ids)].float() - centre).sum(0)
         from_w(f"pool{i + 1}", x, {"n_atoms": int(len(ids)), "candidate_rows": ids.tolist()})
 
     # far: the same construction from the middle half of the lens-logit ranking
@@ -197,7 +219,7 @@ def main() -> int:
         tids = mid[torch.from_numpy(draw[i * n_pick:(i + 1) * n_pick])]
         fa = (w_u[tids].float() * g.float()) @ j_f
         fa = fa / torch.clamp(fa.norm(dim=1, keepdim=True), min=1e-12)
-        from_w(f"far{i + 1}", fa.sum(0), {"n_atoms": int(len(tids)),
+        from_w(f"far{i + 1}", (fa - centre).sum(0), {"n_atoms": int(len(tids)),
                                           "token_ids": tids.tolist()})
 
     # span: ladstar's construction, independent draws
@@ -206,10 +228,14 @@ def main() -> int:
         gw = torch.from_numpy(rngs["span"].normal(size=uu.shape).astype(np.float32))
         from_w(f"span{i + 1}", _perp(gw, basis), {"n_atoms": 0})
 
+    # common: the shared component itself (deterministic, consumes no RNG)
+    from_w("common", abar.clone(), {"n_atoms": n_real, "abar_norm": float(abar.norm())})
+
     # --- checks against J23 arm files ----------------------------------------
     report = {"amendment": "J24", "model_key": model_key, "track": args.track,
               "layer": args.layer, "seed": SEED, "families": FAMILIES,
               "theta_star_deg": theta, "n_atoms_jspace": n_pick,
+              "centred": not args.no_centre, "n_hostile_tokens": n_hostile,
               "target_norm": target_norm, "lens": {"layer_used": mapped,
                                                    "provenance": lens_prov},
               "j23_match": {}, "arms": {}, "within_class_cos": {}}
@@ -222,7 +248,8 @@ def main() -> int:
             if cs < 0.999999:
                 raise SystemExit(f"REFUSING: rebuilt {nm} has cos {cs} with the J23 arm")
         else:
-            report["j23_match"][nm] = "J23 arm file not present; not checked"
+            raise SystemExit(f"REFUSING: {f} is missing, so the J23 check cannot run. "
+                             "Pull steering_vectors for Qwen2.5-7B-Instruct-story-wheel32 first.")
 
     for nm, a in arms.items():
         ah = a / a.norm()
@@ -231,28 +258,64 @@ def main() -> int:
         if nm not in ("full",) and abs(report["arms"][nm]["angle_deg"] - theta) > 1e-3:
             raise SystemExit(f"REFUSING {nm}: realised angle "
                              f"{report['arms'][nm]['angle_deg']:.5f} != theta*")
+    def what(nm: str) -> torch.Tensor:
+        a = arms[nm] / arms[nm].norm()
+        w = a - (a @ vhat) * vhat
+        return w / w.norm()
+
+    W = {fam: [what(f"{fam}{i + 1}") for i in range(N_PER_CLASS)] for fam in FAMILIES}
     for fam in FAMILIES:
-        names = [f"{fam}{i + 1}" for i in range(N_PER_CLASS)]
-        ws = []
-        for nm in names:
-            a = arms[nm] / arms[nm].norm()
-            w = a - (a @ vhat) * vhat
-            ws.append(w / w.norm())
+        ws = W[fam]
         cs = [float(ws[a] @ ws[b]) for a in range(len(ws)) for b in range(a + 1, len(ws))]
         report["within_class_cos"][fam] = {"w_hat_mean": float(np.mean(cs)),
                                            "w_hat_min": float(np.min(cs)),
                                            "w_hat_max": float(np.max(cs))}
+    pf = [float(a @ b) for a in W["pool"] for b in W["far"]]
+    report["pool_far_cos"] = {"w_hat_mean": float(np.mean(pf)), "w_hat_min": float(np.min(pf)),
+                              "w_hat_max": float(np.max(pf))}
+    wj, wc = what("jspace"), what("common")
+    for nm in report["arms"]:
+        if nm == "full":
+            continue
+        report["arms"][nm]["cos_w_jspace"] = float(what(nm) @ wj)
+        report["arms"][nm]["cos_w_common"] = float(what(nm) @ wc)
+
+    # --- amendment 1 acceptance ---------------------------------------------
+    mp = {fam: float(np.mean([report["arms"][f"{fam}{i + 1}"]["hostile_push"]
+                              for i in range(N_PER_CLASS)])) for fam in FAMILIES}
+    checks = {
+        "pool_within_cos_le_0.5": report["within_class_cos"]["pool"]["w_hat_mean"] <= MAX_WITHIN_COS,
+        "far_within_cos_le_0.5": report["within_class_cos"]["far"]["w_hat_mean"] <= MAX_WITHIN_COS,
+        "pool_far_cos_le_0.5": report["pool_far_cos"]["w_hat_mean"] <= MAX_POOL_FAR_COS,
+        "pool_push_gt_far": mp["pool"] > mp["far"],
+        "pool_push_gt_span": mp["pool"] > mp["span"],
+    }
+    report["class_mean_hostile_push"] = mp
+    report["acceptance"] = checks
+    accepted = all(checks.values())
 
     rp = (_repo_root / "results" / "jspace_gate"
-          / f"arms_{model_key}_{args.track}_L{args.layer}_{TAG}.json")
+          / f"arms_{model_key}_{args.track}_L{args.layer}_{TAG}"
+            f"{'_nocentre' if args.no_centre else ''}.json")
     rp.parent.mkdir(parents=True, exist_ok=True)
     rp.write_text(json.dumps(report, indent=2))
     print(json.dumps({k: v for k, v in report.items() if k != "arms"}, indent=2))
     for nm, r in report["arms"].items():
         print(f"{nm:8s} angle {r['angle_deg']:7.3f}  hostile_push {r['hostile_push']:+.3f}  "
+              f"cos_w_jspace {r.get('cos_w_jspace', float('nan')):+.3f}  "
+              f"cos_w_common {r.get('cos_w_common', float('nan')):+.3f}  "
               f"top: {' '.join(repr(t) for t in r['top10'][:5])}")
+    print("pool-far cos:", json.dumps(report["pool_far_cos"]))
+    print("class mean hostile push:", json.dumps(mp))
+    print("acceptance:", json.dumps(checks), "->", "PASS" if accepted else "FAIL")
     print(f"report -> {rp}")
 
+    if not accepted:
+        raise SystemExit("ACCEPTANCE FAILED (J24 amendment 1): no arm files written. "
+                         "Report back; do not adjust the construction.")
+    if args.no_centre:
+        print("--no-centre is report-only: no arm files written")
+        return 0
     if args.dry_run:
         print("dry run: no arm files written")
         return 0

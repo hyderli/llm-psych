@@ -168,15 +168,17 @@ def main() -> int:
         print(f"{nm}: direction {'agrees' if agree else 'DISAGREES'} across analyses "
               f"({d1:+.3f} vs {d2:+.3f})")
 
-    print("\n## jspace against each span draw (descriptive replication of J23 P4), Fisher")
-    jk, jn = rate(pay, sc, "B", cond("jspace"))
-    for a in CLASSES["span"]:
-        k, n = rate(pay, sc, "B", cond(a))
-        p = fisher_exact([[jk, jn - jk], [k, n - k]])[1]
-        print(f"  jspace {jk}/{jn} vs {a} {k}/{n}: p = {p:.3g}")
+    for ref, why in (("jspace", "descriptive replication of J23 P4"),
+                     ("common", "amendment 1: does the shared atom component act?")):
+        print(f"\n## {ref} against each span draw ({why}), Fisher")
+        jk, jn = rate(pay, sc, "B", cond(ref))
+        for a in CLASSES["span"]:
+            k, n = rate(pay, sc, "B", cond(a))
+            p = fisher_exact([[jk, jn - jk], [k, n - k]])[1]
+            print(f"  {ref} {jk}/{jn} vs {a} {k}/{n}: p = {p:.3g}")
 
     print("\n## EXPLORATORY: B rate vs hostile push, across directions (Spearman)")
-    names = ["jspace"] + [a for arms in CLASSES.values() for a in arms]
+    names = ["jspace", "common"] + [a for arms in CLASSES.values() for a in arms]
     xs, ys = [], []
     for a in names:
         k, n = rate(pay, sc, "B", cond(a))
@@ -190,6 +192,7 @@ def main() -> int:
     rho2, p2_ = spearmanr(pool_x, pool_y)
     print(f"within pool (n = {N}): rho = {rho2:+.3f}, p = {p2_:.3g}")
     print("\nwithin-class w_hat cosines (build):", json.dumps(build["within_class_cos"]))
+    print("pool-far w_hat cosines (build):", json.dumps(build["pool_far_cos"]))
     return 0
 
 

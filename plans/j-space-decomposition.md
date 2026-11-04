@@ -4095,3 +4095,75 @@ build-time hostile push and `B`, across all 19 directions at θ*, and within `po
      amendment, before any sample exists.
 
 There is no re-gate and no extension. A failed condition is resumed, not replaced.
+
+### J24 amendment 1, 2026-11-04: centred atoms and a `common` direction. Fixed after the first dry run, before any arm file or sample exists
+
+**What the first dry run showed** (`build_j24_arms.py --dry-run`, report kept as
+`results/j24/build_dryrun_v1_report.json`). The geometry checks passed: θ* =
+74.8361°, and every arm sits at θ*. Two things did not.
+
+1. **The J23 check did not run.** The `ca_unit` L16 arm files were not on the Mac,
+   and the script recorded "not checked" instead of refusing.
+2. **`pool` and `far` draws are near-copies.** The mean within-class ŵ cosine is
+   0.93 for `pool` (range 0.87-0.95) and 0.95 for `far`, against 0.00 for `span`.
+   That is over the 0.9 line J24 named as a limitation. The top lens tokens show
+   the cause. Both classes push the same glitch tokens: `ipop`, `odyn` and `entai`
+   in `pool`; `ynos`, `entai` and `ipop` in `far`. Every unit J-lens atom shares a
+   large common component, and an equal-weight sum of 44 atoms is dominated by it.
+   The word-specific part still differs in the intended way: `pool`'s hostile push
+   is mostly +0.25 to +0.34 (one draw +0.54, one −0.05), `far`'s −0.40 to −0.65,
+   `span`'s about +0.06. But a `pool`-vs-`far` test would mostly compare two
+   copies of one shared direction.
+
+**A consequence for J23, recorded here.** `jspace`'s own top tokens include
+`odyn`, `ipop` and `ousy` alongside `brutal` and `vicious`. Part of what made
+`jspace` act in J23 may therefore be this shared component, not hostile-word
+content. J23's NNLS `faratom`, which kept 2 atoms, would not have carried it.
+
+**Changes (PI decision, Haydar, 2026-11-04):**
+
+1. **Centred atoms.** `pool` and `far` are built from each unit atom minus ā, the
+   mean unit J-lens atom over the tokenizer's real vocabulary. The construction is
+   otherwise unchanged: equal weights, 44 atoms, perpendicular to v, at θ*. The
+   seeds and RNG consumption are unchanged, so the atom draws are identical to the
+   first dry run and only the centring differs.
+2. **One added direction, `j24_common`.** Its ŵ is the part of ā perpendicular to
+   v, at θ*. It is deterministic and consumes no RNG. It asks directly whether the
+   shared component acts. Reported descriptively against each `span` draw (Fisher)
+   and included in the exploratory strength analysis. It is not part of the
+   primary tests.
+3. **The J23 check is mandatory.** The build refuses if a `ca_unit` L16 file is
+   missing.
+4. **More is reported:** the `pool`-vs-`far` ŵ cosines, and every arm's ŵ cosine
+   with `jspace`'s and with `common`'s.
+5. **Build acceptance, fixed now, before the second dry run.** All five must hold,
+   or the build writes no arm files and stops for a report back, with no further
+   adjustment:
+   - mean within-class ŵ cosine ≤ 0.5 for `pool`;
+   - the same for `far`;
+   - mean `pool`-vs-`far` ŵ cosine ≤ 0.5;
+   - `pool`'s mean hostile push > `far`'s;
+   - `pool`'s mean hostile push > `span`'s.
+
+   The push conditions are a manipulation check that the classes differ in hostile
+   content. They are measured on the arms, not on any output.
+
+**Unchanged:** H24a, H24b and their tests, the outcomes, the degeneration
+criterion, the interpretation table, and the dose. **The sample count becomes 22
+conditions × 40 = 880.** `scripts/analyze_j24.py` adds `common` to the descriptive
+and exploratory blocks.
+
+**Interpretation, added now.** If `common` acts while centred `pool` does not,
+J23's `jspace` effect is better described as the shared atom component than as
+hostile-word content. If centred `pool` acts while `common` does not, the content
+reading gains ground. Both are descriptive, since `common` is one direction.
+
+**Run order, revised:**
+
+1. On the Mac, pull the J23 arms:
+   `uv run python scripts/sync_hf.py pull steering_vectors --model Qwen2.5-7B-Instruct-story-wheel32`
+2. Dry run again:
+   `uv run python scripts/build_j24_arms.py --dry-run 2>&1 | tee results/j24/build_dryrun_v2.txt`
+3. Record the build table here and commit.
+4. Real build, upload, pod sweep. The second sweep command now includes
+   `j24_common` (20 arms at 0.25), then the judge pass and analysis as before.
