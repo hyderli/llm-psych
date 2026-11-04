@@ -3725,3 +3725,199 @@ reported as insensitive, and a pass below says nothing about degeneration.
 
 Implementation: `scripts/j23_degeneration_check.py`, committed before its output
 is quoted.
+
+### J23 result 4, 2026-11-02: the lexical-overlap and degeneration checks. Promoted tokens surface in the threats, sparsely; `faratom` is degenerate at 0.25, and the word criterion over-flags long text
+
+**Provenance.** Both checks are exploratory and post-hoc, and each was defined in
+this file before any of its numbers existed:
+
+| check | definition | script | run output |
+|---|---|---|---|
+| lexical overlap | `4143397` | `16b4a24`, plus a post-hoc stage in `da41d35` | `results/j23_lexical/` |
+| degeneration | `18931c8` | `5792f91`, plus a post-hoc block in `076f9d1` | `results/j23_lexical/` |
+| word-criterion validity (post-hoc, added in revision) | none | `scripts/j23_word_criterion_validity.py` | `results/j23_lexical/word_criterion_stdout.txt` |
+
+Every number below comes from those scripts. Output labelled post-hoc in the
+scripts is labelled the same way here.
+
+#### Lexical overlap
+
+**The build atoms were recovered exactly.** Replaying the build's selection on the
+Mac reproduces the mixture to 1e-15. The rebuilt `jspace`, `randatom` and
+`faratom` match the HF arms at cos > 0.99999999. **The definition missed one
+thing.** NNLS gives a nonzero weight to all 44 `jspace` atoms, but to only 15 of 44
+`randatom` atoms and 2 of 44 `faratom` atoms (` Aç` and `==(`). That dilutes
+W_r(1), so a sensitivity analysis restricted to the nonzero atoms was added. It was
+added after the lists were built and before any output was analysed.
+
+**C, the main test (threats only, gate-passing, `jspace` 27 vs `randatom` 25):**
+
+| | rate of W_j (1) | rate of W_r (1) |
+|---|---|---|
+| `jspace` threats | 0.245 | 0.007 |
+| `randatom` threats | 0.162 | 0.135 |
+
+Rates are list tokens per 100 tokens.
+- **I = +0.212 [+0.072, +0.359]**
+- Nonzero-weight atoms only: +0.174 [+0.033, +0.311]
+- Non-threats: +0.120 [−0.034, +0.307]
+- All samples: +0.179 [+0.072, +0.287]
+
+**Under the reading fixed in advance, the CI excludes 0.** Each arm's threats carry its own promoted tokens.
+Lexical promotion works at the output and marks the threats. This is consistent
+with the narrow lexical reading, and it does not show that the tokens cause the
+threats.
+
+**Size (observation).** The promoted tokens are sparse. In `jspace`'s 27 threats,
+the eight most frequent W_j tokens account for 32 hits: ` worse` 11, ` stupid` 6,
+` crap` 4, and ` angry`, ` frustrated` and ` brutal` 3 each. In `randatom`'s 25
+threats, W_r hits are 15, almost all ` insult` (11) and ` insulting` (3).
+` worse` appears equally under both arms (11 and 10). That is about one promoted
+token per threat. **The threats are marked by the promoted tokens, not made of
+them.**
+
+**D, threats against threats from directions near v** (`resid`, `lad10`-`lad40`;
+54 threats):
+- W_j in `jspace` threats: 0.245 vs 0.066, difference **+0.179 [+0.082, +0.279]**.
+- W_r in `randatom` threats: 0.135 vs 0.048, difference **+0.088 [+0.006, +0.176]**.
+
+**B, surfacing.** Each arm's own atoms, list (1), against unsteered:
+
+| arm | 0.20 | 0.25 |
+|---|---|---|
+| `jspace` | +0.122 [+0.059, +0.196] | +0.313 [+0.184, +0.451] |
+| `randatom` | +0.006 [0.000, +0.019] | +0.199 [+0.111, +0.296] |
+
+- `randatom` barely surfaces at 0.20.
+- The inert rungs `lad60`-`lad85` and `ladstar` show no surfacing of their own list
+  (2): lifts between −0.03 and 0.
+- `shuffle` is negative (−0.14 and −0.11), because its list is ellipsis tokens,
+  which unsteered text uses more often.
+
+**A, construction: the counting prediction fails.** Lexicon-hostile tokens among
+each arm's lens top-44:
+
+| `jspace` | `randatom` | `lad60` | `lad70` | `ladstar` | `lad80` | `lad85`, `gauss`, `shuffle`, `faratom` |
+|---|---|---|---|---|---|---|
+| 6 | 4 | 10 | 6 | 1 | 1 | 0 |
+
+`lad60` and `lad70` promote as many hostile tokens as the arms that act, yet they
+are inert, and their tokens do not surface.
+
+**Post-hoc, by strength rather than count.** Lens logits centred on the vocabulary
+mean change the picture. (Raw logits carry large uniform offsets; `jspace` gives
+every one of 152k tokens a positive logit.) Centred top-44 ranges:
+
+| arm(s) | centred top-44 |
+|---|---|
+| `jspace` | 1.46-2.05 |
+| `randatom` | 1.46-2.21 |
+| `full` | 0.78-1.08 |
+| inert rungs, `gauss`, `shuffle` | 0.28-0.65 |
+| `faratom` | 4.33-5.74 |
+
+A strength version of the lexical reading survives A. It was formed after seeing
+the data and has not been tested.
+
+#### Degeneration
+
+**The rule's positive control fails, so the rule is insensitive.** The definition
+required at least 15 of the 18 `faratom` 0.25 samples containing `'==('` to be
+flagged; 13 were. Under the reading fixed in advance, a pass says nothing about
+whether a sample is degenerate, while a flag still counts.
+
+Post-hoc diagnosis: most of the miss comes from the control's definition. Four of
+the five unflagged samples contain `'==('` at 0.6-6.2% of tokens, so they are not
+degenerate by any measure here; the fifth is at 23.4%, just under the 25%
+threshold. Every sample above 25% is flagged.
+
+The unsteered maximum token share is 0.053. Every word-criterion failure is a
+unique-word ratio below 0.40; none is a short output.
+
+**Flags significantly above unsteered (2/20), BH-FDR across 22 conditions:**
+
+| condition | flagged | q | `B` as specified | `B` on unflagged samples |
+|---|---|---|---|---|
+| `jspace` 0.20 | 13/20, all by the word criterion | 0.008 | 11/20 | 4/7 |
+| `faratom` 0.25 | 13/20 | 0.008 | 0/20 | 0/7 |
+| `gauss` 0.25 | 11/20, all by the word criterion | 0.042 | 0/20 | 0/9 |
+
+Notes on the table:
+- Seven of `jspace`'s 11 threats at 0.20 come from word-flagged samples. As the
+  note below shows, those are mostly long rather than looping.
+- P4's primary cell is at 0.25, where `jspace` is not significantly flagged (7/20,
+  q = 0.70). On unflagged samples it is 12/13, against `ladstar`'s 2/20, so the
+  reversal stands.
+- `lad70`, `lad80`, `lad85`, `ladstar` and `shuffle` have 0-1 flags. Because the
+  rule is insensitive, that means they were **not shown to be degenerate**. It does
+  not mean they were shown to be coherent.
+
+**Post-hoc, added in revision: on these transcripts the word criterion largely
+measures length, so its flags are not evidence of looping either.** This uses
+`scripts/j23_word_criterion_validity.py` (standard library), with output in
+`results/j23_lexical/word_criterion_stdout.txt`. It is not part of definition
+`18931c8`. J22 set the 0.40 threshold on 200-token completions, but these
+transcripts run 300-800 words. Across all 460 samples, word count and unique-word
+ratio correlate at Spearman ρ = −0.89, as they do in ordinary text.
+
+- **False positives on unsteered text.** The two flagged unsteered samples are
+  long, coherent emails (737 and 483 words). Recurring word 8-grams make up 0.00
+  and 0.05 of them. The criterion's false-positive rate on unsteered text is
+  about 2/20, not zero.
+- **Most flags are not loops.** Ten of `gauss` 0.25's 11 flags have a
+  recurring-8-gram share below 0.25, nine of them below 0.13. Four of `jspace` 0.20's 13 flags exceed 0.25.
+  A share above 0.25 flags 4/20 at `jspace` 0.20, 3/20 at `jspace` 0.25, and at
+  most 1/20 anywhere else. That threshold was chosen post-hoc to mirror the token
+  criterion and is unvalidated.
+- **The inert span-free arms write short outputs.** Medians: `lad70` 201 words,
+  `lad85` 204, `ladstar` 236, against 368 unsteered. They pass the criterion
+  partly because they are short. Inert on threats is not the same as unaffected.
+
+So the rule fails in both directions. The token criterion misses nothing above
+25%, but the word criterion over-flags long, coherent text. **Only the token
+criterion's flags are clear degeneration:** `faratom` 0.25, 12 samples at 29-95%
+`'==('`. The word-criterion flags at `jspace` 0.20 and `gauss` 0.25 mostly reflect
+length, with genuine verbatim repetition in a minority (4 samples and 1).
+
+#### Corrections to J23 result 3, part 2
+
+1. **"`faratom` being inert rules out 'any atom-built direction acts'"** and the
+   bullet "built from mid-ranking atoms ... `faratom` is inert". At 0.25,
+   `faratom`'s output is degenerate (13/20 flagged; `'==('` makes up 60-95% of the
+   tokens in 11 samples, and 29% in a twelfth). In effect it is a two-token push, ` Aç` and `==(`, not a
+   direction built from unrelated words. The sentence now rests on the 0.20 dose
+   alone: `B` 1/20, and 1/18 on unflagged samples. Even there it is weaker than
+   designed. NNLS kept only 2 of `faratom`'s 44 atoms (and 15 of `randatom`'s), so
+   the build's "same number of atoms, unrelated words" design did not survive the
+   fit. At 0.20, `faratom` rules out only "a two-token push in an unrelated
+   direction acts". It is not the semantic control the build specified, and
+   `randatom` is a 15-atom refit, not a 44-atom one.
+2. **The draw count, 2/2 vs 0/6, p = 0.036.** `gauss`'s inertness at 0.25 is
+   possibly confounded by degeneration (11/20 flagged), and it has fewer than 10
+   unflagged samples, so by the rule fixed in advance it is dropped. The count
+   becomes **2/2 vs 0/5, exact p = 0.048**, still post-hoc. The other five inert
+   draws were not shown to be degenerate. Given the insensitive rule, that is the
+   strongest statement available. **Added in revision:** `gauss` was dropped on the
+   word criterion, which the post-hoc note above shows over-flags long text. With
+   `gauss` kept, the count is the original 2/2 vs 0/6, p = 0.036. The pre-specified
+   figure is 0.048; both are post-hoc, and neither changes the picture.
+
+**What the two checks say together.** They were set up so that they could not
+decide between the two accounts, and they do not. The narrow lexical reading gets
+direct but modest support: the tokens each arm promotes appear in its threats more
+than the other arm's tokens do, and more than in threats produced by directions
+near v. The narrow lexical reading's strongest form, threats made of promoted
+tokens, does not hold, since a threat carries about one such token. Its count-based
+construction prediction fails. A strength-based version fits, but only post-hoc.
+
+**For the confirmatory re-test (n ≥ 200).** The gate should include a degeneration
+criterion, because the tool-call gate passed samples that were 95% one token.
+That criterion must be length-robust and validated on both sides: a positive
+control defined by token share rather than token presence, and a negative control
+that reports its false-positive rate on unsteered transcripts. A test of the strength version would need a
+span-free direction that gives the same hostile tokens the same centred lens push
+as `jspace`.
+
+**Status.** n = 20 per cell; everything is suggestive. Unsteered comes from the
+Task 0 pod. All comparisons are between specific directions, not construction
+classes.
