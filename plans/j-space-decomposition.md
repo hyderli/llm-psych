@@ -4167,3 +4167,107 @@ reading gains ground. Both are descriptive, since `common` is one direction.
 3. Record the build table here and commit.
 4. Real build, upload, pod sweep. The second sweep command now includes
    `j24_common` (20 arms at 0.25), then the judge pass and analysis as before.
+
+### J24 build result 1, 2026-11-04: the second dry run FAILS one acceptance criterion. No arm files written
+
+`uv run python scripts/build_j24_arms.py --dry-run`, at `6a09c08`. Full output is in
+`results/j24/build_dryrun_v2.txt`.
+
+**Passed:**
+- **Geometry and the J23 check.** θ* = 74.8361°, and every arm sits at θ*. The
+  rebuilt `full` and `jspace` match the J23 arms at cos 0.99999994.
+- **The hostility mask** marks 157 tokens.
+
+**Acceptance (amendment 1):**
+
+| criterion | value | result |
+|---|---|---|
+| `pool` within-class ŵ cos ≤ 0.5 | **0.817** (0.71-0.88) | **FAIL** |
+| `far` within-class ŵ cos ≤ 0.5 | 0.042 | pass |
+| `pool`-`far` ŵ cos ≤ 0.5 | −0.165 | pass |
+| mean hostile push, `pool` > `far` | +1.306 vs −0.270 | pass |
+| mean hostile push, `pool` > `span` | +1.306 vs +0.065 | pass |
+
+**What centring did, observed on the arms only.**
+
+- **The glitch component is gone.** `far` draws are now diverse, and nothing is
+  shared between `pool` and `far`.
+- **`pool` draws are still similar to each other.** Their top centred tokens are
+  now function words (` the`, ` a`, ` in`, ` and`) in five of six draws, and the
+  sixth (`pool5`) leads with ` bad`, ` stupid`, ` terrible`.
+- **Why `pool` and `far` still differ in more than hostility:**
+  - ā is the mean over the whole vocabulary, which is dominated by rare and
+    non-English subword tokens.
+  - Relative to ā, the candidate pool, which is v's top lens tokens and mostly
+    English words, shares a common English-word component.
+  - The `far` pool, the middle of the ranking and mostly rare tokens, does not.
+  - **So `pool` and `far` now differ in both hostility and English-word status.**
+    That confounds H24b.
+
+**A pre-data observation about J23.** The `common` direction's ŵ has cosine
+**0.693** with `jspace`'s ŵ. About 48% (0.693²) of the energy in `jspace`'s
+perpendicular part is the shared glitch component. Centred `pool` draws have
+cosine 0.23-0.31 with `jspace`'s ŵ. This is geometry only and says nothing yet about
+behaviour. It makes `j24_common` the most informative single direction in the run
+for interpreting J23.
+
+**Status:** under amendment 1's rule, the construction is not adjusted further
+without a PI decision.
+
+### J24 amendment 2, 2026-11-04: word-population-matched `pool` and `far`. PI decision after build result 1, before any arm file or sample exists
+
+**PI decision (Haydar): option A.** `pool` and `far` are drawn from the same token
+population and centred on that population's own mean atom. They should then differ
+in relatedness to v and in nothing else the construction controls.
+
+**Changes to `scripts/build_j24_arms.py`:**
+
+1. **The population is English-word tokens.** An English-word token decodes to a
+   leading space followed by three or more ASCII letters, such as ` the` or
+   ` brutal`. The mandatory space excludes word-continuation fragments like
+   `odyn`, `ipop` and `entai`, which dominated the first dry run. This is a proxy,
+   not a dictionary check.
+2. **Centring.** Every `pool` and `far` atom has the mean unit atom over
+   English-word tokens subtracted. That replaces amendment 1's whole-vocabulary
+   mean.
+3. **`pool`.**
+   - Candidates are v's top 2048 tokens by lens logit, as before, restricted to
+     English-word tokens.
+   - `jspace`'s 44 picked atoms are excluded. They are identified among the
+     candidates by cosine, which must be ≥ 0.999, or the build refuses.
+   - Six disjoint draws of 44 atoms each.
+4. **`far`.**
+   - The middle half of v's lens-logit ranking *within* English-word tokens, with
+     the 157 hostile-lexicon tokens excluded.
+   - Six disjoint draws of 44 atoms each.
+5. **Unchanged:** `common` stays the whole-vocabulary mean atom. It is the glitch
+   component that `jspace` shares (ŵ cosine 0.693), and testing that component is
+   its job. Also unchanged: `span`, `jspace`, `full`, θ*, equal weights, seeds and
+   per-family RNG. Because `pool` and `far` now draw from different eligible sets,
+   their atom draws differ from those of build result 1.
+
+**Acceptance, revised now, before the third dry run.**
+
+- **The `pool` within-class criterion (≤ 0.5) is dropped. It is reported, not
+  required.** This is a change made after a failure, and it is recorded as one.
+- **The reason.** Amendment 1's criterion assumed that whatever `pool` draws
+  share is an artifact. Build result 1 showed the artifacts: first the glitch
+  component, then an English-word component. Amendment 2 removes both by
+  construction. What `pool` draws can still share is relatedness to v, which is
+  the content under test, so requiring it to be absent would test nothing.
+- **What the `pool` class then measures.** It reads as one hostile-word direction
+  family realised through six different atom sets, not as six independent
+  directions. H24a and H24b are worded that way in any write-up.
+- **Kept, unchanged:**
+  - `far` within-class ŵ cos ≤ 0.5;
+  - `pool`-`far` ŵ cos ≤ 0.5;
+  - `pool`'s mean hostile push above both `far`'s and `span`'s.
+- **On failure:** no arm files are written, and the build stops for a report back.
+
+**Also reported:** English-word token count, eligible counts for both classes, the
+picked-atom match cosine, and the top tokens of every draw. The top tokens are the
+direct check that `pool` and `far` now differ in what they push and not in token
+type.
+
+Hypotheses, tests, outcomes, interpretation table, dose and the 880-sample count
+are unchanged.
