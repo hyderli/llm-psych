@@ -4348,3 +4348,16 @@ inputs.
 
 Hypotheses, tests and the interpretation table are unchanged. Observation 3
 qualifies how H24b is worded and nothing else.
+
+**Real build, 2026-11-04.** Run at `13b391e`, output in `results/j24/build_real.txt`.
+
+- The build output is line-for-line identical to the third dry run, apart from the
+  final "files written" line.
+- The 21 arm files are on the HF dataset at commit `b40067c3`. The build report
+  and the dry-run logs are at `eval_outputs/j24/build/`, commit `e46315fe`.
+- Mac md5s are in `results/j24/arms_md5_mac.txt`. The pod's copies are compared
+  against them before the sweep.
+- **The saved `.npy` files were checked independently** with a stdlib reader, not
+  the build code:
+  - every arm except `full` sits at 74.8361° from `j24_full`, all at norm 1.7387;
+  - `j24_full` matches J23's `ca_unit_pos_full` at cos 1.0000000.
