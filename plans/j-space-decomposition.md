@@ -4271,3 +4271,80 @@ type.
 
 Hypotheses, tests, outcomes, interpretation table, dose and the 880-sample count
 are unchanged.
+
+### J24 build result 2, 2026-11-04: the third dry run PASSES. Build table recorded before any arm file or sample exists
+
+Run at `2c45536`; output in `results/j24/build_dryrun_v3.txt`, report in
+`results/jspace_gate/arms_Qwen2.5-7B-Instruct_story-wheel32_L16_j24.json`. The real
+build will regenerate both deterministically, from the same seeds and the same
+inputs.
+
+**Checks.**
+- θ* = 74.8361°, and every arm sits at θ*.
+- The rebuilt `full` and `jspace` match J23 at cos 0.99999994.
+- Every one of `jspace`'s 44 picked atoms is found among the candidates (min cos
+  0.999996).
+- The hostility mask marks 157 tokens; there are 40,034 English-word tokens.
+- Eligible tokens: 916 for `pool` (264 are needed), 20,016 for `far`.
+
+**Acceptance: PASS**
+
+| criterion | value |
+|---|---|
+| `far` within-class ŵ cos ≤ 0.5 | 0.041 |
+| `pool`-`far` ŵ cos ≤ 0.5 | −0.059 |
+| mean hostile push, `pool` > `far` | +1.066 > +0.049 |
+| mean hostile push, `pool` > `span` | +1.066 > +0.065 |
+| `pool` within-class ŵ cos (reported only, amendment 2) | 0.880 (0.85-0.90) |
+
+**Build table.**
+
+- ŵ cos J is each arm's ŵ cosine with `jspace`'s ŵ; ŵ cos C is its cosine with
+  `common`'s ŵ.
+- Top tokens are the first of the top-10 centred lens tokens.
+
+| arm | hostile push | ŵ cos J | ŵ cos C | top tokens |
+|---|---|---|---|---|
+| `full` (0°) | +0.281 | | | brutal, angry, vicious, nasty, ridiculous |
+| `jspace` | +0.403 | 1 | +0.693 | brutal, odyn, ipop, ousy, vicious |
+| `common` | −0.452 | +0.693 | 1 | ynos, utow, entai, alink, verige |
+| `pool1` | +0.902 | +0.505 | +0.034 | brutal, vicious, desperately, brutally, cruel |
+| `pool2` | +1.071 | +0.425 | −0.077 | even, only, so, bad, forced |
+| `pool3` | +1.063 | +0.429 | −0.088 | even, bad, brutal, so, just |
+| `pool4` | +0.978 | +0.433 | −0.075 | pretty, even, weird, nasty, really |
+| `pool5` | +1.186 | +0.411 | −0.166 | even, bad, just, so, the |
+| `pool6` | +1.198 | +0.436 | −0.124 | even, huge, so, just, almost |
+| `far1` | +0.361 | −0.085 | −0.099 | quote marks, single letters |
+| `far2` | −0.355 | −0.001 | +0.139 | utow, GPC, FOX, ício |
+| `far3` | +0.567 | −0.050 | −0.165 | quote marks, single capitals |
+| `far4` | +0.126 | +0.044 | +0.098 | quote marks, United, code fragments |
+| `far5` | −0.092 | +0.036 | +0.191 | mixed-language fragments |
+| `far6` | −0.311 | +0.072 | +0.201 | nü, PURE, utow, SURE |
+| `span1`-`6` | +0.056 to +0.078 | ±0.000 | −0.005 to +0.012 | code and punctuation; `span1` includes 无奈, 残酷, stubborn |
+
+**Observations fixed before any data, which the write-up must carry.**
+
+1. **The arms decompose `jspace`.** `jspace`'s ŵ is about 48% `common` (cos 0.693)
+   and about 18-26% the `pool` family (cos 0.41-0.51), with the rest neither.
+   `common` and `pool` are nearly orthogonal (cos −0.17 to +0.03). So in J24,
+   `common` tests the glitch component and `pool` tests the hostile-word
+   component, separately. That is the cleanest available decomposition of J23's
+   `jspace` effect.
+2. **`pool` is a much stronger hostile push than `jspace`:** +0.90 to +1.20,
+   against +0.40. It also carries an intensifier and evaluative-adverb component
+   (even, so, just, pretty, huge), shared across draws. That component is part of
+   what "hostile-word direction family" means here.
+3. **Limitation: `far` is diffuse, not a coherent push toward unrelated words.**
+   Its atoms are English words, but an equal-weight sum of 44 unrelated atoms
+   promotes no word strongly. Its top centred tokens are punctuation, single
+   letters and fragments, and its hostile push sits near `span`'s. `pool`'s atoms
+   share meaning, so they add up coherently. **So H24b (`pool` > `far`) contrasts
+   a coherent hostile-word push with a diffuse word push.** A positive H24b means
+   "hostile-word content, or a coherent word push of any kind". It is not read as
+   content alone. A coherent but non-hostile word cluster would separate the two.
+   It is not part of J24, and it is noted for any follow-up.
+4. **`span` and `far` both sit near zero hostile push.** That leaves `far` mostly
+   as a second family of controls perpendicular to v, but made from atoms.
+
+Hypotheses, tests and the interpretation table are unchanged. Observation 3
+qualifies how H24b is worded and nothing else.
