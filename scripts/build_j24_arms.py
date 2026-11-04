@@ -148,10 +148,17 @@ def main() -> int:
     vocab = w_u.shape[0]
     print(f"building hostility mask over {vocab} tokens ...")
     hostile = torch.zeros(vocab, dtype=torch.bool)
+    # lm_head has padding rows beyond the tokenizer's vocabulary (Qwen 2.5:
+    # 152064 rows, ~151665 tokens). Those rows are never hostile; a decode
+    # failure on them must not abort the build.
     for t in range(vocab):
-        s = tokenizer.decode([t])
+        try:
+            s = tokenizer.decode([t])
+        except Exception:
+            continue
         if sc.lexicon_hits(sc.words(s), lex)[0] > 0:
             hostile[t] = True
+    print(f"hostile tokens: {int(hostile.sum())}")
 
     def push(x: torch.Tensor) -> dict:
         z = lens_logits(x / x.norm())
