@@ -3921,3 +3921,177 @@ as `jspace`.
 **Status.** n = 20 per cell; everything is suggestive. Unsteered comes from the
 Task 0 pod. All comparisons are between specific directions, not construction
 classes.
+
+## 2026-11-04 — J24: does construction decide action at a matched angle? A confirmatory test with the direction as the unit. Pre-registered before any J24 arm or sample exists
+
+**Why.** J23 result 3 part 2 found that on Qwen at 74.84°, the J-lens component
+produces threats (`B` 16/19) while a span-free direction at the same angle does not
+(2/20). That was one deterministic direction against one random draw. The class
+version, 2/2 against 0/5-0/6, was post-hoc. J23 result 4 then showed the controls
+were not what they were designed to be. `faratom` kept 2 of its 44 atoms and was
+degenerate at 0.25. `randatom` kept 15. And the gate let degenerate text through.
+J24 fixes each of those problems and asks one question, with directions as the
+unit: **at a matched angle, do directions built from the emotion's own word atoms
+act where span-free directions and unrelated-word atom directions do not?**
+
+PI decisions (Haydar, 2026-11-04): Qwen only; 6 directions per class, 40 samples
+each; the strength analysis is exploratory.
+
+### Design
+
+**Model, layer, dose:** `Qwen2.5-7B-Instruct` at `a09a3545`, L16, α = 0.25 (J23's
+P4 dose). Single dose. The J21/J23 scaffold, judge (`claude-sonnet-5`) and
+`run_dose_sweep.sh` are unchanged.
+
+**Construction.** Let v̂ be the unit `contempt=1 aggressiveness=1` mixture (pos side)
+and θ* the `jspace` angle, 74.836°. Every arm except `full` is
+
+    arm = cos θ* · v̂ + sin θ* · ŵ,   ŵ ⟂ v̂, unit
+
+so all arms share their v-component exactly and differ only in ŵ:
+
+| class | ŵ comes from | directions |
+|---|---|---|
+| **pool** | the part perpendicular to v of an **equal-weight** sum of 44 unit J-lens atoms. The atoms are drawn from the candidate pool (top 2048 tokens by v's lens logit, `jspace`'s picked atoms excluded), disjoint across draws. This is a push toward words the emotion promotes. | `j24_pool1`-`6` |
+| **far** | the same construction, from the middle half of the lens-logit ranking (`faratom`'s pool). This is a push toward unrelated words. | `j24_far1`-`6` |
+| **span** | a Gaussian draw made perpendicular to v and to `jspace`'s picked atoms. This is `ladstar`'s construction. | `j24_span1`-`6` |
+| reference | `jspace` (at θ* by definition) and `full` (v), rebuilt and checked against the J23 arm files at cos ≥ 0.999999 | `j24_jspace`, `j24_full` |
+
+- **44 atoms** is `jspace`'s own atom count. Equal weights make `pool` and `far`
+  atom-matched by construction. Unlike J23's NNLS controls, they cannot collapse.
+- **Why `pool` differs from J19's `pin`.** `pin` was a random *signed* direction
+  inside the atom span, and J20 found span membership did nothing on Gemma. A
+  nonnegative sum is a push *toward* the atoms' tokens, and that is what J23's
+  acting arms were.
+- **Seeds:** `SeedSequence(20261104)`, with one spawned child per family in the
+  order `pool`, `far`, `span`. No family's draws depend on another's, which fixes
+  the J21 build-note defect under a new tag. The `ca_unit` arms are untouched.
+
+**Conditions:** `j24_full` at α 0 (unsteered) and at 0.25, `j24_jspace`, and the 18
+class arms at 0.25. That is 21 conditions × 40 samples = **840**, all on one pod.
+The J23 cross-pod caveat therefore does not arise.
+
+**Build:** `scripts/build_j24_arms.py`, run on the Mac (`uv run`) or a pod. It
+refuses to emit if any of these fail:
+
+- θ* does not reproduce J23's to within 0.01°;
+- any arm's realised angle is off θ* by more than 0.001°;
+- any ŵ is not perpendicular to v;
+- the rebuilt `full` or `jspace` misses J23's arm.
+
+For every arm, the report records:
+
+- its angle;
+- its atom ids;
+- the within-class pairwise cosines of ŵ;
+- its **hostile push**: the mean vocabulary-centred J-lens logit over tokens that
+  hit the J23 hostility lexicon, at unit norm. This is computed from the arm alone.
+
+**The build table** (θ*, hostile push per arm, within-class cosines) is written
+into this file **after the build and before any generation**, the same way as
+J21's prediction 4.
+
+### Outcomes
+
+- **Primary:** `B`, explicit threats, on gate-passing samples, the J21 surface.
+- **Secondary:** `A_act`.
+- **Not exported:** `A_pad` and `D`. They are not identified on Qwen (J23 result 2).
+- **Gate:** the tool-call gate, unchanged. It defines the as-specified samples.
+
+**Degeneration criterion for the sensitivity analysis, validated before J24
+runs.** A sample is degenerate if either part fires:
+
+- **TOKEN:** the single most frequent Qwen token makes up more than 25% of its
+  tokens. Validated in J23 result 4: it flags every `faratom` 0.25 sample above
+  25%, and the unsteered maximum share is 0.053.
+- **REPETITION:** rep8 > 0.25, where rep8 is the share of the sample's word 8-grams
+  that occur more than once in it. This replaces J22's unique-word ratio, which J23
+  result 4 showed is confounded with length. It was validated on existing J23 data
+  by `scripts/j24_degeneration_validate.py`, at drafting time, with acceptance rules
+  fixed in that script:
+  - **negative control:** J23 unsteered plus Task 0 `full`, **0/60 flagged**
+    (rule: ≤ 1);
+  - **positive control:** each unsteered transcript with a verbatim loop appended
+    (its last 30 words, repeated until they make up ≥ 30% of the text), **20/20
+    flagged** (rule: 20/20).
+
+  **Margin caveat:** the highest negative-control rep8 is 0.234, close to the
+  0.25 threshold. A few percent false positives on long coherent transcripts are
+  plausible. That is acceptable for a sensitivity analysis and is the reason
+  REPETITION is not used to define the primary samples.
+
+### Hypotheses and tests
+
+Each direction's `B` rate is computed over its gate-passing samples. Class
+comparisons are **exact two-sided permutation tests on the difference in mean
+direction-level rate**: 924 splits of 12 directions, smallest attainable p =
+0.0022.
+
+| | prediction (from J23) | test |
+|---|---|---|
+| **H24a, primary** | `pool` > `span` | permutation, `B` |
+| **H24b, primary** | `pool` > `far` | permutation, `B` |
+
+Holm across H24a and H24b. A primary claim needs a significant Holm p in the
+predicted direction, **and** the same direction in the sensitivity analysis on
+non-degenerate samples.
+
+**Secondary and descriptive:**
+
+- the same tests on `A_act`;
+- `far` vs `span`;
+- `jspace` against each `span` draw (Fisher), as a replication of J23 P4 with six
+  comparators in place of one;
+- `full` vs unsteered (Fisher), a same-pod sanity check;
+- per-condition gate, degeneration and non-degenerate `B`. Directions with fewer
+  than 20 non-degenerate samples are flagged.
+
+**Exploratory, the strength version of the lexical reading:** Spearman ρ between
+build-time hostile push and `B`, across all 19 directions at θ*, and within `pool`
+(n = 6). No claim rests on it.
+
+### How outcomes will be read, fixed now
+
+| result | reading |
+|---|---|
+| H24a and H24b both hold | At a matched angle, **hostile-word atom content**, not atom construction as such, decides whether a direction acts. This is consistent with **both** "the workspace carries the emotion" and "pushing hostile words produces hostile actions". J24 cannot separate them, and the write-up says so. |
+| H24a holds, `far` also acts (H24b fails, `far` > `span`) | Atom-built directions act whatever their word content. That points to a property of unembedding-row directions, and it **counts against both** semantic readings. |
+| H24a fails (`pool` ≈ `span`) | J23's `jspace` effect does **not** generalise to other hostile-word directions at the same angle. It belongs to `jspace`'s pursuit weighting, or to J23's single comparator. `jspace` against six `span` draws then says which. |
+| `full` does not exceed unsteered | The run does not reproduce Task 0, and nothing else in it is interpreted. |
+
+**Limitations stated now:**
+
+- **Draws within a class share structure.** Draws from the same pool share a
+  common component, so `pool` and `far` draws may be highly correlated with each
+  other; `span` draws are nearly orthogonal. The within-class cosines are reported.
+  If `pool`'s mean ŵ cosine exceeds 0.9, the six directions test robustness to
+  atom choice more than independent replication, and the write-up says so.
+- **Narrow scope.** One model, one layer, one dose.
+- **Same judge.** The judge is the J21/J23 judge, so its biases carry over.
+
+### Cost and run order
+
+840 samples ≈ 5 GPU-hours on a 4090 (≈ $2). Judge items `A_act` and `B` only:
+≈ 1,680 calls (≈ $8-10).
+
+1. **Mac:** `uv run python scripts/build_j24_arms.py --dry-run`. Record the build
+   table in this file, then commit.
+2. **Mac:** `uv run python scripts/build_j24_arms.py`, then upload the 20
+   `j24_*_layer16.npy` files to `steering_vectors/Qwen2.5-7B-Instruct-story-wheel32/`
+   on HF.
+3. **Pod (4090):** pull the vectors, then run the sweep. The second command takes
+   `ARMS="j24_jspace j24_pool1 … j24_pool6 j24_far1 … j24_far6 j24_span1 … j24_span6"`
+   written out in full:
+
+        ARMS="j24_full" DOSES="0 0.25" EPOCHS=40 LAYER=16 bash ../scripts/run_dose_sweep.sh
+        ARMS="<the 19 arms above>" DOSES="0.25" EPOCHS=40 LAYER=16 bash ../scripts/run_dose_sweep.sh
+
+4. **Mac:**
+   - parse with `--glob 'j24_*_L16_a*.txt'` into `results/j24/`;
+   - `export --items A_act,B`;
+   - judge;
+   - ingest;
+   - `uv run python scripts/analyze_j24.py`. That script is committed with this
+     amendment, before any sample exists.
+
+There is no re-gate and no extension. A failed condition is resumed, not replaced.
