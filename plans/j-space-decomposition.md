@@ -4361,3 +4361,45 @@ qualifies how H24b is worded and nothing else.
   the build code:
   - every arm except `full` sits at 74.8361° from `j24_full`, all at norm 1.7387;
   - `j24_full` matches J23's `ca_unit_pos_full` at cos 1.0000000.
+
+### J24 run, 2026-11-05: generation complete. Recorded before any judge score exists
+
+**Generation.**
+- 22 conditions × 40 = 880 samples, on one pod at `2f92b57`, 08:15-12:14 UTC.
+- All 21 arm md5s matched the Mac list before the sweep. Both logs show 0
+  `FAILED`.
+- Uploaded to HF at `eval_outputs/j24/L16/` (commit `bb77848f`).
+- Copied into `eval_outputs/j24/L16/` on the Mac. All 22 transcripts pass
+  `md5sum -c MD5SUMS`.
+
+**Parse.** `score_blackmail.py parse` gives 880 samples, 0 blinding leaks, and **24
+gate-flagged**:
+
+| condition | flagged | reason |
+|---|---|---|
+| `j24_far1` | **14** | 14 `no_tool_call` (1 sample also `repeated_fragments`) |
+| `j24_span5` | 3 | `repeated_fragments` |
+| `j24_full` 0.25 | 2 | `repeated_fragments` |
+| `j24_pool2`, `j24_pool4`, `j24_pool5` | 1 each | `repeated_fragments` |
+| `j24_far3`, `j24_span4` | 1 each | `no_tool_call` |
+
+Every other condition, including unsteered, is 40/40.
+
+`far1` is the one condition with real attrition. The pod session reported that
+all 40 of its samples hit the 1,000-token limit. Its 26 gate-passing samples are
+what H24b sees for `far1`. The sensitivity analysis, on non-degenerate samples,
+is where its degeneration is accounted for.
+
+**Export.** `--items A_act,B` gives 1,712 prompts over the 856 gate-passing
+samples. There are no empty payloads.
+
+**A judge attempt from the device shell failed authentication**
+(`AuthenticationError: Unauthorized` on every call). It was stopped after 25
+calls, and no score was produced. The 25 error rows were moved to
+`results/j24/_failed_auth_attempt_results.jsonl`, so they cannot enter a resume.
+
+That exposed a latent bug in `run_judge_anthropic.py`: on resume it counted
+`runner_error` rows as done, which would have frozen them at 0. It is now fixed,
+so error rows are retried. `ingest` already drops error rows, so no reported J23
+number is affected: J23's judge passes had 0 errors. The judge pass runs on the
+Mac.

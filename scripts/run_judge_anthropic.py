@@ -118,6 +118,12 @@ def main() -> int:
         for l in outp.read_text().splitlines():
             if l.strip():
                 r = json.loads(l)
+                # A runner_error row is a failed call, not a score. Counting it
+                # as done would freeze it at 0 on resume -- the failure class
+                # fixed on 2026-09-25. It is re-attempted instead; ingest drops
+                # error rows, so the retried score is the only one counted.
+                if r.get("reason") == "runner_error" or r.get("error"):
+                    continue
                 done.add((r["id"], r["item"]))
         print(f"resuming: {len(done)} already done")
     rows = [r for r in rows if (r["id"], r["item"]) not in done]
