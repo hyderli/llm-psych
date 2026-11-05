@@ -23,6 +23,7 @@ import itertools
 import json
 from pathlib import Path
 
+import numpy as np
 from scipy.stats import fisher_exact, spearmanr
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -109,6 +110,36 @@ def class_rates(pay, sc, item, exclude=None):
     return out
 
 
+def bootstrap_difference_ci(a: list[float], b: list[float]) -> tuple[float, float]:
+    """Return a post-hoc pointwise 95% percentile interval for mean(a)-mean(b).
+
+    Parameters
+    ----------
+    a, b : list of float
+        Direction-level rates, independently resampled within each family.
+
+    Returns
+    -------
+    tuple of float
+        Percentiles 2.5 and 97.5 from 10,000 bootstrap mean differences,
+        using seed 20261104 and linear quantile interpolation. Missing
+        outcomes and within-direction sampling uncertainty are not imputed.
+
+    References
+    ----------
+    Efron (1979), Bootstrap Methods: Another Look at the Jackknife.
+    doi:10.1214/aos/1176344552.
+    """
+    x, y = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
+    if any(v.ndim != 1 or v.size == 0 or not np.isfinite(v).all() for v in (x, y)):
+        raise ValueError("Bootstrap requires nonempty, finite direction-level rates")
+    rng = np.random.default_rng(20261104)
+    differences = rng.choice(x, size=(10_000, len(x))).mean(axis=1)
+    differences -= rng.choice(y, size=(10_000, len(y))).mean(axis=1)
+    low, high = np.quantile(differences, [0.025, 0.975], method="linear")
+    return float(low), float(high)
+
+
 def main() -> int:
     pay, sc = load()
     degen, rep_ok = degenerate_flags(pay)
@@ -193,6 +224,17 @@ def main() -> int:
     print(f"within pool (n = {N}): rho = {rho2:+.3f}, p = {p2_:.3g}")
     print("\nwithin-class w_hat cosines (build):", json.dumps(build["within_class_cos"]))
     print("pool-far w_hat cosines (build):", json.dumps(build["pool_far_cos"]))
+    print("\n## POST-HOC: B mean differences, pointwise 95% percentile bootstrap CIs")
+    print("10,000 independent within-family direction resamples; seed 20261104; "
+          "NumPy " + np.__version__ + "; linear quantiles; six directions per family.")
+    print("Not simultaneous/Holm-adjusted; conditional on observed scores. "
+          "Shared-family structure and missing-outcome bounds remain separate limitations.")
+    for label, rates in (("gate-passing", cr), ("non-degenerate", crs)):
+        for comparator in ("span", "far"):
+            low, high = bootstrap_difference_ci(rates["pool"], rates[comparator])
+            difference = sum(rates["pool"]) / N - sum(rates[comparator]) / N
+            print(f"{label} pool vs {comparator}: diff {difference * 100:+.6f} pp; "
+                  f"95% CI [{low * 100:+.6f}, {high * 100:+.6f}] pp")
     return 0
 
 

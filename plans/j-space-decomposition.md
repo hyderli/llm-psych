@@ -4403,3 +4403,258 @@ That exposed a latent bug in `run_judge_anthropic.py`: on resume it counted
 so error rows are retried. `ingest` already drops error rows, so no reported J23
 number is affected: J23's judge passes had 0 errors. The judge pass runs on the
 Mac.
+
+### J24 judge completion status and post-hoc missing-B sensitivity
+
+**Recorded after inspecting provisional results; not a preregistered test or an
+amendment to the primary analysis.** No additional API calls were made for this
+sensitivity check. Observed scores and the preregistered analysis code were not
+changed. Missing scores remain missing in the saved data.
+
+The Mac judge pass and two resume passes produced 1,706 successful unique
+sample/item scores of 1,712 requested (854 B and 852 A_act). There are 19
+historical failed rows, which ingest drops, not 19 missing scores. Ingest forced
+six scores to zero for unverifiable spans under the existing rule. The saved
+`results/j24/analysis_stdout.txt` is explicitly labelled provisional.
+
+Six scores remain missing, each after three batches of up to three attempts:
+
+| sample id | condition | missing items | recorded failure |
+|---|---|---|---|
+| `1bba73cf7310` | `far1` | A_act | JSONDecodeError at character 0 |
+| `cd18dec903d4` | `far1` | A_act, B | JSONDecodeError at character 0 |
+| `2fd01bf32a1a` | `far3` | A_act, B | no text, stop_reason=refusal |
+| `26d8486ad748` | `pool6` | A_act | no text, stop_reason=refusal |
+
+All conditions above are at L16, dose 0.25. The three no-text failures are explicit
+judge refusals, not evidence of token-limit truncation. For the three JSON
+failures, the runner did not retain response text or stop reason, so refusal,
+formatting and other causes cannot be distinguished retrospectively. They must
+not be silently classified as refusals or scored zero. Persistent missing judge
+scores also occurred in J19 (recorded above); no replacement judge or manual
+score was introduced here.
+
+**Exhaustive binary-assignment check (post hoc).** The two missing B scores are
+`cd18dec903d4` (`far1`) and `2fd01bf32a1a` (`far3`). Both pass the gate and both
+are non-degenerate under the existing validated TOKEN/repetition criteria. All
+four assignments were evaluated in memory using `analyze_j24.py`'s `load`,
+`degenerate_flags`, `class_rates`, `perm_test` and `holm`, with copies of the
+observed B-score mapping. The unit remains the direction (six per class).
+Hypothetically filling these scores restores `far1`/`far3` denominators to 26/39
+in the gate-passing analysis and 21/33 in the non-degenerate analysis.
+
+Differences below are pool minus comparator, in percentage points:
+
+| hypothetical B: far1, far3 | pool - span | pool - far | non-degenerate pool - span | non-degenerate pool - far |
+|---|---:|---:|---:|---:|
+| 0, 0 | +84.773909 | +80.608974 | +84.257407 | +78.623631 |
+| 0, 1 | +84.773909 | +80.181624 | +84.257407 | +78.118581 |
+| 1, 0 | +84.773909 | +79.967949 | +84.257407 | +77.829980 |
+| 1, 1 | +84.773909 | +79.540598 | +84.257407 | +77.324930 |
+
+In every assignment, both gate-passing comparisons have exact two-sided
+permutation p = 2/924 = 0.0021645021645021645; Holm across those two gives
+4/924 = 0.004329004329004329 for each. Applying the same two-test Holm correction
+separately to the non-degenerate comparisons gives the same values; this is a
+post-hoc extension of the sensitivity output, not another confirmatory family.
+
+Thus no binary completion of the two missing B scores reverses either primary
+contrast or changes its permutation significance. The worst-case pool-minus-far
+difference is +79.540598 pp (gate-passing) and +77.324930 pp (non-degenerate).
+These are missing-outcome bounds, **not confidence intervals**, and do not
+address the four missing A_act scores, gate exclusions, span verification,
+judge validity, or degeneration thresholds. `pool6` and `span2` still have only
+17 and 18 scored non-degenerate B samples. The coherent-hostile versus diffuse
+control limitation and the n < 100 suggestive-only steering interpretation
+remain unchanged; this does not isolate hostile content alone.
+
+Inputs for this check (SHA256, under `results/j24/`):
+
+- `judge_scores.jsonl`: `778998bb05e46ff0c55006110ffa9ec900f706ac20569e83cccbe5733f117d59`
+- `payloads.jsonl`: `e682fedb4015e2302717afdef8dc00c969e713b11ee382ffe9af2a5ff81a42af`
+- `degeneration_validation.txt`: `1a6beb089b26853427bcb848134213e93ce76310b0c4562d2289d7dc8b7de4a8`
+- `results_actions_sonnet5.jsonl`: `9668a948324c3cee370dff8bc2891ca0a53c8b10d25615b1f87a665ccf4db945`
+
+### J24 result: the hostile-word direction family acts at the matched angle; diffuse atom and span controls mostly do not
+
+**Status and scope.** Result write-up using the available judge scores, with six
+persistent missing scores retained as missing. The machine output remains
+labelled provisional for incomplete judge coverage; the primary B conclusions
+are unchanged by every possible completion of its two missing scores (post-hoc
+check above). This is a small-sample steering result, **suggestive only**, not a
+scaled replication: 40 generated samples per condition, one model, layer and
+dose. It concerns elicited behavioral propensity under this protocol, not a
+change in capability or evidence of subjective experience.
+
+**Design and provenance.** Qwen2.5-7B-Instruct, model revision
+`a09a35458c702b33eeacc393d103063234e8bc28`, L16, alpha 0.25. All arms except
+`full` have the same norm (1.7387) and angle to the original mixture (74.8361°).
+Generation used `2f92b57` on one pod: 22 conditions x 40 = 880 samples. The
+unsteered reference is `full` at alpha 0. Judge: `claude-sonnet-5`, A_act and B
+only, runner default max_tokens 1024 with temperature omitted, concurrency 4.
+The run note, pre-data amendments and input hashes above fix the provenance;
+transcripts and logs are under `eval_outputs/j24/L16/`, parsed payloads and judge
+artifacts under `results/j24/`, and the numerical output is
+`results/j24/analysis_stdout.txt`. No raw transcript excerpt is reproduced here.
+
+#### The same-pod sanity check passes
+
+On gate-passing samples, `full` produces B in **23/38** versus **0/40** unsteered
+(Fisher two-sided p = 4.48e-10), and A_act in **31/38** versus **0/40**
+(p = 2.37e-15). These are the registered sanity comparisons, with unadjusted
+p-values as emitted by the script. The Task 0 failure branch of the
+interpretation table therefore does not apply to these observed results.
+
+#### Both registered B contrasts meet the specified decision rule
+
+Rates are equally weighted **means of six direction-level rates**, not pooled
+sample rates. The six pool draws realise one highly shared hostile-word
+family; they are not six independent semantic mechanisms (amendment 2).
+
+| family | mean B rate | mean A_act rate | mean B rate, non-degenerate |
+|---|---:|---:|---:|
+| pool | 86.8910% | 98.3120% | 85.3151% |
+| far | 6.3333% | 7.6608% | 6.7708% |
+| span | 2.1171% | 0.4167% | 1.0577% |
+
+| primary contrast | B difference, percentage points | exact raw p | Holm p across two primaries | non-degenerate B difference, pp |
+|---|---:|---:|---:|---:|
+| H24a: pool - span | +84.773909 | 2/924 | 4/924 | +84.257407 |
+| H24b: pool - far | +80.557692 | 2/924 | 4/924 | +78.544266 |
+
+Here 2/924 = 0.0021645021645021645 and 4/924 = 0.004329004329004329.
+The exact tests enumerate the 924 splits of 12 direction rates, rather than
+permuting individual transcripts. Both contrasts are in the predicted direction,
+both pass Holm, and both retain their direction after excluding degeneration,
+as the registered decision rule requires. Each non-degenerate raw p is also
+2/924; that does not create another primary test family.
+
+The corresponding observed B counts, in draw order 1-6, are:
+
+- pool: **33/40, 31/39, 36/40, 34/39, 34/39, 38/40**;
+- far: **2/25, 0/40, 0/38, 11/40, 1/40, 0/40**;
+- span: **0/40, 3/40, 0/40, 0/39, 1/37, 1/40**.
+
+Thus the pattern is not driven by one unusually active pool draw. Nor is every
+far draw inactive: `far4` has B in 11/40 (9/32 non-degenerate). The descriptive
+far-minus-span mean difference is +4.216216 pp, exact unadjusted p = 492/924 =
+0.5324675324675324. This is not evidence of equivalence between control families.
+
+**Secondary A_act.** Pool-minus-span is +97.895299 pp and pool-minus-far is
++90.651147 pp; each exact raw p is 2/924. Far-minus-span has raw p = 168/924 =
+0.18181818181818182. These secondary p-values are unadjusted, not additional
+Holm-controlled primary claims, and four A_act scores remain missing. The
+post-hoc missing-B check does not bound A_act.
+
+#### Gate losses, degeneration and judge missingness remain distinct
+
+The unchanged tool-call gate excludes 24/880 samples. `far1` accounts for 14
+exclusions, all no_tool_call; it has 26 gate-passing samples but only 25 B and
+24 A_act scores. `far3` has 39 gate-passing samples and 38 scores on each item;
+`pool6` has 40 B and 39 A_act scores. Persistent judge failures are not zeros.
+Six unverifiable-span scores were forced to zero by the unchanged ingest rule.
+
+The separate TOKEN/repetition sensitivity leaves only **17** scored B samples
+for `pool6` and **18** for `span2`, below the registered 20-sample warning line.
+It preserves the large pool contrasts but does not repair tool-call attrition,
+token-cap censoring, or judge refusal. The analysis conditions on gate passage;
+it is not an unconditional rate over all 40 generations per direction.
+
+The post-hoc exhaustive check assigns each missing B outcome 0 or 1 in memory,
+without altering saved scores. Even the least favorable assignment leaves
+pool-minus-far at **+79.540598 pp**, or **+77.324930 pp** after degeneration
+exclusion; both Holm p-values remain 4/924 in all assignments. Pool-minus-span
+is unaffected. Missingness therefore cannot reverse these B comparisons,
+conditional on the observed scores, gate and degeneration rules.
+
+#### The reference directions constrain, but do not identify, a mechanism
+
+`jspace` yields B in **29/40**, against span draws ranging from 0/40 to 3/40;
+its non-degenerate count is **26/36**. Descriptively, J23's acting `jspace`
+reference persists with six span comparators, and high B rates extend to the
+six pool realisations rather than belonging only to `jspace`'s pursuit weights.
+
+`common` yields B in **1/40** and A_act in **0/40**, with no degeneration. The
+whole-vocabulary common atom component alone does not reproduce the observed
+`jspace`/pool pattern at this dose. This does not show that the component is
+causally irrelevant inside `jspace`: no interaction or ablation test was run.
+The reference-wise Fisher comparisons remain descriptive; no additional
+multiplicity-controlled discovery is claimed from them.
+
+Exploratory hostile-push correlations are rho = +0.774 over the 20 matched-angle
+directions (including `common`), and +0.464 within pool (n = 6). They do not
+establish a within-family strength law or a mediator; no claim rests on the
+uncorrected exploratory p-values.
+
+#### Interpretation against the fixed table, with its pre-data qualifications
+
+The numerical outcome falls in the **H24a and H24b both hold** row, not the
+failed-sanity, pool-equals-span, or broadly acting unrelated-atom rows. At the
+matched angle, behavior depends strongly on the constructed direction family;
+angle and atom construction alone do not account for the observed separation.
+
+The pre-data build qualification governs what that row means. Pool has coherent
+hostile/evaluative/intensifier content, while far is a diffuse word-atom sum.
+H24b therefore contrasts **a coherent hostile-word push with a diffuse word
+push**, not hostile with equally coherent non-hostile content. Pool's mean
+within-family perpendicular-component cosine is 0.880, versus 0.041 for far
+and 0.0024 for span: six disjoint atom sets demonstrate robustness within this
+family, not six independent replications. The shared intensifier/evaluative
+component and content coherence are unresolved alternatives.
+
+Consequently this pattern is consistent with both a behaviorally relevant
+emotion-related representation and a lexical route from word promotion to
+threat behavior; it separates neither interpretation and does not establish
+emotion-specific causality. A coherent non-hostile control and scaled
+replication would be needed before strengthening that claim.
+
+#### Post-hoc effect-size confidence intervals (PI-approved after results)
+
+The original registered script did not compute confidence intervals. With PI
+approval after inspecting the results, `scripts/analyze_j24.py` now appends a
+separately labelled post-hoc bootstrap section; the preceding registered output
+was verified byte-for-byte unchanged. These intervals do not amend the
+registered tests or decision rule.
+
+For each comparison, independently resample six direction-level rates with
+replacement within each family, retaining equal direction weights. Generate
+10,000 differences of resampled means using NumPy `default_rng(20261104)`
+(PCG64; NumPy 2.4.4), reinitialised for each comparison. Use the 2.5th and
+97.5th percentiles with linear interpolation. Resample the six rates from the
+non-degenerate analysis separately for its intervals. This is a direction-level
+percentile bootstrap, not a pooled-transcript or paired bootstrap (Efron 1979,
+doi:10.1214/aos/1176344552). Missing judge outcomes remain excluded; no scores
+are imputed or modified.
+
+| analysis | contrast | difference, pp | pointwise 95% bootstrap CI, pp |
+|---|---|---:|---:|
+| gate-passing B | pool - span | +84.773909 | [+80.277244, +89.099453] |
+| gate-passing B | pool - far | +80.557692 | [+70.941827, +88.250748] |
+| non-degenerate B | pool - span | +84.257407 | [+80.972041, +87.379493] |
+| non-degenerate B | pool - far | +78.544266 | [+69.049589, +85.955961] |
+
+All four intervals are **pointwise, not simultaneous or Holm-adjusted**, and
+post hoc. The primary claims still rest on the registered exact permutation
+tests with Holm correction, not on these interval exclusions of zero. The
+intervals describe resampling variability of the six observed rates per family;
+they do not explicitly model within-direction binomial uncertainty, account for
+missing outcomes, or validate an independent-direction superpopulation. In
+particular, shared structure among pool draws can make bootstrap uncertainty
+look smaller than uncertainty across independently constructed semantic
+families. Do not interpret the endpoints as resolving that limitation.
+
+**Reporting limits.** The missing-outcome bounds above remain separate from
+these sampling intervals; neither should be substituted for the other. No CIs
+were added for secondary A_act, reference-wise or exploratory comparisons.
+Exact permutation p-values and post-hoc bootstrap intervals do not remove the
+shared-family, small-sample, single-model or single-judge limitations. Any
+steering-effect claim must be retested at n >= 200 before it is treated as
+established.
+
+**Bottom line.** In this run, the pool family elicits high explicit-threat rates
+where the matched-angle span and diffuse atom controls mostly do not. Both
+registered contrasts pass their statistical decision rule and survive the
+registered degeneration sensitivity and exhaustive missing-B bounds. This is
+suggestive evidence for a construction/content-family-dependent behavioral
+effect, not evidence that hostile content alone, or an emotion mechanism
+rather than a lexical mechanism, has been isolated.
