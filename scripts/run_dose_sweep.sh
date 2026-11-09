@@ -163,7 +163,7 @@ cat <<HINT
 from huggingface_hub import HfApi
 api = HfApi()
 c = api.upload_folder(
-    repo_id="llm-psych/llm-psych-activations", repo_type="dataset",
+    repo_id="llm-psych/llm-psych-eval-outputs", repo_type="dataset",
     folder_path=".", path_in_repo="eval_outputs/blackmail_arms/L${LAYER}",
     allow_patterns=["*_L${LAYER}_a*.txt", "outputs/*.log"],
     commit_message="dose sweep outputs + run log")
