@@ -5805,3 +5805,44 @@ For `pool`, T's push (1.124) does not exceed the largest of E, C and W
 before any readout exists**. The decoy X receives `pool`'s highest push, as
 built. `pool` and `coh` push every draft by a similar amount, which is the
 generic English-word component noted in J25 amendment 2.
+
+### J26–J28 amendment 2, 2026-11-10: L16-only ablation condition, H27a clause fixed, Chinese matching rule. Before any J27 arm, hook, ablation or sample exists
+
+PI decisions (Haydar, 2026-11-10): all three, plus a fluent-reader check on the
+J26B translation.
+
+**1. New condition 12 in J27: V ablated at L16 only.** `full` 0.25 at L16, V
+mean-ablation applied at L16 only, layers 17-26 free. 100 samples, same
+settings.
+
+- **H27d, secondary:** B(3) < B(12), Fisher two-sided.
+- **Why:** V is `v`'s own top-token subspace, so the L16 ablation removes a
+  large share of the injected `v` at once, and condition 3 is in part a dose
+  cut. The layer split is the only way to separate that from downstream
+  mediation.
+- **Readings, fixed now:** if B(12) ≈ B(2) and B(3) collapses, the downstream
+  layers do the mediating and H27a's first row stands as written. If B(12)
+  collapses with B(3), `v` minus its V-component is dead on its own, so the
+  condition-3 collapse is a dose cut, and the first row is withheld regardless
+  of J26A. Intermediate outcomes are inconclusive, as in the J25 readings.
+- Condition 12 is judged on the same items. Cost: +100 samples, ~40 GPU-min,
+  ~250 judge calls.
+
+**2. H27a's second clause is on point estimates.** "B(3) is below each of
+B(6), B(7), B(8)" means the three realised rates, all three. The pooled
+Fisher is the significance test; no per-draw p-values are required.
+
+**3. `hostile_push_zh` matching.** A token is a hit if its decoded text,
+stripped, **equals** a listed Chinese term of one character; or if it
+**contains** a listed term of two or more characters. The term list is
+deduplicated. Reported per arm, with the hit token list.
+
+**4. J26B translation check.** Before freezing, the Chinese scenario file is
+read end-to-end by a different model family as a fluent reader for errors
+(garbled text, dropped paragraphs, wrong names). That check is recorded, and
+the PI reviews it. The back-translation and no-native-speaker limitation
+stand.
+
+**5. J26A queue.** J26A is queued on the pod after the J25 added conditions
+(execution detail; `data/public/j26a_prompts.jsonl` and the J26A scripts are
+copied there first). Its readout does not wait for J25 judging.
