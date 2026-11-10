@@ -69,3 +69,58 @@ def test_bootstrap_uses_j25_seed() -> None:
     d = np.asarray(a)[ia].mean(axis=1) - np.asarray(b)[ib].mean(axis=1)
     np.testing.assert_allclose(j25._bootstrap_ci(a, b),
                                np.quantile(d, [0.025, 0.975], method="linear"), atol=1e-15)
+
+
+# --- amendment 3 -------------------------------------------------------------
+
+def test_amendment3_condition_names() -> None:
+    assert j25.W90CLASSES["w90"][0] == "j25_w90_L16_a0.2413"
+    assert j25.W90CLASSES["w90"][5] == "j25_w90_6_L16_a0.2413"
+    assert j25.W90CLASSES["w90ctl"][5] == "j25_w90ctl_6_L16_a0.2413"
+    assert j25.V_ONLY == "j24_full_L16_a0.0654"
+    assert j25.POOL_LOW[0] == "j24_pool1_L16_a0.15"
+    assert j25.FULL_LOW == "j24_full_L16_a0.15"
+
+
+def test_holm_known_example() -> None:
+    adj = j25.holm([0.01, 0.04, 0.03])
+    assert adj == pytest.approx([0.03, 0.06, 0.06])
+
+
+def test_dissociation_row() -> None:
+    assert j25.dissociation_row(True, True, 0.4, 0.1, 0.01) == "double dissociation"
+    assert (j25.dissociation_row(True, True, 0.1, 0.4, 0.01)
+            == "not a double dissociation")          # coh <= unsteered
+    assert (j25.dissociation_row(True, True, 0.4, 0.1, 0.2)
+            == "not a double dissociation")          # Fisher p >= 0.05
+    assert j25.dissociation_row(True, False, 0.4, 0.1, 0.01) == "H25c fails"
+    assert j25.dissociation_row(False, True, 0.4, 0.1, 0.01) == "other"
+    assert j25.dissociation_row(False, False, 0.4, 0.1, 0.01) == "other"
+
+
+def test_interaction_arithmetic() -> None:
+    # I = both - w_only - v_only + none
+    assert j25.interaction(0.8, 0.3, 0.2, 0.1) == pytest.approx(0.4)
+    assert j25.interaction(0.5, 0.5, 0.2, 0.2) == pytest.approx(0.0)
+
+
+def test_interaction_ci_contains_estimate() -> None:
+    pool = [[1] * 30 + [0] * 10 for _ in range(6)]
+    w90 = [[0] * 40 for _ in range(6)]
+    v = [0] * 40
+    none = [0] * 40
+    est = j25.interaction(np.mean([np.mean(x) for x in pool]), 0.0, 0.0, 0.0)
+    lo, hi = j25.interaction_ci(pool, w90, v, none)
+    assert lo <= est <= hi and est == pytest.approx(0.75)
+
+
+def test_sign_flip_perfect_separation() -> None:
+    assert j25.sign_flip_p([0.5, 0.4, 0.6, 0.3, 0.45, 0.55]) == pytest.approx(2 / 64)
+    assert j25.sign_flip_p([0.1, -0.2, 0.15, -0.1, 0.2, -0.15]) > 0.5
+
+
+def test_coherent_dose_selection() -> None:
+    assert j25.coherent_dose({0.15: 0.05, 0.25: 0.30}) == 0.15
+    assert j25.coherent_dose({0.15: 0.20, 0.25: 0.05}) == 0.25
+    assert j25.coherent_dose({0.15: 0.05, 0.25: 0.10}) == 0.25   # <= 10% qualifies
+    assert j25.coherent_dose({0.15: 0.20, 0.25: 0.30}) is None
