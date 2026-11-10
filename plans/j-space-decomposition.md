@@ -4780,3 +4780,99 @@ scores handled as in J24; persistent judge failures stay missing, not zero.
 - One model, one layer, one dose, one judge — unchanged J24 limits.
 
 Cost: 1,160 gen ≈ 6.6 GPU-h (~$3); judge ≈ 2,280 calls (~$10-11). Total ≈ **$13**.
+
+### J25 amendment 1, 2026-11-07: `gen` dropped, `top` deduplicated. Fixed after dry run 1, before any arm file or sample exists
+
+**Dry run 1** (`build_j25_arms.py --dry-run` at `4a96704` plus the
+eligibility-report patch, CPU pod; log `results/j25/build_dryrun1.txt`,
+diagnostics `results/j25/eligibility_dryrun1.json`)
+refused at the eligibility step, as the spec requires:
+
+| class | eligible tokens | needed per draw | needed disjoint |
+|---|---:|---:|---:|
+| `gen` | **34** | 44 | 264 |
+| `coh` | 1,141 | 44 | 264 |
+| `top` | 185 (82 distinct words) | 44 | 264 |
+
+No arm file was written. The token list shows `gen` could not answer its
+question even with a smaller draw:
+
+- **The 34 are not hostile words v ignores.** Their v lens ranks run 2,059 to
+  67,721 of 152,064, and half of them lie between 2,059 and 5,000: they sit just
+  below the top-2048 candidate cutoff, inside roughly the top 3% of the
+  vocabulary. The arm would test "v's second-tier hostile words", not
+  "hostility v does not promote".
+- **About 12 lemmas, not 34 words.** Case and inflection variants of crush,
+  destroy, dominate, fighter, fool, threat and demand make up most of the set,
+  plus the French " demande". Several are not contempt words ("fighter",
+  "demand", "careless").
+- **Design result.** 87 of the 121 English-word hostile-lexicon tokens are in v's
+  top 2,048, and the rest rank just below. With this lexicon, v promotes almost
+  the whole hostile vocabulary, so a discriminator that selects hostile words by
+  v's own ranking cannot be built. This is recorded as a finding about v, not
+  repaired.
+
+**Changes, fixed now (PI decision, Haydar, 2026-11-07):**
+
+1. **`gen` is dropped.** H25a (`pool > gen`) and H25b (`gen > top`) are
+   withdrawn untested. Whether the v-component is needed is carried by
+   `w90` vs `w90ctl`, unchanged and still descriptive.
+2. **`top` is deduplicated and v-candidates are excluded.** Before drawing, keep
+   one token per distinct lower-cased word: the lower-case " word" token if
+   eligible, otherwise the eligible variant with the lowest token id. Also
+   exclude tokens in v's top-2048 candidates, the same rule `coh` uses. From
+   the dry-run diagnostics this removes "guts" and the v-candidate "claw"
+   variant, leaving **81 atoms**. That is at least 44 but under 264, so the
+   overlap fallback applies: `top` is one family tested six ways. Body and food
+   nouns v ranks above other Swadesh words ("blood", "meat", "bone") stay in.
+   They are outside v's candidates, so the same rule as `coh` applies, and
+   removing them by hand would be a post-hoc selection.
+3. **Seeds unchanged.** `SeedSequence(20261107)` still spawns three children in
+   the registered order gen, coh, top. The `gen` child is spawned and unused, so
+   the `coh` and `top` streams are exactly those registered.
+4. **Acceptance:** the two `gen` criteria are removed; every other criterion is
+   unchanged (angles, w ⟂ v, J23 match, `coh`/`top` within-class ŵ cos ≥ 0.5,
+   `coh`/`top` mean self-push ≥ max(0.5 × pool's mean hostile push, 0.195)).
+
+5. **`w90`/`w90ctl` dose: the deletion is applied in alpha, not in the file
+   norm.** `SteeringHook` (`emotion_steering/sycophancy_blackmail/hooks.py`)
+   normalises every direction to unit length and injects
+   `alpha × unit(d) × ‖h‖`, so the stored norm never reaches the model. A
+   `w90` file at 0.966 × target norm would therefore be injected at full dose,
+   which is the rescaled version this plan rejected. The deletion is
+   implemented by running `w90` and `w90ctl` at **alpha = 0.25 × sin(theta*) =
+   0.2413** (sin 74.836° = 0.96518). That alpha is the in-arm magnitude of the
+   `sin(theta*)·ŵ` component. Every other arm stays at 0.25. The files are
+   still written at the deletion norm so they document the construction.
+
+**Hypotheses replacing H25a/H25b,** same test machinery (direction-level B
+rates, exact two-sided permutation on 6 vs 6, 924 splits, min p = 0.0022,
+Holm across the two, J24 degeneration sensitivity):
+
+| | prediction | reading |
+|---|---|---|
+| **H25a′, primary** | `pool` > `coh` | hostile emotion words beat coherent non-hostile emotion words |
+| **H25b′, primary** | `pool` > `top` | hostile emotion words beat coherent non-emotional words |
+
+Descriptive: `coh` vs `top`; `w90` and `w90ctl` B and A_act rates; same-pod
+`jspace`/`full` against unsteered.
+
+**Revised reading table:**
+
+| result | reading |
+|---|---|
+| `pool` high, `coh` and `top` ≈ floor | The coherence-only account fails: a coherent push of non-hostile words, emotional or not, does not produce threats. Hostile content is necessary. This does not separate the lexical and emotion accounts. |
+| `coh` or `top` acts near `pool` | A coherent word push acts whatever its content, and the hostile-content reading fails. |
+| `coh`/`top` intermediate | Inconclusive at pilot scale. |
+| `w90` ≈ `pool`, `w90ctl` ≈ floor | The content-bearing ŵ works without v: the v-component is not needed at this dose (favours the lexical account). |
+| `w90` ≈ floor, `w90ctl` ≈ floor | ŵ needs the v-component at this dose (consistent with the emotion account). One arm each, descriptive. |
+| `w90ctl` acts | The deletion itself does something; neither `w90` reading holds. |
+
+**What J25 no longer tests:** whether *this emotion's* selection of hostile
+words matters beyond hostility in general. Vocabulary selection cannot test it
+here (above). An independent route, such as another emotion's hostile pool or
+a natural-activation probe, would need its own preregistration.
+
+**Conditions:** 6 coh + 6 top + 6 reused pool + jspace + full@0.25 + full@0 +
+w90 + w90ctl = **23 conditions × 40 = 920 samples**, one pod. Cost: ≈ 5.2
+GPU-h (~$2-3); judge ≈ 1,800 calls (~$8-9). Total ≈ **$11**.

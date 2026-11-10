@@ -1,25 +1,28 @@
-"""J25 pilot arm builder: the emotion-selection discriminator, Qwen 2.5 7B L16.
+"""J25 pilot arm builder: coherent non-hostile controls and the v-deletion, Qwen 2.5 7B L16.
 
 Pre-registered in plans/j-space-decomposition.md ("J25", 2026-11-07) before any
-arm exists. J24 asked whether a coherent hostile-word push acts; J25 asks
-whether it acts because of hostility in general or because of the hostile
-words the emotion vector v itself promotes. New families, same construction
-as J24 (cos(theta*) * v_hat + sin(theta*) * w_hat, w_hat perp to v, 44 centred
-English-word atoms per draw, equal weights):
+arm exists; amendment 1 (same day, after dry run 1 refused) drops the ``gen``
+family, deduplicates ``top`` and moves the w90 deletion into alpha. New
+families, same construction as J24 (cos(theta*) * v_hat + sin(theta*) * w_hat,
+w_hat perp to v, 44 centred English-word atoms per draw, equal weights):
 
-  gen<i>    w_hat = equal-weight sum of atoms for hostile-lexicon English-word
-            tokens NOT among v's top-2048 lens candidates: generic hostility
-            that v does not promote. The lexical-vs-emotion discriminator.
+  gen       DROPPED (amendment 1): only 34 hostile English-word tokens lie
+            outside v's top-2048, all just below the cutoff. Its eligibility
+            is still reported, and its seed child is still spawned so the
+            coh/top streams match the registration.
   coh<i>    w_hat = atoms for the top-2048 English-word lens candidates of
             u_coh = admiration=1 + joy=1 (non-hostile primary pair), hostile
             tokens and v's candidate-pool tokens excluded: a coherent
             emotion-word push v does not promote.
   top<i>    w_hat = atoms for English-word tokens in the fixed Swadesh
-            concrete-noun list (data/public/swadesh_nouns.txt), hostile
-            excluded: a coherent non-emotional push.
+            concrete-noun list (data/public/swadesh_nouns.txt), hostile and
+            v-candidate tokens excluded, one token per distinct lower-cased
+            word (amendment 1): a coherent non-emotional push.
   w90       j24_pool1 minus its cos(theta*)*v_hat component: sin(theta*)*w_hat
-            kept at its in-arm magnitude, NOT rescaled (a deletion). Does a
-            content-bearing w_hat need the v-component? Descriptive, one arm.
+            (a deletion). SteeringHook re-normalises every direction, so the
+            deletion magnitude is applied at sweep time as alpha = 0.25 *
+            sin(theta*) = 0.2413 (amendment 1); the file norm only documents
+            it. Does a content-bearing w_hat need the v-component? Descriptive.
   w90ctl    the identical deletion applied to j24_span1: norm- and
             geometry-matched contentless control for w90.
   (refs)    pool1-6 are the J24 files reused unchanged; jspace and full are
@@ -35,8 +38,8 @@ Self-push generalises J24's hostile_push: the mean vocabulary-centred J-lens
 logit over a class's own atom tokens at unit norm. Build acceptance (fixed):
 angles at theta*, w perp v, coh/top within-class w_hat cos >= 0.5, each new
 class's mean self-push >= 0.5 x pool's mean hostile push and >= 3 x span's
-J24 mean (+0.065 -> >= 0.195), gen's mean hostile push >= 0.5 x pool's, and
-the J23 full/jspace rebuild check. On failure nothing is written.
+J24 mean (+0.065 -> >= 0.195), and the J23 full/jspace rebuild check. On
+failure nothing is written.
 
     uv run python scripts/build_j25_arms.py --dry-run     # report only
     uv run python scripts/build_j25_arms.py               # report + .npy arms
@@ -57,6 +60,7 @@ _repo_root = Path(__file__).resolve().parents[1]
 # --- frozen by the J25 section of plans/j-space-decomposition.md -------------
 SEED = 20261107
 FAMILIES = ("gen", "coh", "top")        # spawn order is part of the seed spec
+BUILT = ("coh", "top")                  # amendment 1: gen dropped, child unused
 N_PER_CLASS = 6
 ATOMS_PER_DRAW = 44
 EXPECTED_THETA = 74.836                 # J23 build report, pos side, L16
@@ -65,7 +69,7 @@ TAG = "j25"
 MIN_WITHIN_COS = 0.5                    # coh, top: as coherent as pool-family draws
 SPAN_J24_MEAN_PUSH = 0.065              # J24 report, class mean hostile push of span
 PUSH_FRACTION = 0.5                     # new classes' self-push vs pool's hostile push
-GEN_PUSH_FRACTION = 0.5                 # gen's hostile push vs pool's
+SWEEP_ALPHA = 0.25
 CHUNK = 8192
 ENGLISH_RE = re.compile(r" [A-Za-z]{3,}")
 MIN_PICKED_MATCH = 0.999
@@ -199,7 +203,8 @@ def main() -> int:
         return out
 
     rngs = {f: np.random.default_rng(ch)
-            for f, ch in zip(FAMILIES, np.random.SeedSequence(SEED).spawn(len(FAMILIES)))}
+            for f, ch in zip(FAMILIES, np.random.SeedSequence(SEED).spawn(len(FAMILIES)),
+                             strict=True)}
     arms: dict[str, torch.Tensor] = {}
     meta: dict[str, dict] = {}
     draw_tids: dict[str, torch.Tensor] = {}
@@ -226,18 +231,54 @@ def main() -> int:
     coh_cand = torch.zeros(vocab, dtype=torch.bool)
     coh_cand[torch.topk(logits_coh, args.n_candidates).indices] = True
     coh_elig = torch.nonzero(coh_cand & english & ~hostile & ~in_cand).flatten()
-    # top: Swadesh concrete nouns, hostile excluded
-    top_elig = torch.nonzero(swadesh_mask & english & ~hostile).flatten()
+    # top (amendment 1): Swadesh concrete nouns, hostile and v-candidate tokens
+    # excluded, then one token per distinct lower-cased word: the lower-case
+    # " word" token if eligible, else the eligible variant with the lowest id
+    top_raw = torch.nonzero(swadesh_mask & english & ~hostile & ~in_cand).flatten()
+    by_word: dict[str, list[int]] = {}
+    for t in sorted(top_raw.tolist()):
+        by_word.setdefault(tokenizer.decode([t]).strip().lower(), []).append(t)
+    top_keep = []
+    for w, ts in sorted(by_word.items()):
+        lower = [t for t in ts if tokenizer.decode([t]) == f" {w}"]
+        top_keep.append(lower[0] if lower else ts[0])
+    top_elig = torch.tensor(sorted(top_keep), dtype=torch.long)
     eligible = {"gen": gen_elig, "coh": coh_elig, "top": top_elig}
+
+    # Eligibility diagnostics, written before any refusal so a failed build
+    # still reports every class (added after the first J25 dry run refused at gen).
+    v_rank = torch.empty(vocab, dtype=torch.long)
+    v_rank[torch.argsort(logits_v, descending=True)] = torch.arange(vocab)
+
+    def tok_rows(tids: torch.Tensor) -> list[dict]:
+        rows = [{"id": int(t), "tok": tokenizer.decode([int(t)]), "v_rank": int(v_rank[t]),
+                 "english": bool(english[t]), "in_v_candidates": bool(in_cand[t])}
+                for t in tids.tolist()]
+        return sorted(rows, key=lambda r: r["v_rank"])
+
+    diag = {"n_eligible": {f: int(e.numel()) for f, e in eligible.items()},
+            "needed_per_draw": ATOMS_PER_DRAW,
+            "needed_disjoint": N_PER_CLASS * ATOMS_PER_DRAW,
+            "hostile_all": tok_rows(torch.nonzero(hostile).flatten()),
+            "gen_eligible": tok_rows(gen_elig),
+            "top_eligible_before_dedup": tok_rows(top_raw),
+            "top_eligible": tok_rows(top_elig)}
+    dp = (_repo_root / "results" / "jspace_gate"
+          / f"eligibility_{model_key}_{args.track}_L{args.layer}_{TAG}.json")
+    dp.parent.mkdir(parents=True, exist_ok=True)
+    dp.write_text(json.dumps(diag, indent=2))
     for fam, elig in eligible.items():
-        print(f"{fam}: {elig.numel()} eligible tokens")
-        if elig.numel() < ATOMS_PER_DRAW:
-            raise SystemExit(f"REFUSING: only {elig.numel()} {fam}-eligible tokens, "
-                             f"need {ATOMS_PER_DRAW}")
+        print(f"{fam}: {elig.numel()} eligible tokens "
+              f"(need {ATOMS_PER_DRAW}/draw, {N_PER_CLASS * ATOMS_PER_DRAW} disjoint)")
+    print(f"eligibility diagnostics -> {dp}")
+    short = [f for f in BUILT if eligible[f].numel() < ATOMS_PER_DRAW]
+    if short:
+        raise SystemExit(f"REFUSING: too few eligible tokens for {short}; "
+                         f"need {ATOMS_PER_DRAW} per draw")
 
     # --- draws under the overlap fallback ------------------------------------
     overlap: dict[str, bool] = {}
-    for fam in FAMILIES:
+    for fam in BUILT:
         elig = eligible[fam]
         overlap[fam] = elig.numel() < N_PER_CLASS * ATOMS_PER_DRAW
         if overlap[fam]:            # sets may overlap across draws
@@ -264,14 +305,19 @@ def main() -> int:
             raise SystemExit(f"REFUSING: {f} is missing; {nm} cannot be built")
         a = torch.from_numpy(np.load(f).astype(np.float32))
         arms[nm] = a - (a @ vhat) * vhat          # keeps sin(theta*) magnitude
-        meta[nm] = {"deletion_of": src, "n_atoms": 0}
+        meta[nm] = {"deletion_of": src, "n_atoms": 0,
+                    "norm_ratio_to_source": float(arms[nm].norm() / a.norm()),
+                    "sweep_alpha": round(SWEEP_ALPHA * s_s, 4)}
 
     # --- rebuilt refs and the J23 check --------------------------------------
     arms["full"] = uu.clone()
     arms["jspace"] = comp_t.clone()
     report = {"spec": "J25 pilot, plans/j-space-decomposition.md 2026-11-07",
               "model_key": model_key, "track": args.track, "layer": args.layer,
-              "seed": SEED, "families": FAMILIES, "theta_star_deg": theta,
+              "seed": SEED, "seed_spawn_order": FAMILIES, "families_built": BUILT,
+              "amendment": "J25 amendment 1 (gen dropped, top deduplicated, "
+                           "w90 deletion applied in alpha)",
+              "theta_star_deg": theta,
               "atoms_per_draw": ATOMS_PER_DRAW, "swadesh_list": str(args.swadesh),
               "n_swadesh_nouns": len(swadesh),
               "centring": "English-word mean unit atom (J24 amendment 2)",
@@ -334,7 +380,7 @@ def main() -> int:
                                   np.clip(float((a / a.norm()) @ vhat), -1, 1)))),
                               **push(a, pool_tids.get(nm))}
 
-    for fam in FAMILIES:
+    for fam in BUILT:
         ws = [what(arms[f"{fam}{i + 1}"]) for i in range(N_PER_CLASS)]
         cs = [float(ws[a] @ ws[b]) for a in range(len(ws)) for b in range(a + 1, len(ws))]
         report["within_class_cos"][fam] = {"w_hat_mean": float(np.mean(cs)),
@@ -345,21 +391,20 @@ def main() -> int:
         fam: {"w_hat_mean_vs_pool": float(np.mean(
             [float(what(arms[f"{fam}{i + 1}"]) @ pw)
              for i in range(N_PER_CLASS) for pw in pool_ws]))}
-        for fam in FAMILIES}
+        for fam in BUILT}
 
-    # --- acceptance, fixed in the plan ----------------------------------------
+    # --- acceptance, fixed in the plan (amendment 1: gen criteria removed) ----
     mean_hp = {fam: float(np.mean([report["arms"][f"{fam}{i + 1}"]["hostile_push"]
-                                   for i in range(N_PER_CLASS)])) for fam in FAMILIES}
+                                   for i in range(N_PER_CLASS)])) for fam in BUILT}
     mean_sp = {fam: float(np.mean([report["arms"][f"{fam}{i + 1}"]["self_push"]
-                                   for i in range(N_PER_CLASS)])) for fam in FAMILIES}
+                                   for i in range(N_PER_CLASS)])) for fam in BUILT}
     pool_hp = float(np.mean([report["arms"][f"pool{i + 1}"]["hostile_push"]
                              for i in range(N_PER_CLASS)]))
     push_floor = max(PUSH_FRACTION * pool_hp, 3.0 * SPAN_J24_MEAN_PUSH)
     checks = {
         "coh_within_cos_ge_0.5": report["within_class_cos"]["coh"]["w_hat_mean"] >= MIN_WITHIN_COS,
         "top_within_cos_ge_0.5": report["within_class_cos"]["top"]["w_hat_mean"] >= MIN_WITHIN_COS,
-        "gen_hostile_push_ge_half_pool": mean_hp["gen"] >= GEN_PUSH_FRACTION * pool_hp,
-        **{f"{fam}_self_push_ge_floor": mean_sp[fam] >= push_floor for fam in FAMILIES},
+        **{f"{fam}_self_push_ge_floor": mean_sp[fam] >= push_floor for fam in BUILT},
     }
     report["class_mean_hostile_push"] = {**mean_hp, "pool": pool_hp}
     report["class_mean_self_push"] = mean_sp
