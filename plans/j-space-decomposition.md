@@ -4946,3 +4946,35 @@ without emotion (this amendment).
 **Conditions:** 6 coh + 6 reused pool + jspace + full@0.25 + full@0 + w90 +
 w90ctl = **17 conditions × 40 = 680 samples**, one pod. Cost: ≈ 3.9 GPU-h;
 judge ≈ 1,330 calls (~$6-7).
+
+### J25 build result, 2026-11-10: PASS. Before any sample exists
+
+`uv run python scripts/build_j25_arms.py` at `ac00b54`, CPU env on the 4090 pod
+(torch 2.15.0+cpu, transformers 5.22.2; log `results/j25/build_real.txt`, report
+`results/j25/build_real_report.json`). Acceptance: `coh` within-class ŵ cos
+0.773 ≥ 0.5, `coh` self-push 1.378 ≥ 0.533, J23 match `full` 1.0000001 /
+`jspace` 0.9999998, all angles exact → **PASS**. Token draws and pushes for
+`coh1`-`6`, `w90` and `w90ctl` match dry run 2 exactly. `w90`/`w90ctl` file norm
+1.6781 = 0.96518 × target norm, sweep alpha 0.2413.
+
+Arm files (sha256), `steering_vectors/Qwen2.5-7B-Instruct-story-wheel32/`:
+
+| file | sha256 |
+|---|---|
+| j25_coh1_layer16.npy | ea2be30f86048721ad9741f5e1c130e42a236ab88dc5419fdb4f10bb670094e0 |
+| j25_coh2_layer16.npy | 4cb3b86ccf3b3e66becc0f94da8247ea5f7b0eac1b39178595115f8c98e035fb |
+| j25_coh3_layer16.npy | 8f3ad2747b38db1e1a6b515b6f6a22ce9c10c077a13aa172d008eec73b52326b |
+| j25_coh4_layer16.npy | d30ab65a420805477dea5bcb0fa93569a7764583bd555c60ab79e42502bfe947 |
+| j25_coh5_layer16.npy | 78f19c49aba2c398fd1176a7a21e01f63a8292f138be411cbf213dbe8d4adad1 |
+| j25_coh6_layer16.npy | 1a1f9fe3383402fab78e14b378838ee86e1153f56e805b6df60e4117023f8c81 |
+| j25_w90_layer16.npy | 68283ccab7ce11d24f5a5af2cb2c678128888375306c92586a7bf5126050e367 |
+| j25_w90ctl_layer16.npy | d90eaaedaaad21bc076e733ec5c1ffb178737f5d9a1131b5d1d9eb814f250841 |
+
+Analysis script `scripts/analyze_j25.py` and tests committed at `1790b40`,
+before any sample.
+
+**Sweep, same pod** (17 conditions × 40):
+
+    ARMS="j24_full" DOSES="0 0.25" EPOCHS=40 LAYER=16 bash ../scripts/run_dose_sweep.sh
+    ARMS="j24_jspace j24_pool1 j24_pool2 j24_pool3 j24_pool4 j24_pool5 j24_pool6 j25_coh1 j25_coh2 j25_coh3 j25_coh4 j25_coh5 j25_coh6" DOSES="0.25" EPOCHS=40 LAYER=16 bash ../scripts/run_dose_sweep.sh
+    ARMS="j25_w90 j25_w90ctl" DOSES="0.2413" EPOCHS=40 LAYER=16 bash ../scripts/run_dose_sweep.sh
