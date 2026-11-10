@@ -4876,3 +4876,73 @@ a natural-activation probe, would need its own preregistration.
 **Conditions:** 6 coh + 6 top + 6 reused pool + jspace + full@0.25 + full@0 +
 w90 + w90ctl = **23 conditions × 40 = 920 samples**, one pod. Cost: ≈ 5.2
 GPU-h (~$2-3); judge ≈ 1,800 calls (~$8-9). Total ≈ **$11**.
+
+### J25 amendment 2, 2026-11-07: `top` dropped. Fixed after dry run 2, before any arm file or sample exists
+
+**Dry run 2** (`build_j25_arms.py --dry-run` at `fae1ee1`, CPU pod; log
+`results/j25/build_dryrun2.txt`, report `results/j25/build_dryrun2_report.json`)
+**passed** every acceptance criterion in amendment 1:
+
+| check | value |
+|---|---|
+| angles | all arms 74.836°; `w90`, `w90ctl` 90.000° |
+| J23 match | `full` 1.0000001, `jspace` 0.9999998 |
+| `coh` within-class ŵ cos | mean 0.773 (min 0.629, max 0.841); six disjoint draws from 1,141 eligible |
+| `top` within-class ŵ cos | mean 0.985 (min 0.978); overlapping draws from 81 eligible |
+| class mean self-push (floor 0.533) | `coh` 1.378, `top` 3.053 |
+| class mean hostile push | pool 1.066, `coh` 0.702, `top` 1.315 |
+| ŵ cos with pool | `coh` 0.246, `top` 0.470 |
+| `w90` / `w90ctl` hostile push | 0.858 / 0.004 (pool1 0.902) |
+
+The table showed that **`top` does not measure what it was built to measure**.
+The criteria did not anticipate this:
+
+- Every `top` draw's top-10 lens tokens are function words (" the", " a",
+  " and", " in"), and none of them is a Swadesh noun. The direction is
+  mostly a generic push toward English-word tokens, not a push toward
+  concrete nouns.
+- `top`'s hostile push (1.315) is above pool's (1.066). Hostile push is
+  centred on the whole vocabulary, which is mostly non-English and code
+  tokens, so any broad English-word push raises it. The metric is not
+  hostility-specific. This also qualifies the J24 and J25 hostile-push
+  numbers for every atom-sum arm: some of each one is a generic English-word
+  component. Recorded as a limitation; J24 is not re-analysed.
+- The six `top` draws are effectively one direction (cos 0.985).
+
+If `top` produced threats, the result could not separate "coherent nouns
+act" from "a generic English-word push acts". **PI decision (Haydar,
+2026-11-07): drop `top`.** The selectivity diagnostic considered as an
+alternative was not run.
+
+**Changes, fixed now:**
+
+1. `top` is not built. `SeedSequence(20261107)` still spawns gen, coh, top in
+   that order and only the `coh` child is used, so the `coh` arms are exactly
+   the dry-run-2 arms above.
+2. **Single primary, H25a′: `pool` > `coh`.** Direction-level B rates, exact
+   two-sided permutation on 6 vs 6 (924 splits, min p = 0.0022). With one
+   primary test there is no multiplicity correction. The J24 degeneration
+   sensitivity is unchanged. H25b′ (`pool` > `top`) is withdrawn untested.
+3. Descriptive: `w90` and `w90ctl` B and A_act rates, both at alpha 0.2413
+   (amendment 1); same-pod `jspace`/`full` against unsteered.
+4. Acceptance at the real build: the `coh` criteria and the geometry and J23
+   checks above. The real build must reproduce the dry-run-2 `coh` and
+   `w90`/`w90ctl` arms exactly (same seed child, same code path).
+
+**Readings:**
+
+| result | reading |
+|---|---|
+| `pool` high, `coh` ≈ floor | A coherent push toward non-hostile emotion words does not produce threats, so hostile content is necessary. The pushes are not matched: `coh`'s hostile push is two-thirds of pool's and its self-push is similar, so this does not rule out push strength. It also does not separate the lexical and emotion accounts. |
+| `coh` near `pool` | Coherent emotion-word pushes act whatever their content, and the hostile-content reading fails. |
+| `coh` intermediate | Inconclusive at pilot scale. |
+| `w90`/`w90ctl` | As in amendment 1: one arm each, descriptive. |
+
+**What J25 now tests:** whether hostile content is needed (`pool` vs `coh`) and,
+descriptively, whether the v-component is needed (`w90` vs `w90ctl`). It no
+longer tests the emotion's own selection of words (amendment 1) or coherence
+without emotion (this amendment).
+
+**Conditions:** 6 coh + 6 reused pool + jspace + full@0.25 + full@0 + w90 +
+w90ctl = **17 conditions × 40 = 680 samples**, one pod. Cost: ≈ 3.9 GPU-h;
+judge ≈ 1,330 calls (~$6-7).

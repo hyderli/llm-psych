@@ -14,7 +14,9 @@ w_hat perp to v, 44 centred English-word atoms per draw, equal weights):
             u_coh = admiration=1 + joy=1 (non-hostile primary pair), hostile
             tokens and v's candidate-pool tokens excluded: a coherent
             emotion-word push v does not promote.
-  top<i>    w_hat = atoms for English-word tokens in the fixed Swadesh
+  top<i>    DROPPED (amendment 2): its draws pushed generic English words, not
+            nouns. Eligibility is still reported. Original definition:
+            w_hat = atoms for English-word tokens in the fixed Swadesh
             concrete-noun list (data/public/swadesh_nouns.txt), hostile and
             v-candidate tokens excluded, one token per distinct lower-cased
             word (amendment 1): a coherent non-emotional push.
@@ -60,7 +62,7 @@ _repo_root = Path(__file__).resolve().parents[1]
 # --- frozen by the J25 section of plans/j-space-decomposition.md -------------
 SEED = 20261107
 FAMILIES = ("gen", "coh", "top")        # spawn order is part of the seed spec
-BUILT = ("coh", "top")                  # amendment 1: gen dropped, child unused
+BUILT = ("coh",)                        # amendments 1-2: gen, top dropped; children unused
 N_PER_CLASS = 6
 ATOMS_PER_DRAW = 44
 EXPECTED_THETA = 74.836                 # J23 build report, pos side, L16
@@ -315,7 +317,7 @@ def main() -> int:
     report = {"spec": "J25 pilot, plans/j-space-decomposition.md 2026-11-07",
               "model_key": model_key, "track": args.track, "layer": args.layer,
               "seed": SEED, "seed_spawn_order": FAMILIES, "families_built": BUILT,
-              "amendment": "J25 amendment 1 (gen dropped, top deduplicated, "
+              "amendment": "J25 amendments 1-2 (gen and top dropped, "
                            "w90 deletion applied in alpha)",
               "theta_star_deg": theta,
               "atoms_per_draw": ATOMS_PER_DRAW, "swadesh_list": str(args.swadesh),
@@ -402,8 +404,8 @@ def main() -> int:
                              for i in range(N_PER_CLASS)]))
     push_floor = max(PUSH_FRACTION * pool_hp, 3.0 * SPAN_J24_MEAN_PUSH)
     checks = {
-        "coh_within_cos_ge_0.5": report["within_class_cos"]["coh"]["w_hat_mean"] >= MIN_WITHIN_COS,
-        "top_within_cos_ge_0.5": report["within_class_cos"]["top"]["w_hat_mean"] >= MIN_WITHIN_COS,
+        **{f"{fam}_within_cos_ge_0.5":
+           report["within_class_cos"][fam]["w_hat_mean"] >= MIN_WITHIN_COS for fam in BUILT},
         **{f"{fam}_self_push_ge_floor": mean_sp[fam] >= push_floor for fam in BUILT},
     }
     report["class_mean_hostile_push"] = {**mean_hp, "pool": pool_hp}
