@@ -5846,3 +5846,82 @@ stand.
 **5. J26A queue.** J26A is queued on the pod after the J25 added conditions
 (execution detail; `data/public/j26a_prompts.jsonl` and the J26A scripts are
 copied there first). Its readout does not wait for J25 judging.
+
+## 2026-11-11 — J25 result and J26A result: the v-component contributes nothing; threats ride on the verbalizable ŵ alone. J26A's positive control fails
+
+**Provenance.** 35 conditions x 40 = 1,400 samples, parsed to `results/j25/payloads.jsonl`
+(15 gate-flagged, 0 dev-flagged, 0 blinding leaks). Judge `claude-sonnet-5`,
+4,139 of 4,155 calls scored; **16 sid x item pairs missing on 9 samples**
+after three passes (judge refusals + 1 JSON error), declared missing per the
+registered rule. 19 scores forced to 0 for unverifiable spans (0.5%).
+Analysis `analyze_j25.py` at the amendment-3 commit; full stdout in
+`results/j25/analysis_stdout.txt`.
+
+### Primaries, all three PASS (Holm-adjusted p = 0.0065 each, the attainable minimum)
+
+| test | rates | diff |
+|---|---|---|
+| H25a′ `pool` > `coh` on B | 0.809 vs 0.009 | +80.0 pp, CI [+63.4, +89.9] |
+| H25c `coh` > `pool` on P | 0.948 vs 0.149 | +79.9 pp, CI [+74.0, +85.3] |
+| H25d `w90` vs `w90ctl` on B | 0.766 vs 0.000 | +76.6 pp, CI [+67.1, +85.8] |
+
+All three sensitivities on non-degenerate samples agree in direction.
+`coh` P (pooled 216/228) exceeds same-pod unsteered P (11/40), Fisher
+p = 1.7e-20, 6/6 directions above unsteered → **READING: double
+dissociation.** The `pool`-suppresses-baseline account is excluded: `coh`
+produces praise above the unsteered rate, not merely above `pool`'s.
+
+### The decisive comparisons
+
+- **`w90` ≈ `pool` on B:** paired by source direction, mean diff -4.2 pp,
+  sign-flip p = 0.406. Removing the cos θ* · v̂ component costs nothing.
+- **2×2:** v-only `full` @0.0654 B = 0/40; none = 0/40; ŵ-only (w90 class)
+  0.766; both (pool) 0.809. Interaction I = +4.2 pp, CI [-15.2, +21.1].
+- **v alone at 0.0654 produces nothing** (B 0/40, A_act 1/40, P 9/40).
+- Full dose response: `full` B = 0/40 @0.0654 → 14/40 @0.15 → 32/40 @0.25.
+  `pool` at 0.15: B 0.775 class mean vs `full` 0.35.
+- **Coherent-regime rule:** neither dose has pool class-mean degeneration
+  ≤ 10% (0.125 at 0.15, 0.415 at 0.25) → **the `pool` effect is confined to
+  the degenerate regime; every `pool` claim carries that caveat.** The
+  non-degenerate sensitivity still holds (0.816 vs 0.015 at 0.25).
+- Secondary A_act: pool > coh +97.0 pp; w90 > w90ctl +97.1 pp.
+- `w90ctl` P is elevated on two directions (0.35, 0.40) with B = 0 —
+  reported, no reading attached.
+- `jspace` B = 35/40 (0.875) on the same pod — above `pool`'s class mean.
+
+**J25's answer:** at a matched angle the verbalizable ŵ carries the entire
+effect. The v-component is neither necessary (w90 ≈ pool) nor sufficient
+(v-only = 0). With J24, ŵ content is *sufficient*; J25 shows it is *complete*
+— nothing else in v is needed. This is the lexical-account reading, not the
+emotion-representation reading. **For J28:** H28c's identification condition
+(w90 < pool on B, sign-flip p < 0.05) is NOT met → H28c is reported as not
+identified; the Holm family shrinks to two.
+
+### J26A: forced choice — positive control FAILS
+
+`results/j26a/readout.jsonl`, 2,400 rows, `analyze_j26a.py`; stdout in
+`results/j26a/analysis_stdout.txt`. Non-compliance: 2 conditions only
+(pool3 5/120, coh5 94/120).
+
+- **Positive control: `full` vs unsteered P(T) = +0.0049, paired p = 0.463 →
+  FAIL.** Steering at this dose does not move a choice made without
+  generation.
+- Primaries (reported, not read per the registered rule): H26a `pool` >
+  `span` on P(T) +17.2 pp PASS; H26b `coh` > `span` on P(W) +4.6 pp PASS;
+  secondary P(X) +11.6 pp.
+- **READING: control fails** — the task cannot separate the accounts.
+- Descriptive pattern worth noting: `pool` moves P(T) to ~0.21 and the
+  decoy P(X) to ~0.14 while `full` does not move the choice at all — the
+  same "words-only" signature as J25, here on a generation-free outcome.
+  Under the registered rules this stays descriptive.
+
+**What this means for the series.** J24: hostile-word directions act.
+J25: nothing but the hostile words is needed — the emotion vector's own
+component contributes zero measurable threat. J26A: even where the
+word-directions measurably shift choice probabilities, `v` alone does not,
+so the choice assay cannot tell a concept from a word prime. The remaining
+clean tests are J27 (does removing the verbalizable subspace downstream of
+the injection kill the `full` effect?) and J26B (does the effect transfer
+to Chinese output?). J28's report-vs-behaviour dissociation lost its
+identification condition and is now limited to the report-tracking
+descriptives.
