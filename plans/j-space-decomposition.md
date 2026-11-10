@@ -4658,3 +4658,125 @@ registered degeneration sensitivity and exhaustive missing-B bounds. This is
 suggestive evidence for a construction/content-family-dependent behavioral
 effect, not evidence that hostile content alone, or an emotion mechanism
 rather than a lexical mechanism, has been isolated.
+
+## 2026-11-07 — J25 pilot: is it the emotion's own hostile words, or hostility? Pre-registered before any J25 arm or sample exists
+
+**Why.** J24's result is "pool family acts, far/span mostly do not". Its two
+open confounds are fixed before data: (a) a coherent but non-hostile word push
+was never tested, so "coherent push of any kind" remains alive; (b) every acting
+direction's atoms were selected by v's own lens ranking, so J24 cannot separate
+"the subset of hostile words v promotes" from "hostility in general". J25 adds
+three control families and one descriptive arm to separate these.
+
+PI decisions (Haydar, 2026-11-07): pilot scale n = 40 first, not n = 200; the
+coherent non-hostile test uses an other-emotion word pool (Option A) and a
+semantic topic cluster (Option B); a generic-hostile family and a ŵ-only arm
+plus its norm-matched control are included; the `top` lexicon is the Swadesh
+concrete-noun subset (below); overlapping draws are accepted as one family per
+the fallback rule. J24's pool arms are **reused** (same .npy files, new samples
+on the same pod) as the same-pod anchor — not rebuilt, so no cross-pod or
+cross-build caveat for the anchor family.
+
+**Model, layer, dose:** Qwen2.5-7B-Instruct at `a09a3545`, L16, alpha 0.25,
+theta* = 74.836° — identical to J24. Same judge (`claude-sonnet-5`), gate,
+degeneration criterion, item set (A_act, B only), and direction-level unit of
+analysis. All conditions on one pod.
+
+### Construction (tag `j25`; new families only)
+
+All arms except `full` share cos(theta*)·v̂ + sin(theta*)·ŵ with ŵ ⟂ v̂, unit —
+identical geometry to J24. English-word eligibility and centring are J24
+amendment 2 unchanged (English-word mean unit atom). New families:
+
+| class | ŵ source | draws |
+|---|---|---|
+| `gen` | Hostile-lexicon English-word tokens **not among v's top-2048 lens candidates** — generic hostility v does not promote. 44 atoms per draw, equal weights, centred. | 6 |
+| `coh` | Top-2048 English-word tokens of **u_coh = admiration=1 + joy=1** (the non-hostile primary pair, opposite poles of loathing and sadness), hostile lexicon excluded, tokens in v's candidate pool also excluded — coherent emotion-word pushes v does not promote. 44 atoms, equal weights, centred. | 6 |
+| `top` | English-word tokens matching the **Swadesh concrete-noun subset** (decided below), hostile excluded. 44 atoms, equal weights, centred. | 6 |
+| `w90` | pool1's arm **minus its cos(theta*)·v̂ component** — `sin(theta*)·ŵ` kept at its in-arm magnitude (≈0.966 of arm norm), not rescaled. A deletion, not a new unit arm: does a content-bearing ŵ need the v-component at all? Descriptive, one arm. A random ŵ alone is already flat (J14 `gauss` ~89°), so this tests content-bearing ŵ only. | 1 |
+| `w90ctl` | span1's arm minus its cos(theta*)·v̂ component — the identical deletion applied to a contentless ŵ. Norm- and geometry-matched control for `w90`: a `w90` ≈ floor result is attributable to v-necessity only if `w90ctl` is also flat (it is expected to be). | 1 |
+| refs | `pool1`-`6` (**reused j24 files**), `jspace`, `full` at 0.25, `full` at 0 | 9 |
+
+**The `top` lexicon, decided (Haydar, 2026-11-07):** the concrete-common-noun
+subset of the 207-word Swadesh list — nouns only (pronouns, function words,
+verbs, adjectives, numerals excluded; ~100 entries expected), standard English
+singular forms, then the usual English-word eligibility filter, hostile
+lexicon excluded. The list is fixed; the build records the exact token subset
+that survives eligibility in the build report.
+
+**Eligible-count fallback, fixed now.** `gen` eligible count is bounded by the
+157-token hostility mask and will likely be < 264; `top` and `coh` may also be.
+Rule: if eligible ≥ 264, six disjoint draws (as J24). If 44 ≤ eligible < 264,
+each draw samples 44 distinct atoms but **sets may overlap across draws** —
+reported as one family of correlated draws, not six independent directions. If
+eligible < 44, the build REFUSES for that class and reports back; no arm files
+are written (J24's rule).
+
+**Seeds:** `SeedSequence(20261107)`, spawn order `gen`, `coh`, `top`. Pool arms
+are reused, so they consume no RNG and draw order is stable.
+
+**Self-push metric for matching.** For each class, the mean vocabulary-centred
+J-lens logit over that class's own atom tokens at unit norm — the generalisation
+of `hostile_push` (which is `gen`'s and `pool`'s self-push over the hostility
+lexicon). Reported for every draw.
+
+**Build acceptance, fixed before any build:**
+
+- Every non-`full` arm at theta* ± 0.001°, every ŵ ⟂ v; `full`/`jspace` match
+  J23 files at cos ≥ 0.999999 (unchanged J24 checks).
+- `coh` and `top` mean within-class ŵ cos **≥ 0.5**: the classes must be as
+  coherent as pool-family draws are, or they repeat J24's `far` confound.
+  `gen`'s within-cos is reported, not required (small eligible sets force near-1).
+- Each new class's mean self-push ≥ 0.5 × pool's mean hostile push **and** ≥ 3×
+  span's J24 mean (+0.065): non-hostile controls must push their own words at a
+  comparable magnitude, or a `pool > class` result is push-strength, not content.
+- `pool` vs `gen` hostile push: `gen`'s mean must be ≥ 0.5 × pool's — generic
+  hostility must still push hostile words measurably.
+- On failure: no arm files; report back; do not adjust silently (J24 rule).
+
+**Conditions:** 6 gen + 6 coh + 6 top + 6 reused pool + jspace + full@0.25 +
+full@0 + w90 + w90ctl = **29 conditions x 40 = 1,160 samples**, one pod.
+
+### Hypotheses and tests
+
+Direction-level B rates over gate-passing samples; exact two-sided permutation
+tests on differences of class means (924 splits, min p = 0.0022); Holm across
+the two primaries; the non-degenerate sensitivity is the J24 criterion
+unchanged.
+
+| | prediction | test |
+|---|---|---|
+| **H25a, primary** | `pool` > `gen` — emotion-selection hypothesis | permutation, B |
+| **H25b, primary** | `gen` > `top` — is generic hostility above a matched-coherence floor? | permutation, B |
+
+Secondary/descriptive: `gen` vs `coh`; `coh` vs `top`; `w90` B and A_act rates
+descriptively; `jspace`/`full` against unsteered as same-pod sanity; per-class
+self-push vs B (exploratory, no claim). Gate, degeneration and missing judge
+scores handled as in J24; persistent judge failures stay missing, not zero.
+
+### How outcomes will be read, fixed now
+
+| result | reading |
+|---|---|
+| `gen` ≈ `pool` (H25a fails; `gen` high) | Hostility is hostility — v's own selection adds nothing. **Counts against the emotion-representation reading and for the lexical route.** |
+| `gen`, `coh`, `top` all ≈ floor; `pool` high (H25a holds, H25b passes trivially) | Only the subset of hostile words v promotes acts. The strongest evidence in this series for an emotion-relevant lexical carrier — still a precondition result, not a mechanism proof. |
+| `gen` high AND `coh`/`top` also act | Any coherent word push acts; content story dead — points to a property of coherent unembedding pushes. |
+| `gen` intermediate between `pool` and floor | Inconclusive by design: flagged as the expected worst case; scaling to n = 200 resolves it only if the pattern is stable, not if the arms are mismatched. |
+| `w90` ≈ `pool` | ŵ suffices alone — the cos(theta*)·v̂ component is not needed at this dose; lexical-friendly, reported descriptively. |
+| `w90` ≈ floor, `w90ctl` ≈ floor | A content-bearing ŵ alone is inert and its norm-matched control is too — the v-component is required for the effect at this dose. Consistent with the emotion reading. |
+| `w90` ≈ floor, `w90ctl` acts | The deletion itself does something — geometry artifact; neither w90 outcome is interpretable as written. |
+
+**Limitations stated now:**
+
+- Overlapping `gen`/`top` draws (if triggered) are one family tested six ways —
+  same caveat as pool's within-cos 0.88, not independent replications.
+- `pool` arms are J24's files; the anchor is the *same directions* on a *new
+  sample* — direction identity is preserved, but samples are new, so this
+  does not double J24's n.
+- Pilot n = 40: every result here is suggestive; the n ≥ 200 run is what a
+  claim requires. This pilot's job is to (a) verify the new classes pass
+  coherence/push matching, (b) locate `gen` in the flat vs acting regime,
+  (c) decide whether the full-scale run is worth its ~$80–100 cost.
+- One model, one layer, one dose, one judge — unchanged J24 limits.
+
+Cost: 1,160 gen ≈ 6.6 GPU-h (~$3); judge ≈ 2,280 calls (~$10-11). Total ≈ **$13**.
