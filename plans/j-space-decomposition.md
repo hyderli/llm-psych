@@ -5206,3 +5206,41 @@ builder and the extended `analyze_j25.py` with tests, before any J25 judging;
 (2) P calibration passes; (3) build and checksum the 10 new arms, then upload
 them; (4) run the 18 added conditions after the registered sweep; (5) parse
 all 35 conditions and judge A_act, B and P; (6) run the analysis once.
+
+### J25 amendment 3 checks, 2026-11-10: P calibration PASS, baseline 8/40, w90-class build PASS. Before any J25 sample is judged
+
+**P calibration:** `claude-sonnet-5`, same anchors → judge → calibrate path as
+the 61/61 calibration. Tier one 4/4, tier two 11/11, **15/15 → PASS**; no runner
+errors. Logs: `results/j25/p_calibration_{anchors,results}.jsonl`,
+`results/j25/p_calibration_stdout.txt`.
+
+**Baseline check:** P on J24's unsteered `j24_full_L16_a0` (40 samples, none
+gate-flagged) is **8/40 = 0.20**. Outputs are in
+`results/j25/baseline_p_j24_unsteered/`, and nothing was written to `results/j24/`.
+The rate is not near zero, so the baseline ambiguity is live: by the reading rule
+fixed above, the `coh`-vs-unsteered comparison on P decides between the two
+double-dissociation rows. This record changes no criterion.
+
+**w90-class build:** `scripts/build_j25_w90class.py` at `66e88b0`. All 12 arms are
+at 90.000°, norm ratio 0.9651815, and i = 1 recompute cos ≥ 0.999999999999999
+against the existing `j25_w90`/`j25_w90ctl` → **PASS**. Report:
+`results/j25/w90class_build_report.json`.
+
+| file | sha256 |
+|---|---|
+| j25_w90_2_layer16.npy | 5d803cd18f995eed092c8aaabef3efc9d5bcb468e91c448512e431e0ce24d942 |
+| j25_w90_3_layer16.npy | f4f262fac629ae984e629e6e7ca05ef9e852b4661b3fe43b9f13f342bd01af87 |
+| j25_w90_4_layer16.npy | 7f6cb789bee83761710f5409bbfe75fa7f920b023fedd82e6460579880268be0 |
+| j25_w90_5_layer16.npy | d7034fac872256072d7c5e96fd460996bd67dc8331e41cd4a0445609c8a427b7 |
+| j25_w90_6_layer16.npy | 860f39a48bd597f93a51ce9bf33f1c2589ad4c352ea879549cfbf5395f258314 |
+| j25_w90ctl_2_layer16.npy | e6ab5fa92c94abf3832cc90baa2f60051a813726a08ec73c8edcef1be02ecde9 |
+| j25_w90ctl_3_layer16.npy | 30e8c2ee90a6a9f0d2748f2ffbf58c37a8ae9cd6529f5b9844aeb8eca7bc5a81 |
+| j25_w90ctl_4_layer16.npy | 4fb929d645b45ffa880731a61d822af1c1b29e2b1cf49662c91ff1291d94a834 |
+| j25_w90ctl_5_layer16.npy | 3697b3f6bf5451226d079d83c741388e33d9d383b2a3c8a28aea1f50b77eebbc |
+| j25_w90ctl_6_layer16.npy | d8518399a4d18ab4bb565c5d2e5ac07859aa39237df93e8aed05ab84d35b7cc6 |
+
+**Added sweep, same pod, after the registered 17:**
+
+    ARMS="j24_full" DOSES="0.0654 0.15" EPOCHS=40 LAYER=16 bash ../scripts/run_dose_sweep.sh
+    ARMS="j24_pool1 j24_pool2 j24_pool3 j24_pool4 j24_pool5 j24_pool6" DOSES="0.15" EPOCHS=40 LAYER=16 bash ../scripts/run_dose_sweep.sh
+    ARMS="j25_w90_2 j25_w90_3 j25_w90_4 j25_w90_5 j25_w90_6 j25_w90ctl_2 j25_w90ctl_3 j25_w90ctl_4 j25_w90ctl_5 j25_w90ctl_6" DOSES="0.2413" EPOCHS=40 LAYER=16 bash ../scripts/run_dose_sweep.sh
