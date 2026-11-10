@@ -4978,3 +4978,16 @@ before any sample.
     ARMS="j24_full" DOSES="0 0.25" EPOCHS=40 LAYER=16 bash ../scripts/run_dose_sweep.sh
     ARMS="j24_jspace j24_pool1 j24_pool2 j24_pool3 j24_pool4 j24_pool5 j24_pool6 j25_coh1 j25_coh2 j25_coh3 j25_coh4 j25_coh5 j25_coh6" DOSES="0.25" EPOCHS=40 LAYER=16 bash ../scripts/run_dose_sweep.sh
     ARMS="j25_w90 j25_w90ctl" DOSES="0.2413" EPOCHS=40 LAYER=16 bash ../scripts/run_dose_sweep.sh
+
+**Sweep attempt 1, 2026-11-10: no samples, all 17 conditions FAILED on import.**
+The fresh pod resolved `agent-client-protocol` 1.0.0, released 2026-11-09.
+`inspect_ai` 0.3.277 only requires `>=0.12.0`, and 1.0.0 removed
+`acp.helpers`, so every eval failed with `ModuleNotFoundError` before any
+generation. The 17 empty log directories were removed, `agent-client-protocol`
+was pinned to 0.12.1 (also now in `scripts/cloud_bootstrap.sh`), and the
+sweep was relaunched unchanged at 13:23 UTC. Environment: torch 2.6.0+cu124,
+transformers 5.8.1 (uv.lock), inspect_ai 0.3.277, inspect_evals 0.23.0,
+agent-client-protocol 0.12.1, RTX 4090. The model is a local snapshot of
+Qwen/Qwen2.5-7B-Instruct at `a09a3545`. Generation settings are J24's:
+temperature 1.0, max_tokens 1000, message_limit 3, 40 epochs, site=post,
+norm_scale=true.
