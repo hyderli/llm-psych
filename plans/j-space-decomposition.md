@@ -6269,3 +6269,122 @@ the same convention J25 used for its unsteered comparisons. The primary
 s-vs-g contrast is the exact 6v6 permutation over direction-level rates.
 Reference conditions reuse J25 payloads: unsteered `j24_full_L16_a0`,
 pool `j24_pool{1..6}_L16_a0.15`. Sensitivity: non-degenerate, J24 criterion.
+
+### J29 amendment 1, 2026-11-12: in-arm alphas, the emotion-vector leak removed, a real generic control, coh splits. Before any J29 sample exists
+
+**Status when written.** J29 is preregistered at `6ec3ef2` and its analysis at
+`88f0b76`. 18 arm files `j29_*` were built, but no J29 generation has run. This
+amendment replaces J29's construction, conditions and reading. The `j29_*` files
+are superseded: they are not run, and they are kept for the record.
+PI decision (Haydar, 2026-11-12): all six points below.
+
+**What a pre-run check of the built files found** (stdlib reader against the
+steering hook and the stored G basis, `results/j27/subspaces_clean/_G/G_l16.npy`):
+
+1. **The registered run would have used the wrong doses.** The hook normalises
+   every direction (J25 amendment 1, point 5), so `DOSES=0.15` would have
+   injected every G and S arm at the full 0.15, not at its in-arm magnitude.
+   The S arms would have been about 2.3 times too strong.
+2. **The split leaked the emotion vector.** v̂ is 15.4% inside G, so P_G ŵ is
+   not perpendicular to v̂. The `j29_poolG` parts had cosine +0.20 to +0.23 with
+   v̂, and the `j29_poolS` parts the matching negative amount.
+3. **"G" is not one generic direction.**
+   - pool G parts with each other: cosine 0.95.
+   - pool G vs coh G: 0.05-0.32 (with the leak).
+   - pool G vs far G: −0.13 to −0.26.
+   - far G parts with each other: about 0.01.
+
+   Each family lands on a different direction inside the rank-32 G subspace.
+   So the split is "inside G vs outside G", not "generic vs specific". The far-G
+   secondary tested a different direction at roughly 60% of pool-G's dose, so it
+   could not show whether a generic push acts.
+
+**Changes, fixed now:**
+
+1. **Construction, without the leak** (`scripts/build_j29b_arms.py`, standard
+   library, tag `j29b`). For a unit source arm a, w = a − (a·v̂)v̂:
+   - g′ = P_G w − (v̂·P_G w)v̂;
+   - s′ = w − g′.
+
+   g′ + s′ = w exactly, and both are perpendicular to v̂. The build refuses if
+   |cos(component, v̂)| > 1e-6 or the split misses w by more than 1e-6.
+2. **In-arm alphas.** alpha = base × |component|, with base 0.15 for pool (J29's
+   dose) and 0.25 for coh (the dose at which J25 measured coh). Each arm runs at
+   its own alpha, through `scripts/j29b_commands.py`, which reads the build
+   report. A condition is named `<arm>_L16_a<alpha:.4f>`.
+3. **The generic control: `grand1`-`6`.** Six random directions inside G and
+   perpendicular to v̂ (seed 20261112). Draw i runs at `poolG_i`'s alpha. This
+   replaces far-G.
+4. **coh splits: `cohG1`-`6`, `cohS1`-`6`,** built the same way from J25's `coh`
+   arms. Scored on B and P.
+5. **A matched-dose framing: `poolSm1`-`6`.** The `poolS` files run at `poolG`'s
+   alphas. At its in-arm dose (about 0.06) S sits where J25's v-only cell did
+   nothing, so a null there could be dose alone.
+6. **Same-pod anchors.** Unsteered (`j24_full` at 0), `j24_pool1` at 0.15 and
+   `j25_coh1` at 0.25, all on the J29 pod. Nothing is merged from J25.
+
+**Build table** (`results/j29/build_j29b_report.json`, computed before any sample):
+
+| family | alpha range | share inside G | note |
+|---|---|---|---|
+| `poolG` | 0.1247-0.1283 | 0.953-0.966 | within-family cos 0.95 |
+| `poolS` | 0.0563-0.0611 | 0.030-0.037 | cos(G′, S′) +0.09 to +0.11 |
+| `poolSm` | = `poolG` | same files as `poolS` | matched dose |
+| `cohG` | 0.1929-0.2098 | 0.984-0.994 | within-family cos 0.87 |
+| `cohS` | 0.1157-0.1405 | 0.003-0.007 | |
+| `grand` | = `poolG` | 1.000 | within-family cos −0.07 (−0.40 to +0.44) |
+
+After the leak is removed, `poolG` vs `cohG` mean cosine is **0.39**, and
+`poolG` vs `grand` is 0.02. Every arm's |cos with v̂| is ≤ 1e-9.
+
+**Conditions:** 36 family conditions plus 3 anchors = **39 × 40 = 1,560
+samples**, on one pod. About 4.5 GPU-h. Items B and P, about 3,100 judge calls
+(about $15).
+
+**Hypotheses, replacing J29's.** Direction-level rates, exact two-sided 6v6
+permutation (924 splits), Holm across the two primaries:
+
+| | comparison | item |
+|---|---|---|
+| **H29a, primary** | `poolS` vs `poolG` | B |
+| **H29b, primary** | `poolG` vs `grand` | B |
+| secondary | `poolSm` vs `poolG` | B |
+| secondary | `cohG` vs `poolG`; `cohS` vs `poolS` | P |
+
+**"Acts" rule, tightened.** A class acts on an item iff its pooled rate is above
+unsteered **and** Fisher two-sided p < 0.05. J29's rule had no direction clause.
+It is applied to every family on B and on P, and to the `pool1` anchor. The J24
+degeneration sensitivity is unchanged.
+
+**Readings on B, fixed now** (`analyze_j29.reading`, in this order of
+precedence):
+
+| result | reading |
+|---|---|
+| `pool1` anchor does not act | Nothing is read. |
+| `grand` acts | Random pushes inside G act: G membership is a generic potency factor at this dose, and `poolG`'s result is not content-specific. |
+| `poolG` acts, `poolS` does not | The hostile content lives in the G component of the word direction. |
+| `poolS` acts, `poolG` does not | The hostile content lives outside G. |
+| both act | Both components carry the effect. |
+| neither acts, `poolSm` acts | S was dose-limited, not inert. |
+| neither acts, `poolSm` does not | Neither half suffices; the combination is needed. |
+
+**Valence row:** if `poolG` acts on B and not P, and `cohG` acts on P and not B,
+the G components are valence-specific. That would place J25's double
+dissociation inside G.
+
+**Limitations stated now:**
+- The `poolG` draws are nearly one direction (cos 0.95), so "six draws" means
+  six atom sets, as with pool in J24.
+- `grand` spans G at random, so its draws are diverse, unlike `poolG`. A `grand`
+  null is evidence about G in general, not about directions near `poolG`.
+- cos(G′, S′) is +0.1, so the two halves are not orthogonal. They still sum to
+  the original word direction.
+- Pilot n = 40; nothing is a claim before n ≥ 200. One model, layer, judge.
+
+**Code, committed with this amendment:**
+- `scripts/build_j29b_arms.py`: the report is written now; `--write` writes the
+  files after commit.
+- `scripts/j29b_commands.py`.
+- `scripts/analyze_j29.py`, rewritten for this design. It supersedes `88f0b76`'s
+  version, and its reading functions are tested on synthetic flags.

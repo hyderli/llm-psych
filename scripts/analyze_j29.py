@@ -1,41 +1,35 @@
-"""J29 analysis: G/specific split of the pool word direction.
+"""J29 analysis, as revised by J29 amendment 1 (2026-11-12), before any J29 sample.
 
-Implements the analyses fixed in plans/j-space-decomposition.md ("J29",
-2026-11-11), run ONCE after J29's payloads and judge scores exist. Same
-conventions as analyze_j25.py: direction-level rates, exact 6v6 permutation
-on class means, pooled Fisher vs unsteered for the "acts" rule, J24
+Supersedes the 88f0b76 version. Implements plans/j-space-decomposition.md
+("J29" and "J29 amendment 1"). Run ONCE after J29's payloads and judge
+scores exist. Conventions from analyze_j25.py: direction-level rates, exact
+6v6 permutation on class means, pooled Fisher vs unsteered for "acts", J24
 degeneration criterion for the sensitivity.
 
-Classes (all at alpha 0.15, L16):
-    poolG  j29_poolG{1..6}  -- the G component g_i = P_G(w_i), in-arm dose
-    poolS  j29_poolS{1..6}  -- the specific component s_i = w_i - g_i
-    farG   j29_farG{1..6}   -- far's G component (secondary: is "generic"
-                               generic?)
-Reference (reused from results/j25):
-    pool   j24_pool{1..6} @ 0.15 ; unsteered j24_full_L16_a0
+Every condition is from the J29 pod; nothing is merged from J25.
+Class conditions and their alphas come from results/j29/build_j29b_report.json
+(scripts/build_j29b_arms.py). A condition is named <arm>_L16_a<alpha:.4f>,
+which is how scripts/j29b_commands.py launches it.
 
-Primary H29: the 2x2-style reading
-    s acts & g doesn't -> hostile-specific content carries the effect
-    g acts & s doesn't -> generic English push carries it
-    both               -> additive/interaction, compared against pool itself
-    neither            -> the split destroys what acts
-Secondary H29s: farG vs unsteered.
-
-Inputs: results/j29/{payloads,judge_scores}.jsonl plus the J25 files for the
-reference conditions. Usage::
+Inputs: results/j29/{payloads,judge_scores}.jsonl (items B and P). Usage::
 
     uv run python scripts/analyze_j29.py | tee results/j29/analysis_stdout.txt
 """
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
-RES29 = ROOT / "results" / "j29"
-RES25 = ROOT / "results" / "j25"
+RES = ROOT / "results" / "j29"
+BUILD = RES / "build_j29b_report.json"
+
+UNSTEERED = "j24_full_L16_a0"
+ANCHORS = {"pool1": "j24_pool1_L16_a0.15", "coh1": "j25_coh1_L16_a0.25"}
+FAMILIES = ("poolG", "poolS", "poolSm", "cohG", "cohS", "grand")
 
 
 def _load_module(name: str, rel: str):
@@ -47,97 +41,123 @@ def _load_module(name: str, rel: str):
 
 
 j25 = _load_module("analyze_j25", "scripts/analyze_j25.py")
-j24 = j25.j24
-
-UNSTEERED = "j24_full_L16_a0"
-CLASSES = {
-    "poolG": [f"j29_poolG{i}_L16_a0.15" for i in range(1, 7)],
-    "poolS": [f"j29_poolS{i}_L16_a0.15" for i in range(1, 7)],
-    "farG": [f"j29_farG{i}_L16_a0.15" for i in range(1, 7)],
-    "pool": [f"j24_pool{i}_L16_a0.15" for i in range(1, 7)],
-}
 
 
-def load_both() -> tuple[dict, dict]:
-    """J29 payloads + scores merged with the J25 reference conditions."""
-    pay, sc = j25.load(RES29)
-    pay25, sc25 = j25.load(RES25)
-    ref_conds = {UNSTEERED, *CLASSES["pool"]}
-    ref_sids = {s for s, d in pay25.items() if d["condition"] in ref_conds}
-    pay.update({s: pay25[s] for s in ref_sids})
-    for item, m in sc25.items():
-        sc[item].update({s: v for s, v in m.items() if s in ref_sids})
-    return pay, sc
+def cond_name(arm: str, alpha: float) -> str:
+    return f"{arm}_L16_a{alpha:.4f}"
 
 
-def acts(pay: dict, sc: dict, conds: list[str], exclude: dict | None) -> dict:
-    """Pooled B vs unsteered, Fisher two-sided; the fixed 'acts' rule."""
-    vals = [j25.item_values(pay, sc, "B", c, exclude) for c in conds]
+def classes_from_build(build: dict) -> dict[str, list[str]]:
+    """Map each family to its six condition names, from the build report."""
+    out: dict[str, list[str]] = {f: [] for f in FAMILIES}
+    for name, r in build["arms"].items():
+        fam = name.split("_", 1)[1].rstrip("0123456789")
+        arm = r.get("file", name)
+        out[fam].append(cond_name(arm, r["alpha"]))
+    for f, conds in out.items():
+        if len(conds) != 6:
+            raise SystemExit(f"family {f} has {len(conds)} conditions in the build report")
+    return {f: sorted(c) for f, c in out.items()}
+
+
+def acts(pay, sc, item, conds, exclude) -> dict:
+    """Pooled rate vs unsteered: acts iff Fisher two-sided p < 0.05 AND higher."""
+    vals = [j25.item_values(pay, sc, item, c, exclude) for c in conds]
     k, n = sum(sum(v) for v in vals), sum(len(v) for v in vals)
-    ku, nu = j25.rate(pay, sc, "B", UNSTEERED, exclude)
-    return {"k": k, "n": n, "p": j25.fisher((k, n), (ku, nu)),
-            "rate": k / n if n else float("nan"), "unsteered": (ku, nu)}
+    ku, nu = j25.rate(pay, sc, item, UNSTEERED, exclude)
+    p = j25.fisher((k, n), (ku, nu))
+    rate = k / n if n else float("nan")
+    return {"k": k, "n": n, "rate": rate, "p": p, "unsteered": (ku, nu),
+            "acts": bool(p < 0.05 and n and nu and rate > ku / nu)}
+
+
+def reading(anchor_acts: bool, pg: bool, ps: bool, gr: bool, psm: bool) -> str:
+    """The registered B reading (J29 amendment 1, point 6)."""
+    if not anchor_acts:
+        return "pool1 anchor does not act on this pod: nothing is read"
+    if gr:
+        return ("random pushes inside G act: G membership is a generic potency "
+                "factor at this dose; poolG's result is not content-specific")
+    if pg and not ps:
+        return "the hostile content lives in the G component of the word direction"
+    if ps and not pg:
+        return "the hostile content lives outside G"
+    if pg and ps:
+        return "both components carry the effect"
+    if psm:
+        return ("neither half acts at its in-arm dose; poolS acts at the matched "
+                "dose, so S was dose-limited, not inert")
+    return "neither half suffices; the combination is needed"
+
+
+def valence_row(pg_b: bool, pg_p: bool, cg_b: bool, cg_p: bool) -> str:
+    if pg_b and not pg_p and cg_p and not cg_b:
+        return "G components are valence-specific: poolG -> threats, cohG -> praise"
+    return "G components are not shown to be valence-specific"
 
 
 def main() -> int:
-    pay, sc = load_both()
+    build = json.loads(BUILD.read_text())
+    cls = classes_from_build(build)
+    pay, sc = j25.load(RES)
     degen, rep_ok = j25.degenerate_flags(pay)
     present = {d["condition"] for d in pay.values()}
-    missing = [c for conds in CLASSES.values() for c in conds if c not in present]
+    need = [UNSTEERED, *ANCHORS.values(), *[c for v in cls.values() for c in v]]
+    missing = [c for c in need if c not in present]
     if missing:
         raise SystemExit(f"conditions missing from payloads: {missing}")
 
-    print("# J29 analysis (G/specific split; prereg 2026-11-11)")
+    print("# J29 analysis (amendment 1, 2026-11-12)")
     print(f"samples {len(pay)}; repetition criterion "
           f"{'validated (J24)' if rep_ok else 'NOT validated (TOKEN only)'}")
 
-    print("\n## Gate and degeneration per condition")
+    print("\n## Gate, degeneration, B and P per condition")
     for c in sorted(present):
         ss = [s for s, d in pay.items() if d["condition"] == c]
         gate = sum(not pay[s]["gate_flags"] for s in ss)
         dg = sum(degen[s] for s in ss)
         kb, nb = j25.rate(pay, sc, "B", c)
-        kb2, nb2 = j25.rate(pay, sc, "B", c, degen)
-        print(f"{c:26s} gate {gate:2d}/{len(ss)}  degen {dg:2d}  "
-              f"B {kb:2d}/{nb:2d}  B non-degen {kb2:2d}/{nb2:2d}")
+        kp, np_ = j25.rate(pay, sc, "P", c)
+        print(f"{c:28s} gate {gate:2d}/{len(ss)}  degen {dg:2d}  B {kb:2d}/{nb:2d}  P {kp:2d}/{np_:2d}")
 
-    def table(exclude: dict | None, label: str) -> dict:
-        cr = j25.class_rates(pay, sc, "B", exclude, CLASSES)
-        print(f"\n## B rates per direction{label}")
-        for c, v in cr.items():
-            print(f"  {c:6s} " + " ".join(f"{x:.3f}" for x in v)
-                  + f"   mean {np.nanmean(v):.3f}")
-        return cr
-
-    out = {}
+    flags = {}
     for exclude, label in [(None, ""), (degen, " (non-degenerate sensitivity)")]:
-        cr = table(exclude, label)
-        print(f"\n## 'Acts' tests{label}: pooled B vs unsteered "
-              f"({j25.rate(pay, sc, 'B', UNSTEERED, exclude)})")
-        for c in ("pool", "poolG", "poolS", "farG"):
-            r = acts(pay, sc, CLASSES[c], exclude)
-            out[(c, bool(exclude))] = r
-            print(f"  {c:6s} {r['k']:3d}/{r['n']:3d} ({r['rate']:.3f}) vs "
-                  f"unsteered, Fisher p = {r['p']:.4g}  "
-                  f"{'acts' if r['p'] < 0.05 else 'inert'}")
-        # H29 primary: poolS vs poolG class means, exact permutation
-        r = j25.primary(cr, "poolS", "poolG")
-        print(f"  H29 poolS - poolG: {r['diff'] * 100:+.2f} pp; 95% CI "
-              f"[{r['ci'][0] * 100:+.2f}, {r['ci'][1] * 100:+.2f}] pp; "
-              f"exact p = {r['p']:.4f}")
-        out[("h29", bool(exclude))] = r
+        for item in ("B", "P"):
+            print(f"\n## 'Acts' on {item}{label}: pooled vs unsteered")
+            a = acts(pay, sc, item, [ANCHORS["pool1"]], exclude)
+            flags[("pool1", item, bool(exclude))] = a["acts"]
+            print(f"  pool1 anchor {a['k']}/{a['n']} p={a['p']:.4g} {'acts' if a['acts'] else 'inert'}")
+            for f in FAMILIES:
+                r = acts(pay, sc, item, cls[f], exclude)
+                flags[(f, item, bool(exclude))] = r["acts"]
+                print(f"  {f:6s} {r['k']:3d}/{r['n']:3d} ({r['rate']:.3f}) p={r['p']:.4g} "
+                      f"{'acts' if r['acts'] else 'inert'}")
 
-    sg = out[("poolS", False)]["p"] < 0.05
-    gg = out[("poolG", False)]["p"] < 0.05
-    fg = out[("farG", False)]["p"] < 0.05
-    row = ("hostile-specific content carries it" if sg and not gg else
-           "generic English push carries it" if gg and not sg else
-           "both act (additive/interaction)" if sg and gg else
-           "neither acts; the split destroys the effect")
-    print(f"\n## REGISTERED READING: s {'acts' if sg else 'inert'}, g "
-          f"{'acts' if gg else 'inert'} -> {row}")
-    print(f"## H29s (farG vs unsteered): {'acts' if fg else 'inert'} "
-          f"-> {'generic push alone is not sufficient' if not fg else 'generic is generic'}")
+        crb = j25.class_rates(pay, sc, "B", exclude, cls)
+        crp = j25.class_rates(pay, sc, "P", exclude, cls)
+        print(f"\n## B direction rates{label}")
+        for f, v in crb.items():
+            print(f"  {f:6s} " + " ".join(f"{x:.3f}" for x in v) + f"   mean {np.nanmean(v):.3f}")
+        h_a = j25.primary(crb, "poolS", "poolG")
+        h_b = j25.primary(crb, "poolG", "grand")
+        holm = j25.holm([h_a["p"], h_b["p"]])
+        print(f"\n## PRIMARY{label} (B; exact 6v6 permutation; Holm across two)")
+        for nm, r, hp in (("H29a poolS - poolG", h_a, holm[0]), ("H29b poolG - grand", h_b, holm[1])):
+            print(f"  {nm}: {r['diff'] * 100:+.2f} pp, 95% CI [{r['ci'][0] * 100:+.2f}, "
+                  f"{r['ci'][1] * 100:+.2f}], raw p {r['p']:.4f}, Holm p {hp:.4f}")
+        sec = [("poolSm - poolG (B, matched dose)", crb, "poolSm", "poolG"),
+               ("cohG - poolG (P)", crp, "cohG", "poolG"),
+               ("cohS - poolS (P)", crp, "cohS", "poolS")]
+        print(f"\n## SECONDARY{label} (exact 6v6 permutation, unadjusted)")
+        for nm, cr, a_, b_ in sec:
+            r = j25.primary(cr, a_, b_)
+            print(f"  {nm}: {r['diff'] * 100:+.2f} pp, raw p {r['p']:.4f}")
+
+    f = lambda k, i="B": flags[(k, i, False)]  # noqa: E731
+    print("\n## REGISTERED READING (B, as specified):",
+          reading(f("pool1"), f("poolG"), f("poolS"), f("grand"), f("poolSm")))
+    print("## VALENCE ROW:", valence_row(f("poolG"), f("poolG", "P"), f("cohG"), f("cohG", "P")))
+    print("## build families:", json.dumps(build["families"]))
     return 0
 
 
