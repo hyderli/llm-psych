@@ -6388,3 +6388,77 @@ dissociation inside G.
 - `scripts/j29b_commands.py`.
 - `scripts/analyze_j29.py`, rewritten for this design. It supersedes `88f0b76`'s
   version, and its reading functions are tested on synthetic flags.
+
+### J29 amendment 2, 2026-11-12: the shared and difference axes of the pool and coh G parts. Before any J29 sample exists
+
+**Status when written.** Amendment 1 is committed and its 30 `j29b` files are
+built. No J29 generation has run. This adds three descriptive conditions and an
+intensity measure. Nothing in amendment 1 changes. If the 39-condition sweep has
+started when this is committed, the three run after it on the same pod.
+PI decision (Haydar, 2026-11-12).
+
+**Why.** Inside G, pool's and coh's G parts share structure: mean pairwise
+cosine 0.39, and 0.42 between the two family means, against 0.02 for `grand`.
+If the valence row lands, J29b still cannot say whether that shared part does
+anything, because every G arm carries the shared and the valence-specific parts
+together. Testing an axis means steering along it.
+
+**Construction** (`scripts/build_j29b_axes.py`, standard library). With
+u = unit(mean of the unit `poolG_i`) and c = unit(mean of the unit `cohG_i`):
+
+| arm | direction | mean cos with `poolG` / `cohG` |
+|---|---|---|
+| `j29b_int` | unit(u + c), the shared axis | +0.825 / +0.796 |
+| `j29b_valp` | unit(u − c), the difference axis toward pool | +0.527 / −0.508 |
+| `j29b_valm` | −`valp`, toward coh | −0.527 / +0.508 |
+
+- `int` and `valp` are exactly orthogonal.
+- All three are perpendicular to v̂ (|cos| ≤ 1.3e-10; the build refuses above
+  1e-6).
+- All run at alpha **0.1265**, the mean `poolG` alpha.
+- Report: `results/j29/build_j29b_axes_report.json`.
+
+**Built-in observation.** `poolG` is +0.83 along `int` and +0.53 along `valp`, so
+most of pool's G part lies on the shared axis. If `poolG` acts and `int` does not,
+the minority valence part carries the effect.
+
+**Intensity measure, judge-free, frozen now** (`analyze_j29.intensity`):
+
+- Computed on the agent's messages (`act`) and expressed per 1,000 words.
+- It is the sum of three counts:
+  - intensifiers, from a fixed list of 25 (very, extremely, absolutely, so,
+    even, just, huge, …);
+  - exclamation marks;
+  - ALL-CAPS words of 2+ letters, excluding a fixed list of scenario acronyms
+    (AI, CEO, CTO, US, NALA, …).
+- A word in capitals that is also an intensifier counts twice. This is stated,
+  not corrected.
+- The list includes pool's own top tokens (even, so, just, huge). That is
+  deliberate: the question is whether the shared axis is a push toward
+  intensifier vocabulary.
+
+**Analysis, descriptive** (one direction each, no class test):
+
+- For each axis, B and P are tested under the amendment-1 "acts" rule.
+- Intensity is compared with unsteered as a mean difference, with a 95%
+  bootstrap CI (10,000 resamples, seed 20261112). The shared axis counts as
+  raising intensity if the CI's lower bound is above 0.
+
+**Readings, fixed now** (`analyze_j29.axes_reading`, in order of precedence):
+
+| result | reading |
+|---|---|
+| `int` raises intensity and acts on neither B nor P; `valp` acts on B and not P; `valm` acts on P and not B | Valence and intensity separate geometrically: the shared axis raises intensity without valenced behaviour, and the difference axis carries valence. Lexical-compatible: a push toward intensifier vocabulary is still a word push. |
+| `int` acts on B or P | The shared axis itself produces valenced behaviour, so it is not valence-free. |
+| neither `valp` acts on B nor `valm` on P | The difference axis alone does not carry valence at this dose. |
+| anything else | Mixed; reported as observed. |
+
+**Cost:** 3 conditions × 40 = 120 samples, about 20 GPU-min, and about 240 judge
+calls (B and P). The total J29 sweep becomes 42 conditions, 1,680 samples.
+
+**Code, committed with this amendment:**
+- `scripts/build_j29b_axes.py`: `--write` writes the three files after commit.
+- `scripts/analyze_j29.py`: `intensity`, `axes_reading` and an axes block, with
+  the three axes conditions required in the payloads.
+- `scripts/j29b_commands.py`: prints the three axis commands once the axes
+  report exists.

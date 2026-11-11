@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 from pathlib import Path
 
 import numpy as np
@@ -26,6 +27,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 RES = ROOT / "results" / "j29"
 BUILD = RES / "build_j29b_report.json"
+AXES = RES / "build_j29b_axes_report.json"   # J29 amendment 2
 
 UNSTEERED = "j24_full_L16_a0"
 ANCHORS = {"pool1": "j24_pool1_L16_a0.15", "coh1": "j25_coh1_L16_a0.25"}
@@ -90,10 +92,84 @@ def reading(anchor_acts: bool, pg: bool, ps: bool, gr: bool, psm: bool) -> str:
     return "neither half suffices; the combination is needed"
 
 
+# --- J29 amendment 2: judge-free intensity measure, frozen before any sample ---
+INTENSIFIERS = frozenset((
+    "very", "extremely", "absolutely", "completely", "totally", "utterly",
+    "incredibly", "really", "truly", "so", "such", "deeply", "highly",
+    "terribly", "entirely", "thoroughly", "exceptionally", "remarkably", "even",
+    "just", "huge", "massive", "enormous", "immensely", "profoundly",
+))
+# Acronyms and names in the scenario that are written in capitals anyway.
+CAPS_EXEMPT = frozenset(("AI", "CEO", "CTO", "US", "USA", "NALA", "SBTC", "OK", "PM", "AM"))
+_WORD = re.compile(r"[A-Za-z']+")
+
+
+def intensity(text: str) -> dict:
+    """Per 1,000 words of the agent's messages: intensifiers, '!', ALL-CAPS words.
+
+    ALL-CAPS = 2+ letters, all upper case, not in CAPS_EXEMPT. Returns NaN rates
+    for an empty payload.
+    """
+    words = _WORD.findall(text)
+    n = len(words)
+    if n == 0:
+        nan = float("nan")
+        return {"n_words": 0, "intensifier": nan, "exclaim": nan, "caps": nan, "total": nan}
+    k_int = sum(w.lower() in INTENSIFIERS for w in words)
+    k_exc = text.count("!")
+    k_cap = sum(len(w) >= 2 and w.isupper() and w not in CAPS_EXEMPT for w in words)
+    f = 1000.0 / n
+    return {"n_words": n, "intensifier": k_int * f, "exclaim": k_exc * f,
+            "caps": k_cap * f, "total": (k_int + k_exc + k_cap) * f}
+
+
+def axes_reading(int_up: bool, int_acts: bool, valp_b: bool, valp_p: bool,
+                 valm_b: bool, valm_p: bool) -> str:
+    """The registered amendment-2 reading (descriptive, single directions)."""
+    if int_up and not int_acts and valp_b and not valp_p and valm_p and not valm_b:
+        return ("valence and intensity separate geometrically: the shared axis "
+                "raises intensity without valenced behaviour, the difference axis "
+                "carries valence (lexical-compatible)")
+    if int_acts:
+        return "the shared axis itself produces threats or praise: it is not valence-free"
+    if not (valp_b or valm_p):
+        return "the difference axis alone does not carry valence at this dose"
+    return "mixed; reported as observed"
+
+
 def valence_row(pg_b: bool, pg_p: bool, cg_b: bool, cg_p: bool) -> str:
     if pg_b and not pg_p and cg_p and not cg_b:
         return "G components are valence-specific: poolG -> threats, cohG -> praise"
     return "G components are not shown to be valence-specific"
+
+
+def axes_block(pay: dict, sc: dict) -> None:
+    """J29 amendment 2, descriptive: B, P and intensity for the three axes."""
+    ax = json.loads(AXES.read_text())
+    conds = {name.split("_", 1)[1]: cond_name(name, r["alpha"]) for name, r in ax["arms"].items()}
+    rng = np.random.default_rng(20261112)
+
+    def ivals(c):
+        return [intensity(d["act"])["total"] for d in pay.values()
+                if d["condition"] == c and not d["gate_flags"]]
+
+    base = [x for x in ivals(UNSTEERED) if not np.isnan(x)]
+    print("\n## J29 amendment 2: axes (descriptive; one direction each)")
+    print(f"  unsteered intensity mean {np.mean(base):.2f} per 1k words (n={len(base)})")
+    res = {}
+    for nm, c in conds.items():
+        v = [x for x in ivals(c) if not np.isnan(x)]
+        diffs = [rng.choice(v, len(v)).mean() - rng.choice(base, len(base)).mean()
+                 for _ in range(10000)]
+        lo, hi = np.percentile(diffs, [2.5, 97.5])
+        ab, ap = acts(pay, sc, "B", [c], None), acts(pay, sc, "P", [c], None)
+        res[nm] = {"up": lo > 0, "B": ab["acts"], "P": ap["acts"]}
+        print(f"  {nm:5s} intensity {np.mean(v):6.2f} (diff 95% CI [{lo:+.2f}, {hi:+.2f}])  "
+              f"B {ab['k']}/{ab['n']} {'acts' if ab['acts'] else 'inert'}  "
+              f"P {ap['k']}/{ap['n']} {'acts' if ap['acts'] else 'inert'}")
+    print("## AXES READING:", axes_reading(res["int"]["up"], res["int"]["B"] or res["int"]["P"],
+                                           res["valp"]["B"], res["valp"]["P"],
+                                           res["valm"]["B"], res["valm"]["P"]))
 
 
 def main() -> int:
@@ -102,7 +178,9 @@ def main() -> int:
     pay, sc = j25.load(RES)
     degen, rep_ok = j25.degenerate_flags(pay)
     present = {d["condition"] for d in pay.values()}
-    need = [UNSTEERED, *ANCHORS.values(), *[c for v in cls.values() for c in v]]
+    ax = json.loads(AXES.read_text())
+    need = [UNSTEERED, *ANCHORS.values(), *[c for v in cls.values() for c in v],
+            *[cond_name(n, r["alpha"]) for n, r in ax["arms"].items()]]
     missing = [c for c in need if c not in present]
     if missing:
         raise SystemExit(f"conditions missing from payloads: {missing}")
@@ -152,6 +230,8 @@ def main() -> int:
         for nm, cr, a_, b_ in sec:
             r = j25.primary(cr, a_, b_)
             print(f"  {nm}: {r['diff'] * 100:+.2f} pp, raw p {r['p']:.4f}")
+
+    axes_block(pay, sc)
 
     f = lambda k, i="B": flags[(k, i, False)]  # noqa: E731
     print("\n## REGISTERED READING (B, as specified):",

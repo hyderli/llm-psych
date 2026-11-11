@@ -15,3 +15,7 @@ print(f'ARMS="j24_pool1" DOSES="0.15" {base}')
 print(f'ARMS="j25_coh1" DOSES="0.25" {base}')
 for name, r in rep["arms"].items():
     print(f'ARMS="{r.get("file", name)}" DOSES="{r["alpha"]:.4f}" {base}')
+axes = ROOT / "results/j29/build_j29b_axes_report.json"   # J29 amendment 2
+if axes.exists():
+    for name, r in json.loads(axes.read_text())["arms"].items():
+        print(f'ARMS="{name}" DOSES="{r["alpha"]:.4f}" {base}')
