@@ -70,7 +70,7 @@ def load_npy(path: Path) -> tuple[list[float], dict]:
 
 
 def save_npy(path: Path, x: list[float]) -> None:
-    hdr = "{'descr': '<f4', 'fortran_order': False, 'shape': (%d,), }" % len(x)
+    hdr = f"{{'descr': '<f4', 'fortran_order': False, 'shape': ({len(x)},), }}"
     pad = 64 - (10 + len(hdr) + 1) % 64
     hdr = hdr + " " * pad + "\n"
     path.write_bytes(b"\x93NUMPY\x01\x00" + struct.pack("<H", len(hdr))
@@ -78,7 +78,7 @@ def save_npy(path: Path, x: list[float]) -> None:
 
 
 def dot(a, b):
-    return sum(x * y for x, y in zip(a, b))
+    return sum(x * y for x, y in zip(a, b, strict=True))
 
 
 def norm(a):
@@ -90,11 +90,11 @@ def scale(a, c):
 
 
 def sub(a, b):
-    return [x - y for x, y in zip(a, b)]
+    return [x - y for x, y in zip(a, b, strict=True)]
 
 
 def add(a, b):
-    return [x + y for x, y in zip(a, b)]
+    return [x + y for x, y in zip(a, b, strict=True)]
 
 
 def cos(a, b):
