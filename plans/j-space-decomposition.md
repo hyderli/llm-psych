@@ -6462,3 +6462,17 @@ calls (B and P). The total J29 sweep becomes 42 conditions, 1,680 samples.
   the three axes conditions required in the payloads.
 - `scripts/j29b_commands.py`: prints the three axis commands once the axes
   report exists.
+
+### J29 environment record, 2026-11-12: new pod, new torch — recorded before any J29 generation
+
+Pod: RunPod `RTX PRO 6000 Blackwell Server Edition MIG 2g.48gb` (sm_120),
+16 vCPU, 94 GB RAM. The project's uv.lock pins torch 2.6.0+cu124, whose arch
+list stops at sm_90 and cannot run sm_120. Per the rule in
+`run_dose_sweep.sh`, the pod env overrides torch only:
+**torch 2.8.0+cu128**, transformers 5.8.1, inspect_ai 0.3.277,
+inspect_evals 0.23.0, agent-client-protocol 0.12.1 — everything else from
+uv.lock. Model: same local snapshot of Qwen2.5-7B-Instruct @ a09a3545.
+`tests/test_hooks.py` and `tests/test_steering.py` were re-run on this env
+before generation: 46/46 pass. Vector files: 36 arm npys synced,
+sha256-verified identical to the Mac copies. Bandwidth ~1.8 TB/s vs the
+4090's ~1.0 — same math, ~1.8x faster decode.
