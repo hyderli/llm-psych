@@ -6262,3 +6262,10 @@ exact CIs), with the registered reading:
 
 **Secondary (H29s):** far-G class vs unsteered — if far-G is inert, "generic"
 push alone doesn't explain pool; the combination does.
+
+**Operational rule for "acts"** (fixed now, before any J29 sample): a class
+acts iff its pooled B rate vs unsteered passes Fisher two-sided p < 0.05 —
+the same convention J25 used for its unsteered comparisons. The primary
+s-vs-g contrast is the exact 6v6 permutation over direction-level rates.
+Reference conditions reuse J25 payloads: unsteered `j24_full_L16_a0`,
+pool `j24_pool{1..6}_L16_a0.15`. Sensitivity: non-degenerate, J24 criterion.
