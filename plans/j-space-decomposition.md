@@ -6031,3 +6031,36 @@ with V stays a stated limitation).
   measure; V-overlap was accidental content, not generality.
 - The report records ŵ shares and ‖P v̂‖² for the orthogonalised bases the
   same way, and this amendment's table stands as the pre-fix record.
+
+### Amendment 4 rebuild result, 2026-11-11: PASS with one recorded borderline. Before any J27 sample
+
+`build_j27_ortho_controls.py`; 44 files in `results/j27/subspaces_ortho/`
+(C, R1-R3 rebuilt; V, H unchanged). L16 numbers:
+
+| set | ŵ share r=32 | ŵ share r=64 | ŵ share r=121 | ‖P v̂‖² r=32 |
+|---|---|---|---|---|
+| C | 0.017 | 0.022 | 0.028 | 0.094 |
+| R1 | 0.016 | 0.023 | 0.032 | 0.059 |
+| R2 | 0.014 | 0.021 | 0.028 | 0.061 |
+| R3 | 0.015 | 0.022 | 0.032 | 0.056 |
+
+V-basis share inside every orthogonalised control: 0.0000 (projection valid);
+V–control overlap ‖G‖²/r = 0.0000. Surviving original variance ~0.60-0.65 at
+L16, ~0.92-0.94 at L26.
+
+- **ŵ-share prediction: PASS** (0.014-0.017 vs the < 0.30 rule). The word route
+  is now specific to V (and the secondary H); a `pool1` collapse under R can no
+  longer be caused by removing the word direction.
+- **‖P v̂‖² prediction: borderline, accepted.** R dropped below the pre-fix
+  floor (0.056-0.061 vs 0.075). C dropped 0.145 -> 0.094, ~1.6x the R floor.
+  Accepted on two grounds: (a) the residual removes only ~9% of the injected
+  v's squared norm, and a ~91%-intact dose cannot alone explain a collapse —
+  exactly what condition 12 tests; (b) the damage override requires the R sets,
+  which are clean. **Caveat carried forward:** an H27b (C) collapse is read
+  with this dose caveat, and the R sets remain the reference generic control.
+- The runner passes `ablation_spaces_dir` explicitly per set (V,H -> subspaces/;
+  C,R -> subspaces_ortho/); the directory is recorded per run.
+
+J27 is ready for pod launch. Order: `compute_j27_mu.py` ->
+`check_j27_manipulation.py` (rank selection) -> `run_j27.py` (15 x 100) ->
+parse/judge/analyze.

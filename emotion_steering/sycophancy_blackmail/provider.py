@@ -18,6 +18,11 @@ J27 ablation args (all via -M; off unless ablation_set is given):
     ablation_set=V|H|C|R1|R2|R3
     ablation_layers=16-26     range "a-b", or single layer "16", or list "16,17"
     ablation_rank=32|64|121   columns of the stored (d,121) basis used
+    ablation_spaces_dir=<path>  basis directory override. Amendment 4: pass
+                              results/j27/subspaces_ortho for C/R sets and
+                              results/j27/subspaces for V/H — the choice must
+                              be explicit in the run command (a wrong-dir run
+                              is uninterpretable). Default: <dir>/subspaces.
 
 Hook order at a layer carrying both steering and ablation (the registered J27
 order): the SteeringHook is attached FIRST and the AblationHook SECOND, so the
@@ -79,6 +84,7 @@ class SteeredAPI(_load_parent()):
         ablation_set: str | None = None,
         ablation_layers: int | str | None = None,
         ablation_rank: int | str = 121,
+        ablation_spaces_dir: str | None = None,
         **model_args,
     ):
         super().__init__(model_name=model_name, **model_args)
@@ -111,6 +117,11 @@ class SteeredAPI(_load_parent()):
         self.ablation_set = ablation_set
         self.ablation_layers = _parse_layers(ablation_layers)
         self.ablation_rank = int(ablation_rank)
+        # Amendment 4: the basis directory is an explicit run argument —
+        # subspaces_ortho for the orthogonalised C/R controls, subspaces for V/H.
+        self.ablation_spaces_dir = (
+            Path(ablation_spaces_dir) if ablation_spaces_dir
+            else (Path(ablation_dir) / "subspaces" if ablation_dir else None))
         self.ablation_active = bool(ablation_set)
         if self.ablation_active and ablation_dir is None:
             raise ValueError("ablation_dir is required when ablation_set is set")
@@ -151,9 +162,9 @@ class SteeredAPI(_load_parent()):
 
     def _load_ablation(self, layer: int):
         """(subspace[:, :rank], mu) for one layer from the J27 build files."""
-        base = Path(self.ablation_dir)
-        s = np.load(base / "subspaces" / f"{self.ablation_set}_l{layer}.npy")
-        mu = np.load(base / "mu" / f"mu_l{layer}.npy")
+        s = np.load(
+            self.ablation_spaces_dir / f"{self.ablation_set}_l{layer}.npy")
+        mu = np.load(Path(self.ablation_dir) / "mu" / f"mu_l{layer}.npy")
         r = min(self.ablation_rank, s.shape[1])
         return s[:, :r], mu
 

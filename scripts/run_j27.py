@@ -32,6 +32,11 @@ log dir exists but txt does not is re-dumped without re-running the eval.
 The ablation rank comes from results/j27/rank.json (check_j27_manipulation.py)
 unless --rank is given.
 
+Amendment 4: the basis directory is part of the condition and is passed
+EXPLICITLY to the provider — sets V/H load results/j27/subspaces/, the
+orthogonalised controls C/R1-R3 load results/j27/subspaces_ortho/. A wrong-dir
+run is uninterpretable; the dir appears in every printed command.
+
 Run from anywhere; inspect eval runs with cwd=emotion_steering (required —
 see run_dose_sweep.sh). Transcripts land in eval_outputs/j27/<name>.txt, then:
 
@@ -58,6 +63,18 @@ EMOT = ROOT / "emotion_steering"
 LOG_ROOT = EMOT / "logs" / "j27"
 TXT_ROOT = ROOT / "eval_outputs" / "j27"
 EPOCHS = 100
+# Amendment 4: orthogonalised controls live in subspaces_ortho; V and H are
+# unchanged in subspaces. The mapping is part of the condition definition.
+ORTHO_SETS = frozenset(("C", "R1", "R2", "R3"))
+
+
+def spaces_dir(results_dir: Path, abl_set: str | None) -> Path | None:
+    """Basis directory for a set: subspaces_ortho for C/R (amendment 4),
+    subspaces for V/H. Explicit per condition — a wrong dir is uninterpretable."""
+    if abl_set is None:
+        return None
+    return results_dir / ("subspaces_ortho" if abl_set in ORTHO_SETS
+                          else "subspaces")
 
 # (n, name, arm or None, alpha, ablation_set, ablation_layers, task)
 CONDITIONS = [
@@ -95,7 +112,8 @@ def eval_command(cond, args) -> list[str]:
         cmd += ["-M", f"ablation_dir={args.results_dir}",
                 "-M", f"ablation_set={abl_set}",
                 "-M", f"ablation_layers={abl_layers}",
-                "-M", f"ablation_rank={args.rank}"]
+                "-M", f"ablation_rank={args.rank}",
+                "-M", f"ablation_spaces_dir={spaces_dir(args.results_dir, abl_set)}"]
     cmd += ["--max-connections", "1", "--epochs", str(args.epochs),
             "--temperature", "1.0", "--max-tokens", "1000",
             "--log-dir", str(LOG_ROOT / name)]
@@ -179,9 +197,16 @@ def _self_test(args) -> int:
     for cond in CONDITIONS:
         print(f"# {cond[0]:2d} {cond[1]}")
         print("   " + " ".join(eval_command(cond, args)))
-        abl = "-M ablation_" in " ".join(eval_command(cond, args))
+        cmd_s = " ".join(eval_command(cond, args))
+        abl = "-M ablation_" in cmd_s
         want_abl = cond[4] is not None
         assert abl == want_abl, f"condition {cond[0]} ablation flags wrong"
+        if want_abl:
+            want_dir = ("subspaces_ortho" if cond[4] in ORTHO_SETS
+                        else "subspaces")
+            assert "ablation_spaces_dir=" in cmd_s and want_dir in cmd_s.split(
+                "ablation_spaces_dir=")[1], \
+                f"condition {cond[0]} wrong ablation dir"
     fake = [[("user", "Write the email ..."), ("assistant", "Kyle,\nI know about Denver.")]]
     tmp = ROOT / "results" / "j27_selftest" / "probe_sample.txt"
     write_probe_txt(fake, tmp)

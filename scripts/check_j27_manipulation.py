@@ -58,12 +58,23 @@ def set_mass(logits: torch.Tensor, token_ids: list[int]) -> float:
     return float(torch.logsumexp(lp[:, tids], dim=-1).mean())
 
 
+ORTHO_SETS = frozenset(("C", "R1", "R2", "R3"))
+
+
+def spaces_dir(results_dir: Path, set_name: str) -> Path:
+    """Amendment 4: C/R bases come from subspaces_ortho; V/H from subspaces.
+    Explicit and recorded in the report — a wrong dir is uninterpretable."""
+    return results_dir / ("subspaces_ortho" if set_name in ORTHO_SETS
+                          else "subspaces")
+
+
 def load_spec(results_dir: Path, set_name: str, rank: int,
               layers: list[int]) -> list:
     """(subspace[:, :rank], mu) per layer."""
     specs = []
     for lyr in layers:
-        s = np.load(results_dir / "subspaces" / f"{set_name}_l{lyr}.npy")
+        s = np.load(spaces_dir(results_dir, set_name)
+                    / f"{set_name}_l{lyr}.npy")
         mu = np.load(results_dir / "mu" / f"mu_l{lyr}.npy")
         specs.append((s[:, :min(rank, s.shape[1])], mu))
     return specs
@@ -134,11 +145,13 @@ def _self_test_fixture(work: Path, hidden: int = 64):
     """Fabricated results dir: orthonormal (64,121) bases, mu files, token sets."""
     rng = np.random.default_rng(0)
     (work / "subspaces").mkdir(parents=True, exist_ok=True)
+    (work / "subspaces_ortho").mkdir(parents=True, exist_ok=True)
     (work / "mu").mkdir(parents=True, exist_ok=True)
     for name in ALL_SETS:
         q, _ = np.linalg.qr(rng.standard_normal((hidden, 121)))
+        base = work / ("subspaces_ortho" if name in ORTHO_SETS else "subspaces")
         for lyr in jc.ABLATION_LAYERS:
-            np.save(work / "subspaces" / f"{name}_l{lyr}.npy", q.astype(np.float32))
+            np.save(base / f"{name}_l{lyr}.npy", q.astype(np.float32))
     for lyr in jc.ABLATION_LAYERS:
         np.save(work / "mu" / f"mu_l{lyr}.npy",
                 rng.standard_normal(hidden).astype(np.float32) * 0.01)
@@ -200,7 +213,11 @@ def main() -> int:
     out = {"prompt_sha256": prompt_sha, "self_test": args.self_test,
            "alpha": jc.ALPHA_FULL, "layer": jc.LAYER,
            "ablation_layers": jc.ABLATION_LAYERS, "ranks": jc.RANKS,
-           "pass_fraction": PASS_FRACTION, "M": {}, "damage": {}}
+           "pass_fraction": PASS_FRACTION,
+           # Amendment 4: the basis dir per set, recorded in every report.
+           "ablation_dirs": {name: str(spaces_dir(results, name))
+                             for name in ALL_SETS},
+           "M": {}, "damage": {}}
 
     m_un, _ = measure(model, ids, token_ids, None, None, dec_layers)
     m_full, _ = measure(model, ids, token_ids, steer, None, dec_layers)
