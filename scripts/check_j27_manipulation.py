@@ -5,15 +5,19 @@ On one teacher-forced pass of the canonical scenario prompt:
     M(.) = log of the next-token probability mass on the set's tokens, from
            the final-layer logits, averaged over positions.
 
-Runs: unsteered; full @0.25 at L16; full @0.25 + V ablation at L16-26 for each
-rank r in {32, 64, 121} (steering hook attached FIRST at L16, then the
-ablation — the registered order). Let pass_rise = M(full) - M(unsteered).
+Runs: unsteered; full @0.25 at L16; full @0.25 + P_clean ablation at L16-26
+for each rank r in {32, 64, 121} (steering hook attached FIRST at L16, then
+the ablation — the registered order). Let pass_rise = M(full) - M(unsteered).
 Rank r passes iff
 
     M(full + ablation_r) - M(unsteered) <= 0.20 * pass_rise.
 
 The first passing rank is the J27 rank, written to results/j27/rank.json and
 used for EVERY set by run_j27.py. If none passes, exit 2 and J27 stops.
+
+Amendment 6 retargets the check to P_clean (the primary ablation set): the
+mass M is measured over the 264 pool-atom tokens (token_sets.json "pclean")
+and the rank-selection ablation uses the pclean bases in subspaces_pclean/.
 
 Also reported (amendment 1 item 3): per set and layer, on the unsteered and
 steered passes, the removed share of activation norm
@@ -39,7 +43,15 @@ import j27_common as jc  # noqa: E402
 
 ROOT = jc.ROOT
 PASS_FRACTION = 0.20
-ALL_SETS = ("V", "H", "C", "R1", "R2", "R3")
+# Amendment 6: every ablated set, with its basis directory. pclean/c/r1-r3
+# live in subspaces_pclean; V (V_clean) and H are reused from subspaces_clean.
+SPACES_BY_SET = {"pclean": "subspaces_pclean", "c": "subspaces_pclean",
+                 "r1": "subspaces_pclean", "r2": "subspaces_pclean",
+                 "r3": "subspaces_pclean",
+                 "V": "subspaces_clean", "H": "subspaces_clean"}
+ALL_SETS = tuple(SPACES_BY_SET)
+RANK_SET = "pclean"          # amendment 6: rank selection on the primary set
+MASS_SET = "pclean"          # M measured over the 264 pool-atom tokens
 
 _HOOKS = None
 
@@ -58,14 +70,10 @@ def set_mass(logits: torch.Tensor, token_ids: list[int]) -> float:
     return float(torch.logsumexp(lp[:, tids], dim=-1).mean())
 
 
-ORTHO_SETS = frozenset(("C", "R1", "R2", "R3"))
-
-
 def spaces_dir(results_dir: Path, set_name: str) -> Path:
-    """Amendment 4: C/R bases come from subspaces_ortho; V/H from subspaces.
-    Explicit and recorded in the report — a wrong dir is uninterpretable."""
-    return results_dir / ("subspaces_ortho" if set_name in ORTHO_SETS
-                          else "subspaces")
+    """Basis directory for a set. Explicit and recorded in the report —
+    a wrong dir is uninterpretable."""
+    return results_dir / SPACES_BY_SET[set_name]
 
 
 def load_spec(results_dir: Path, set_name: str, rank: int,
@@ -142,16 +150,17 @@ def _tiny_mock(vocab: int = 2048, hidden: int = 64, n_layers: int = 28):
 
 
 def _self_test_fixture(work: Path, hidden: int = 64):
-    """Fabricated results dir: orthonormal (64,121) bases, mu files, token sets."""
+    """Fabricated results dir: orthonormal (64,121) bases in BOTH amendment-6
+    basis dirs, mu files, token sets."""
     rng = np.random.default_rng(0)
-    (work / "subspaces").mkdir(parents=True, exist_ok=True)
-    (work / "subspaces_ortho").mkdir(parents=True, exist_ok=True)
+    for d in set(SPACES_BY_SET.values()):
+        (work / d).mkdir(parents=True, exist_ok=True)
     (work / "mu").mkdir(parents=True, exist_ok=True)
-    for name in ALL_SETS:
+    for name, d in SPACES_BY_SET.items():
         q, _ = np.linalg.qr(rng.standard_normal((hidden, 121)))
-        base = work / ("subspaces_ortho" if name in ORTHO_SETS else "subspaces")
         for lyr in jc.ABLATION_LAYERS:
-            np.save(base / f"{name}_l{lyr}.npy", q.astype(np.float32))
+            np.save(work / d / f"{name}_l{lyr}.npy",
+                    q.astype(np.float32))
     for lyr in jc.ABLATION_LAYERS:
         np.save(work / "mu" / f"mu_l{lyr}.npy",
                 rng.standard_normal(hidden).astype(np.float32) * 0.01)
@@ -193,7 +202,7 @@ def main() -> int:
         else:
             device = "cpu"
         token_ids = json.loads(
-            (results / "token_sets.json").read_text())["V"]["token_ids"]
+            (results / "token_sets.json").read_text())[MASS_SET]["token_ids"]
         tokenizer = AutoTokenizer.from_pretrained(args.model_path)
         model = AutoModelForCausalLM.from_pretrained(
             args.model_path, device_map=device)
@@ -229,7 +238,7 @@ def main() -> int:
 
     rank = None
     for r in jc.RANKS:
-        specs = load_spec(results, "V", r, jc.ABLATION_LAYERS)
+        specs = load_spec(results, RANK_SET, r, jc.ABLATION_LAYERS)
         m_r, _ = measure(model, ids, token_ids, steer, specs, dec_layers)
         passed = (m_r - m_un) <= PASS_FRACTION * rise
         out["M"]["per_rank"][str(r)] = {

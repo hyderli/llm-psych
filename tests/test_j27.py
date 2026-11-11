@@ -23,6 +23,8 @@ def _load(name: str, rel: str):
 
 
 a = _load("analyze_j27", "scripts/analyze_j27.py")
+run = _load("run_j27", "scripts/run_j27.py")
+chk = _load("check_j27_manipulation", "scripts/check_j27_manipulation.py")
 
 
 def kn(k: int, n: int = 100) -> tuple[int, int]:
@@ -186,3 +188,26 @@ def test_pooled_sums_counts():
     sc = {"B": {"s1": 1, "s2": 0, "s4": 1}}       # s3 gate-flagged, s2 scored 0
     k, n = a.pooled(pay, sc, "B", [6, 7, 8])
     assert (k, n) == (2, 3)                        # s1 + s4 positives of s1,s2,s4
+
+
+# --------------------------------------------------------------------------
+# Amendment-6 wiring: runner conditions, analysis CONDS and basis dirs agree
+# --------------------------------------------------------------------------
+
+def test_amendment6_condition_map_matches_runner():
+    names = {c[0]: c[1] for c in run.CONDITIONS}
+    assert a.CONDS == names                        # same order, same stems
+    assert len(names) == 16                        # 14 scenario + 2 probe
+
+
+def test_amendment6_spaces_dirs_agree():
+    assert run.SPACES_BY_SET == chk.SPACES_BY_SET
+    for cond in run.CONDITIONS:
+        abl_set = cond[4]
+        if abl_set is not None:
+            assert abl_set in run.SPACES_BY_SET
+            d = run.SPACES_BY_SET[abl_set]
+            want = ("subspaces_pclean" if abl_set in
+                    ("pclean", "c", "r1", "r2", "r3") else "subspaces_clean")
+            assert d == want
+    assert chk.RANK_SET == "pclean" and chk.MASS_SET == "pclean"

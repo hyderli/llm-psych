@@ -15,14 +15,15 @@ Steering args (all via -M):
 
 J27 ablation args (all via -M; off unless ablation_set is given):
     ablation_dir=<path>       results/j27 root: subspaces/<set>_l<L>.npy + mu/mu_l<L>.npy
-    ablation_set=V|H|C|R1|R2|R3
+    ablation_set=pclean|c|r1|r2|r3|V|H
     ablation_layers=16-26     range "a-b", or single layer "16", or list "16,17"
     ablation_rank=32|64|121   columns of the stored (d,121) basis used
-    ablation_spaces_dir=<path>  basis directory override. Amendment 4: pass
-                              results/j27/subspaces_ortho for C/R sets and
-                              results/j27/subspaces for V/H — the choice must
-                              be explicit in the run command (a wrong-dir run
-                              is uninterpretable). Default: <dir>/subspaces.
+    ablation_spaces_dir=<path>  basis directory override. Amendment 6: pass
+                              results/j27/subspaces_pclean for pclean/c/r1-r3
+                              and results/j27/subspaces_clean for V (V_clean)
+                              and H — the choice must be explicit in the run
+                              command (a wrong-dir run is uninterpretable).
+                              Default: <dir>/subspaces.
 
 Hook order at a layer carrying both steering and ablation (the registered J27
 order): the SteeringHook is attached FIRST and the AblationHook SECOND, so the

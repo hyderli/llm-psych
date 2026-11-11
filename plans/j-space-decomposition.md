@@ -6189,3 +6189,76 @@ collapses because P_clean holds `pool1` by construction.
 | collapses | collapses-but-so-do-R/C | generic damage; nothing read |
 
 Outputs → `results/j27/subspaces_pclean/`; earlier dirs kept for the record.
+
+### Amendment-6 build result, 2026-11-11: second frozen stop rule fired; J27 shelved
+
+The P_clean build ran and failed its frozen acceptance: `pool1`'s ŵ inside
+P_clean at L16 = **0.0895** vs the registered ≥ 0.60. The failure was
+unreachable by construction, not marginal: ŵ sits **0.783 inside G** at L16,
+so any G-orthogonal subspace can hold at most 0.217 of it. The threshold was
+a PI error: the structural cap was computable from the stored bases before
+the threshold was frozen. **Lesson, fixed for all future thresholds: compute
+structural limits before freezing acceptance numbers.** Per the amendment,
+the build stopped and reported; all bases, code and the build report are
+kept (`results/j27/subspaces_*`, `scripts/build_j27_*`, runner/manipulation/
+analysis plumbing, tests — committed as the record). **J27 does not launch.**
+
+**The measurement that decides the reading** — ŵ (direction minus its v̂
+component) share inside G at L16:
+
+| family | ŵ-in-G | | family | ŵ-in-G |
+|---|---|---|---|---|
+| `pool1–6` | 0.782–0.817 | | `coh1–6` | 0.650–0.763 |
+| `far1–6` | 0.255–0.498 | | `span1–6` | 0.004–0.008 |
+
+`full` v̂ itself: 0.154 in G. Arm directions (v̂+ŵ): pool 0.84–0.86,
+far 0.23–0.46, coh 0.56–0.68, span 0.015, jspace 0.590.
+
+**Reading:** the families that act (`pool`, `coh`) sit 65–82% inside the
+generic English-atom subspace; the families that don't (`far`, `span`) sit
+well below. `far` carries the same lexicon class as `pool` but mostly
+outside G — so part of J24's pool-vs-far contrast was generic-English push,
+which changes how J24 is reported. Hypotheses going forward: G-membership
+may be the *potency* factor for word directions, with the specific residue
+selecting the content. At L26 ŵ-in-G drops to ~0.07 — the membership is an
+early-layer phenomenon. (P_clean–V_clean overlap 0.381 is expected — both
+are hostile-word subspaces minus the generic part — not a bug.)
+
+**J27 status:** shelved, not cancelled. Ablation cannot separate generic
+from specific when the direction itself is ~78% generic — any subspace
+holding `pool`'s direction substantially removes G. The question it was
+built for (does v act through the same channel `pool` uses) moves to J29,
+which tests the split by steering.
+
+---
+
+## J29: G/specific split of the word direction — preregistration, 2026-11-11
+
+Registered before any sample. New experiment (not a J27 amendment — ablation
+→ steering is a design change). Same model/revision, L16, `post`, norm-scale.
+
+**Decomposition.** For each pool direction i: ŵ_i = g_i + s_i, where
+g_i = P_G(ŵ_i) with the stored amendment-5 G basis at L16, s_i = ŵ_i − g_i.
+Each component is steered **at its in-arm dose** (the actual vector
+component × α — same convention as J25's w90 arms).
+
+**Conditions** (all α = 0.15 — the J25 dose with the least degeneration,
+pool class-mean B = 0.775): unsteered (reuse J25); `pool_i` (reuse J25
+n=40); `g_i` × 6 directions × 40; `s_i` × 6 × 40. Secondary: `far`-G
+components g_i(far) × 6 × 40 at the same dose — tests whether "generic is
+generic" (if any G push acted, far-G would act too). 18 new conditions =
+720 samples ≈ 2 GPU-h, ~$7 judging. Degeneration rule and B judge
+unchanged.
+
+**Primary (H29):** class-mean B of the s-arms vs the g-arms (6 arms each,
+exact CIs), with the registered reading:
+
+| s-arms | g-arms | reading |
+|---|---|---|
+| act | don't | hostile-specific content, not generic push — strongest evidence in the series for content |
+| don't | act | generic English push carries the effect — lexical, and surprising given far is inert |
+| both act | — | additive/interaction reading via the 2×2-style comparison with pool itself |
+| neither | — | the split destroys what acts; dose/threshold reading, reported as observed |
+
+**Secondary (H29s):** far-G class vs unsteered — if far-G is inert, "generic"
+push alone doesn't explain pool; the combination does.
