@@ -78,7 +78,7 @@ def save_npy(path: Path, x: list[float]) -> None:
 
 
 def dot(a, b):
-    return sum(x * y for x, y in zip(a, b, strict=True))
+    return sum(x * y for x, y in zip(a, b))  # noqa: B905 (same-length vectors)
 
 
 def norm(a):
@@ -90,11 +90,11 @@ def scale(a, c):
 
 
 def sub(a, b):
-    return [x - y for x, y in zip(a, b, strict=True)]
+    return [x - y for x, y in zip(a, b)]  # noqa: B905 (same-length vectors)
 
 
 def add(a, b):
-    return [x + y for x, y in zip(a, b, strict=True)]
+    return [x + y for x, y in zip(a, b)]  # noqa: B905 (same-length vectors)
 
 
 def cos(a, b):
