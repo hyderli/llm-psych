@@ -5989,3 +5989,45 @@ still override.
 
 **Cost, revised:** J27 is 1,300 scenario samples plus 200 probe samples, about 9
 GPU-h and about 4,100 judge calls (about $20).
+
+### J26–J28 amendment 4, 2026-11-11: control subspaces orthogonalised against V. Fixed after the specificity check, before any J27 sample or pod launch
+
+**Status when written.** Bases `results/j27/subspaces/*` built at `63595d9`; no
+mu vector, manipulation check or sample exists. PI decision (Haydar, 2026-11-11):
+orthogonalise.
+
+**The specificity problem, found by the pre-launch check the PI requested.** At
+L16, the share of `pool1`'s ŵ inside each subspace, and of v̂, is:
+
+| set | ŵ share r=32 | ŵ share r=64 | ŵ share r=121 | ‖P v̂‖² r=32 |
+|---|---|---|---|---|
+| V | 0.803 | 0.821 | 0.838 | 0.130 |
+| H | 0.784 | 0.799 | 0.819 | 0.154 |
+| C | 0.539 | 0.565 | 0.614 | 0.145 |
+| R1 | 0.571 | 0.632 | 0.662 | 0.064 |
+| R2 | 0.512 | 0.570 | 0.615 | 0.075 |
+| R3 | 0.546 | 0.600 | 0.639 | 0.073 |
+
+Two readings follow. (a) ~55% of an arbitrary word direction sits inside any
+rank-32 English-word-atom subspace: the atoms share generic structure beyond
+the English mean. (b) v̂'s share is nearly flat across V, H and C (13-15%),
+with R at 6-7% — V is only ~6 points above the generic level, confirming the
+PI's hypothesis. Subspace overlap (‖G‖²/r, r=32): V–H 0.415, V–C 0.201,
+V–R ~0.18. As built, the R ablations would likely damage `pool1` too, and the
+run would land in the "damage" reading for a structural reason.
+
+**Change, fixed now.** At each layer l, C and R1-R3 bases are computed on atom
+matrices **projected onto the orthogonal complement of V's atom span at that
+layer**: A'_S = (I − P_{A_V}) A_S, then the usual top-r SVD, same r ∈
+{32,64,121}. V and H are unchanged (H is a secondary set; its 0.415 overlap
+with V stays a stated limitation).
+
+- **Prediction to verify at rebuild:** ŵ share of `pool1` inside each
+  orthogonalised control drops below 0.30 at r = 32, and ‖P v̂‖² drops near
+  the structural floor. If either fails, report back; do not adjust silently.
+- Everything else is unchanged: token sets, draws, seeds, rank ladder,
+  manipulation check, conditions, hypotheses, readings. The orthogonalised
+  controls are what "generic rank-r word-subspace damage" was always meant to
+  measure; V-overlap was accidental content, not generality.
+- The report records ŵ shares and ‖P v̂‖² for the orthogonalised bases the
+  same way, and this amendment's table stands as the pre-fix record.
