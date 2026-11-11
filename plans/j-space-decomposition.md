@@ -6116,3 +6116,76 @@ the readings table is decided with that table in hand, not from ranks alone.
 New files under `results/j27/subspaces_clean/` (C, R and the cleaned V, H);
 `subspaces/` and `subspaces_ortho/` are kept for the record and are not used.
 The C residual caveat from the amendment-4 result is unchanged.
+
+### J26–J28 amendment 6, 2026-11-11: P_clean — ablate the subspace where `pool`'s content actually lives. Third construction change, still before any sample
+
+**Status.** No mu vector, manipulation check or sample exists; bases exist in
+`subspaces_clean/` from the amendment-5 build, whose stop rule fired. PI
+direction (Haydar, 2026-11-11).
+
+**Why the amendment-5 stop fired, and what it found.** Cleaned V held only
+**0.063** of `pool1`'s ŵ (threshold 0.60) — almost all of V's apparent `pool`
+coverage was generic English structure. G (rank-32, 2,000 random English
+atoms) captures **44.5%** of all atom variance at L16 — it is the dominant
+structure of these word directions. `pool1` + uncleaned-V is not a
+positive control either: it would collapse mostly by removing G, which the
+numbers already predict, and `full` + G is unreadable (G is too large an
+intervention; a collapse couldn't be separated from "the model stopped
+writing coherent emails" without its own capability conditions).
+
+**Free check run before writing this block** — share of each direction inside
+G at L16 (existing bases, no samples):
+
+| direction | G-share |
+|---|---|
+| `full` (v̂) | 0.154 |
+| `pool1–6` | 0.840, 0.853, 0.848, 0.861, 0.840, 0.862 (mean **0.851**) |
+| `far1–6` | 0.265, 0.309, 0.464, 0.275, 0.228, 0.267 (mean **0.302**) |
+| `coh1–6` | mean **0.632** (0.563–0.679) |
+| `span1–6` | mean **0.015** |
+| `jspace` | 0.590 |
+
+`pool` sits ~85% inside the generic English-atom subspace while `far` sits
+~30% — **per the pre-fixed reading, the J24 contrast is partly a
+generic-English artifact**: `pool` pushes hard into the dominant English
+subspace, `far` mostly doesn't. This is a result in itself and changes how
+J24 is reported (the pool-vs-far gap mixes hostile content with generic-word
+push). It also means V_clean was never where `pool`'s content lives — the
+right test subspace must be built from the pool atoms themselves.
+
+**New construction, fixed now.**
+
+- **P_clean:** at each layer, project G out of the concatenated atom matrix of
+  ALL pool-family atoms (`pool` ∪ `far` candidate lexicon, 264 atoms), then
+  top-r SVD, r ∈ {32,64,121}. This is the specific hostile-word channel `pool`
+  actually uses, minus generic English.
+- **Controls:** C and R1–R3 orthogonalised against P_clean's cleaned atom span
+  (after their own G-projection — amendment 5 rule applied against P_clean).
+- **Acceptance, fixed before the rebuild:** `pool1`'s ŵ inside P_clean at
+  r = 32 **≥ 0.60**; `pool1` ŵ inside each orthogonalised control **< 0.30**.
+  Report ‖P v̂‖² per set. Below 0.60 the build stops and reports.
+
+**J27 condition set, revised (primaries over P_clean):**
+none/no-ablation; full/no-ablation; **full+P_clean (primary test)**;
+full+H; full+C; full+R1/R2/R3; none+P_clean; **pool1@0.15+P_clean (positive
+control — collapses by construction)**; pool1@0.15+R1; pool1@0.15 no-ablation;
+full+P_clean at L16 only (dose-cut); **full+V_clean (secondary, not
+load-bearing)**. 13 scenario conditions ≈ 1,300 samples + 200 probe samples;
+cost unchanged. G itself is NOT ablated — its only readable role would need
+`none+G` scenario and capability arms, which it would likely fail.
+
+**H27 hypotheses retargeted:** H27a′ `full+P` < pooled R controls; H27b′
+`full+P` < `full+C`; H27c unchanged (`full+H` < R); H27e′ `pool1+P` <
+`pool1+R1` and < `pool1`/none. Positive control expectation: `pool1+P_clean`
+collapses because P_clean holds `pool1` by construction.
+
+**Two-routes reading (now means what it was meant to mean):**
+
+| `pool1`+P_clean | `full`+P_clean | reading |
+|---|---|---|
+| collapses | collapses | The vector uses the same specific word channel `pool` uses |
+| collapses | survives | The vector has its own route — the double dissociation |
+| survives | — | Ablation didn't work; nothing read |
+| collapses | collapses-but-so-do-R/C | generic damage; nothing read |
+
+Outputs → `results/j27/subspaces_pclean/`; earlier dirs kept for the record.
