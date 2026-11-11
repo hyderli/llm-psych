@@ -6064,3 +6064,55 @@ L16, ~0.92-0.94 at L26.
 J27 is ready for pod launch. Order: `compute_j27_mu.py` ->
 `check_j27_manipulation.py` (rank selection) -> `run_j27.py` (15 x 100) ->
 parse/judge/analyze.
+
+### J26–J28 amendment 5, 2026-11-11: shared English-structure component G removed from every set. Fixed after the ortho rebuild, before any J27 sample or pod launch
+
+**Status when written.** `subspaces/` and `subspaces_ortho/` exist from builds
+at `63595d9`; no mu vector, manipulation check or sample exists. This is the
+second change to subspace construction after seeing build numbers (still
+before any sample): the first removed the V-overlap of the controls and
+created an asymmetry — V alone still carries the shared English-atom structure.
+PI decision (Haydar, 2026-11-11): clean every set the same way, with the
+acceptance thresholds below fixed before the rebuild runs. No further tuning
+after it.
+
+**The asymmetry, recorded.** Amendment 4's table stands as the pre-fix record:
+`pool1`'s ŵ was ~55% inside the un-orthogonalised R controls, and ~10 points
+of every rank-32 word-atom subspace is generic English structure (v̂ share
+~13-15% in V/H/C vs ~6% in R before any projection). Orthogonalising only the
+controls left that shared structure entirely in V, which would favour H27a.
+
+**Change, fixed now.**
+
+1. **G:** at each layer, the top **32** left singular directions of a
+   2,000-token random English-word atom set (excluding V's 121 tokens and the
+   hostility lexicon; English-word eligibility and centring unchanged; draw from
+   `SeedSequence(20261111)`, one child). The variance G captures is reported.
+2. **Cleaning:** every set's atom matrix is projected onto G's orthogonal
+   complement BEFORE anything else: A* = (I − P_G) A.
+3. **V and H:** top-r SVD of A*, r ∈ {32,64,121}, as before.
+4. **C and R1-R3:** first orthogonalise A* against the CLEANED V atom span
+   (amendment 4, applied to cleaned atoms), then top-r SVD.
+
+**Acceptance, fixed before the rebuild:**
+
+- `pool1`'s ŵ inside cleaned V at r = 32 **≥ 0.60**. Below that, the positive
+  control is weak: `pool1`'s word direction was mostly generic English
+  structure — itself a finding about what `pool` pushes — and the build STOPS
+  and reports rather than adjusting.
+- `pool1`'s ŵ inside each orthogonalised control at r = 32 **< 0.30**
+  (amendment 4's rule).
+- Reported with no pass/fail attached: ‖P_l v̂‖² per set at r ∈ {32,64,121};
+  the share of each set's original variance surviving both projections; V–G and
+  set–set overlaps; `pool1` ŵ share at r = 64, 121 and at L26.
+
+**Damage accounting, also fixed now:** the orthogonalised controls may remove
+less activation norm than V does, so "R did not collapse" is evidence against
+generic damage only when removed norms are comparable. The manipulation-check
+step reports the removed share ‖P(h − μ)‖²/‖h‖² per set per layer on both
+unsteered and steered passes BEFORE `run_j27.py` starts, and the damage row of
+the readings table is decided with that table in hand, not from ranks alone.
+
+New files under `results/j27/subspaces_clean/` (C, R and the cleaned V, H);
+`subspaces/` and `subspaces_ortho/` are kept for the record and are not used.
+The C residual caveat from the amendment-4 result is unchanged.
