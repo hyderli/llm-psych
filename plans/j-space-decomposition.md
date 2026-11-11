@@ -5925,3 +5925,67 @@ the injection kill the `full` effect?) and J26B (does the effect transfer
 to Chinese output?). J28's report-vs-behaviour dissociation lost its
 identification condition and is now limited to the report-tracking
 descriptives.
+
+### J26–J28 amendment 3, 2026-11-11: J27 after the J25 and J26A results. Before any J27 arm, hook, ablation or sample exists
+
+**Status when written.** J25 and J26A are recorded at `a614901`. No J27 artifact
+exists. Conditions 1-12, the sets, the mean-ablation, the manipulation check and
+H27a-d are unchanged.
+
+**1. Scope of the J25 reading, stated before J27 runs.** J25 showed that the
+v-component *inside a `pool` arm* adds nothing: the v-only cell was run at
+0.0654, well below the dose at which `v` acts. So the `pool` arms were
+word-direction arms, and J24's matched angle was not doing any work. J25 does
+**not** show how `full` at 0.25 produces threats. Two existing results bear on
+that:
+
+- J23's `resid` (v with its J-lens component removed at L16) still gave B in
+  10/20 at 0.25, against 15/20 for `full`.
+- Inside `full` at 0.25, the J-lens component has an effective dose of about
+  0.065. `pool` is potent at 0.15 (0.775), and its rate at 0.065 is unmeasured.
+
+The standing summary is therefore: hostile-word directions are sufficient, and
+v's verbalizable part is not necessary at the injection. Whether v is converted
+into word pushes downstream is J27's question.
+
+**2. The first reading row, now that J26A read "control fails".** Amendment 1
+tied that row's wording to J26A reading "conceptual" or "lexical". Neither
+happened. Fixed now: if H27a holds with capability accepted and R ≈ condition 2,
+the result is reported as **mediation by v's verbalizable subspace, with concept
+versus word undetermined**. J26B, if its positive control passes, is the only
+remaining test that can add to that.
+
+**3. Three new conditions: the word route under the same ablation.**
+`j24_pool1` at **0.15**, the dose where `pool` acts (class mean 0.775) with the
+least degeneration measured (12.5%). 100 samples each, same pod and settings.
+
+| # | steering | ablation | role |
+|---|---|---|---|
+| 13 | `pool1` 0.15 | none | word-route reference |
+| 14 | `pool1` 0.15 | V, L16-26 | word route under the test ablation |
+| 15 | `pool1` 0.15 | R1, L16-26 | word route under the generic control |
+
+- **H27e, secondary:** B(14) < B(15), Fisher two-sided, and B(14) below B(13).
+- **Why:** V is built from the tokens `pool` atoms are drawn from, so the V
+  ablation should remove the word route. Condition 14 is therefore a
+  behavioural positive control for the ablation, and it makes a double
+  dissociation possible.
+- **Reported at build:** the share of `pool1`'s ŵ inside V at L16.
+- One `pool` direction, not the class: this is a fixed-direction comparison, as
+  the rest of J27 is, and the limitation is stated.
+
+**4. Readings for conditions 3 and 14 together, fixed now:**
+
+| `full` + V (cond. 3) | `pool1` + V (cond. 14) | reading |
+|---|---|---|
+| collapses | collapses | v acts through the same word channel as `pool`. With J25, the series reads lexical for v as well. |
+| survives | collapses | **Two routes.** The ablation removes the word route and v still acts, so v has a route outside its verbalizable subspace. This is the double dissociation. |
+| survives | survives | The ablation does not remove even the word route. The manipulation failed at the behavioural level, and condition 3 is not read. |
+| collapses | survives | Not predicted by either account. Reported as observed. |
+
+"Collapses" and "survives" are decided by H27a for condition 3 and H27e for
+condition 14. Capability acceptance and the damage row (R and C also collapse)
+still override.
+
+**Cost, revised:** J27 is 1,300 scenario samples plus 200 probe samples, about 9
+GPU-h and about 4,100 judge calls (about $20).
