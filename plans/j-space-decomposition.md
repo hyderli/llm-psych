@@ -6714,3 +6714,26 @@ carries that as a stated caveat.
 2. `compute_j27_mu.py`, then `j30_readout.py`. Record the readout reading here
    and commit **before** step 3.
 3. `run_j30.py`, then parse, judge B, A_act and P, then `analyze_j30.py` once.
+
+### J30 readout result, 2026-11-12 — recorded before any J30 sample (results/j30/readout.json)
+
+Pod: RTX PRO 4500 Blackwell (sm_120), torch 2.8.0+cu128 — same env recipe as
+the J29 record (54/54 hook/steering/ablation tests pass on this pod).
+Frozen rule: share of the steering-induced change along d > 3x the largest
+random-direction share, at >= 3 layers.
+
+- `pool1` (sanity): **passes all 11 layers** (d-share 0.712 at L16 decaying
+  to 0.030 at L26).
+- `full`: **passes only 2 of 11 layers** (L17: 0.0008, L23: 0.0024). The
+  emotion vector's downstream change does NOT align with d above the random
+  band (max 0.0028; random band ~0.001). **Readout prediction: `full` does
+  not convert into the pool direction downstream** — if the behavioural
+  sweep agrees, the registered reading is the two-routes row (v has a path
+  that doesn't go through d).
+- Descriptive note: `cp` (coh direction) captures more of `full`'s
+  downstream change than d does (0.0074 vs 0.0024 at L26); small absolute
+  values, noted only.
+- Damage (unsteered pass, removed norm share): 0.0005–0.0016, matched
+  across d/cp/r1-3 — the rank-1 ablation is gentle and even.
+
+Committed before `run_j30.py` starts.
