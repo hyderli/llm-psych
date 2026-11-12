@@ -6737,3 +6737,33 @@ random-direction share, at >= 3 layers.
   across d/cp/r1-3 — the rank-1 ablation is gentle and even.
 
 Committed before `run_j30.py` starts.
+
+### J30 results, 2026-11-12 (RTX PRO 4500, torch 2.8.0+cu128; judge claude-sonnet-5; 13/13 conditions, 1,120 samples)
+
+- **Positive control PASS:** `pool1`+d collapses 81%→2% (p=2.6e-34) —
+  removing d removes the word direction's effect, as required.
+- **Capability PASS:** `none`+d still writes threats when asked (39/40 vs
+  39/40) — the ablation does not break threat-writing itself.
+- **H30a HOLDS:** `full`+d (49/99) is below every random-direction ablation
+  (63–75/100; pooled p=0.0011) — removing the pool direction cuts v's
+  threats beyond generic damage.
+- **No damage:** pooled random ablations ≈ `full` unablated (68% vs 77%,
+  ns); `pool1`+r1 ≈ `pool1` (p=0.39).
+- **Content control:** `full`+d < `full`+cp (49% vs 67%, p=0.015) —
+  removing d hurts more than removing the coh direction.
+- **REGISTERED READING: PARTIAL MEDIATION.** Removing d reduces v's threats
+  but not to baseline (49% vs 1% unsteered). **Mediated fraction = 0.362,
+  95% CI [0.203, 0.502]** — about a third of the emotion vector's threat
+  effect routes through the hostile word direction; about two-thirds does
+  not. Non-degenerate sensitivity agrees (0.339 [0.177, 0.486]).
+- Readout (recorded pre-generation): no d-conversion visible in-layer
+  (2/11 layers above the 3x band) — consistent with the majority
+  non-verbalizable route.
+- Note: the probe txt dump crashed once on a PosixPath bug (run_j27.py
+  dump_probe_log); fixed in commit, c12 recovered from its own eval log
+  without regeneration. 3 judge rows dropped as MISSING.
+
+**Series reading:** v is not purely lexical — roughly a third of its effect
+travels through the specific hostile-word direction, the rest through a
+route that rank-1 word ablation can't see. That residual is the target for
+the natural-activation experiments (J28 line).
