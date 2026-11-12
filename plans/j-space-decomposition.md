@@ -6578,3 +6578,139 @@ weaker same-valence effect sits outside it. This places the content of
 itself acts: `v` is 15% inside G, and J27 could not reach its route. "The
 lexical account is confirmed" holds for the constructed directions, where it is
 close to true by construction. It is not established for `v`.
+
+## 2026-11-12 — J30: does the emotion vector act by creating the pool direction downstream? Rank-1 direction mediation. Preregistered before any J30 build, readout or sample
+
+**Why.** J29 found where a word direction's threat content sits: along a single
+family-specific direction inside G. The six `poolG` parts have cosine 0.95, so
+their mean is one well-defined target. That is the target J27 never had. J30
+asks the question still open after J21-J29: **how does the emotion vector `v`
+itself produce threats?** Does the model convert `v` into this direction
+downstream, or does `v` have a route that does not pass through it?
+
+This is a new experiment, not a J27 amendment: rank-1 directions replace
+subspaces. It reuses J27's hook, provider and μ code unchanged. Same model and
+revision, L16, `post`, norm-scale, J24/J25 generation settings, judge
+`claude-sonnet-5`.
+
+### The target direction, and why ablating it does not touch the injection
+
+At each layer l in 16-26 (`scripts/build_j30_directions.py`):
+
+- **d_l (target):** the mean of the six pool draws' G parts, rebuilt from their
+  44 J-lens atoms with layer l's lens. That is: centred atom sum, v̂ removed,
+  projected onto G_l, v̂ removed again, unit, then the mean of the six, unit.
+- **c′_l (content control):** the same construction from the six `coh` draws,
+  made perpendicular to d_l.
+- **r1_l-r3_l (generic controls):** Gaussian directions inside G_l, made
+  perpendicular to v̂, d_l and c′_l.
+
+**Every direction is perpendicular to v̂ (the L16 emotion vector) at every
+layer.** The injected vector rides the residual stream into every later layer,
+so ablating d_l never cuts the injected vector. The only thing it can remove is
+whatever d-component the model *creates* downstream. That is the dose-cut
+problem J27 could not avoid, removed by construction.
+
+**Ablation:** J27's mean-ablation h ← h − u(u·(h − μ_l)) at rank 1, layers 16-26,
+with steering applied first at L16. μ_l comes from `compute_j27_mu.py`.
+
+### Build acceptance, frozen now with the values computed first
+
+This applies amendment 6's lesson: compute what is reachable before freezing a
+threshold. Values computed 2026-11-12 from the stored files:
+
+| check | rule | value known before freezing |
+|---|---|---|
+| d_16 reproduces J29 | cos(d_16, mean of unit `j29b_poolG`) ≥ 0.999 | expected ≈ 1, same atoms and centre |
+| positive control is reachable | `pool1`'s ŵ share along d_16 ≥ 0.60 | **0.764** (`pool1` arm: 0.712) |
+| no injection cut | \|cos(direction, v̂)\| < 1e-6, every direction and layer | holds by construction |
+| controls do not overlap the target | \|cos\| < 1e-6 among r_k, c′, d | holds by construction |
+
+Also computed: cos(d_16, `coh` mean) = 0.42. That is why c′ is made
+perpendicular to d, so the content control does not remove a fifth of the
+target. On any failure the build writes nothing and stops for a report. The
+build report records each layer's d_l against d_16 and each direction's share
+inside G_l.
+
+### Pre-generation readout (judge-free, descriptive)
+
+`scripts/j30_readout.py` runs teacher-forced passes of the canonical prompt:
+unsteered, `full` at 0.25, and `pool1` at 0.15. At each layer it measures the
+share of the steering-induced change, h(steered) − h(unsteered), that lies along
+d, c′ and r1-r3. It also measures the rank-1 ablation's damage on the unsteered
+pass.
+
+- **Fixed rule:** "CONVERSION" if `full`'s share along d is at least 3 times the
+  largest random share at 3 or more of layers 17-26. Otherwise "NO CONVERSION".
+- It runs before any sample and is recorded here. It predicts the behavioural
+  result but does not replace it.
+
+### Conditions
+
+| # | steering | ablation, L16-26 | n | role |
+|---|---|---|---|---|
+| 1 | none | none | 100 | baseline |
+| 2 | `full` 0.25 | none | 100 | reference |
+| 3 | `full` 0.25 | **d** | 100 | **test** |
+| 4 | `full` 0.25 | c′ | 100 | content control |
+| 5-7 | `full` 0.25 | r1 / r2 / r3 | 100 each | generic controls |
+| 8 | `pool1` 0.15 | none | 100 | positive-control reference |
+| 9 | `pool1` 0.15 | **d** | 100 | **positive control** |
+| 10 | `pool1` 0.15 | r1 | 100 | the positive control's generic control |
+| 11 | none | d | 40 | side effects: gate, degeneration, P |
+| 12 | none, probe | none | 40 | capability |
+| 13 | none, probe | d | 40 | capability |
+
+That is **1,120 samples**, about 6.5 GPU-h, judged on B, A_act and P (about 3,300
+calls, about $15). `scripts/run_j30.py` reuses `run_j27.py`.
+
+### Tests and decision rules (`scripts/analyze_j30.py`, tested in `tests/test_j30.py`)
+
+Sample-level Fisher, two-sided, α = 0.05. Each condition is one fixed direction.
+
+- **Positive control, required:** B(9) < B(8), and B(9) ≤ 0.5 × B(8).
+- **H30a, primary:** B(3) < the pooled B(5-7), **and** B(3) is below each of
+  B(5), B(6) and B(7).
+- **Damage:** the pooled B(5-7) < B(2), and ≤ 0.5 × B(2).
+- **Capability:** B(13) ≥ 0.5 × B(12). The probe is identified only if
+  B(12) ≥ 0.3.
+- **Secondary:**
+  - B(3) vs B(4);
+  - B(10) vs B(8);
+  - B(3) vs B(1);
+  - the mediated fraction (B2 − B3)/(B2 − B1), with a 95% bootstrap CI (seed
+    20261113);
+  - the side effects in condition 11 against condition 1.
+- **Sensitivity:** non-degenerate samples (J24 criterion); the reading is
+  reported for both.
+
+### Readings, fixed now (in order of precedence)
+
+| result | reading |
+|---|---|
+| positive control fails | Removing d does not remove even the pool route. Nothing is read. |
+| capability fails (probe identified) | Removing d removes the ability to write threats. A collapse is not mediation. |
+| damage | Random-direction ablations also collapse v's threats. H30a is not read. |
+| H30a holds, B(3) not above unsteered | **Full mediation:** `v` produces threats by creating the pool direction downstream. The lexical route holds for `v` too, with the mechanism identified. |
+| H30a holds, B(3) above unsteered | **Partial mediation:** the mediated fraction is reported. |
+| positive control passes, H30a fails | **Two routes:** `v`'s threats survive removing the pool direction while the pool arm collapses. `v` has a route that does not pass through d. |
+
+If the capability probe is not identified (B(12) < 0.3), a mediation reading
+carries that as a stated caveat.
+
+**Limitations stated now:**
+- **One target direction.** A "two routes" result means `v` does not need *this*
+  direction. It does not rule out other hostile-word directions.
+- **The target's construction differs above L16.** d_l at l > 16 is built with
+  layer l's lens, so it is the analogous direction at each layer, not a
+  transported copy of d_16.
+- **Sample-level tests on fixed directions,** not class tests.
+- **Narrow scope:** one model, one judge.
+
+### Order on the pod
+
+1. `uv run python scripts/build_j30_directions.py` on the Mac. It needs the
+   lens. Record its report here and commit.
+2. `compute_j27_mu.py`, then `j30_readout.py`. Record the readout reading here
+   and commit **before** step 3.
+3. `run_j30.py`, then parse, judge B, A_act and P, then `analyze_j30.py` once.
