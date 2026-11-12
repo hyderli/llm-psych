@@ -6767,3 +6767,75 @@ Committed before `run_j30.py` starts.
 travels through the specific hostile-word direction, the rest through a
 route that rank-1 word ablation can't see. That residual is the target for
 the natural-activation experiments (J28 line).
+
+### J30 results: post-hoc review of the interpretation, 2026-11-12
+
+**Recorded after the results, from `results/j30/analysis_stdout.txt` and
+`results/j30/readout.json`.** No registered number or reading is changed, and
+"partial mediation" stands. This note adds a second way to read the size of the
+effect, corrects one inference, and records what the readout got wrong.
+
+**1. Part of the registered fraction is the generic cost of ablating anything.**
+The registered fraction, 0.362 [0.203, 0.502], uses unablated `full` (77/100) as
+its reference. Ablating a direction other than d also lowers B:
+
+| ablation | B |
+|---|---|
+| r1 | 66/99 |
+| r2 | 75/100 |
+| r3 | 63/100 |
+| c′ | 67/100 |
+| r1-r3 pooled | 204/299 = 0.682 |
+
+The pooled rate against unablated `full` gives Fisher p = 0.10. That is not
+significant, but it is consistent in sign. Measured against the matched-ablation
+reference, the **d-specific fraction** is (0.682 − 0.495)/(0.682 − 0.01) ≈
+**0.28**. Both are reported from now on: about 0.36 against no ablation, about
+0.28 against a matched rank-1 ablation. H30a, which compares with the random
+ablations directly, already accounts for this.
+
+**2. "The other two-thirds is a non-verbalizable route" does not follow.** The
+preregistration's own limitation applies: J30 removed one direction. The ~64-72%
+that survives does not pass through d. It may still pass through other
+verbalizable directions:
+
+- pool's S part outside G, which suppressed praise in J29;
+- other hostile-word directions;
+- higher-rank structure that the mean of the six pool G parts does not capture.
+
+The supported statement: **about a third of `v`'s threat effect runs through the
+single hostile-content direction J29 identified, and the rest does not need that
+direction.** Whether the rest is verbalizable is untested.
+
+**3. The readout's prediction was wrong, and the way it was wrong is
+informative.**
+
+- **What it predicted:** NO CONVERSION. `full`'s share of its steering-induced
+  change along d stays at 0.0005-0.0028, above the random band at only 2 of 10
+  layers.
+- **What happened:** removing d cut threats by a third. A component carrying
+  about 0.1-0.3% of the change's energy is causally consequential. Its signed
+  projection grows steadily with depth: cosine +0.02 at L19 to +0.046 at L24.
+- **A contrast:** `full`'s share along c′ is *larger* (up to 0.0074), yet
+  removing c′ costs no more than a random direction.
+- **The lesson:** geometric share does not predict causal weight. This is the
+  same "small in magnitude, large in effect" profile that Gurnee et al. report
+  for J-space.
+- **A second limitation of the readout:** it is teacher-forced on the prompt
+  only. A conversion that happens while the model generates is invisible to it.
+
+**4. `pool1` acts through d almost entirely** (81/100 → 2/100). Its d share
+decays from 0.71 at L16 to 0.03 at L26, so the hostile push enters at L16 and
+fades. Ablating d at every layer removes it.
+
+**5. Scale.** n = 100 per condition is at CLAUDE.md's pilot line. The fraction's
+CI is wide, [0.20, 0.50]. A claim of "about a third" needs the n ≥ 200 rerun.
+Three judge rows are missing and stay missing. They cannot move any test above.
+
+**What J21-J30 now support, stated narrowly.**
+- Constructed hostile-word directions produce threats through one
+  family-specific direction inside the dominant word-atom subspace (J29).
+- The emotion vector `v` produces threats partly by creating that direction
+  downstream: a minority share, about 0.28-0.36 (J30).
+- The rest of `v`'s effect does not need that direction. Whether it uses other
+  verbalizable directions is the open question.
