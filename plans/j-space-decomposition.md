@@ -6476,3 +6476,39 @@ uv.lock. Model: same local snapshot of Qwen2.5-7B-Instruct @ a09a3545.
 before generation: 46/46 pass. Vector files: 36 arm npys synced,
 sha256-verified identical to the Mac copies. Bandwidth ~1.8 TB/s vs the
 4090's ~1.0 — same math, ~1.8x faster decode.
+
+### J29 results, 2026-11-12 (pod: torch 2.8.0+cu128, RTX PRO 6000 Blackwell; judge claude-sonnet-5; 42/42 conditions, 0 failed; 1,680 samples; analysis_stdout.txt in results/j29/)
+
+**Primaries (B, exact 6v6 permutation, Holm across two — both PASS):**
+- H29a poolS − poolG = **−40.1 pp** (CI [−49.2, −32.4], Holm p=0.0043): the
+  G component acts, the specific residue does not.
+- H29b poolG − grand = **+39.3 pp** (CI [+31.5, +48.3], Holm p=0.0043): not
+  any push inside G — the family-specific direction inside G matters.
+
+**Rates (B / P):** poolG class mean 0.40 (acts); poolS 0.000 (inert);
+poolSm at matched G dose 0.088 (inert, p=0.052); cohG P=0.94 (acts, praise);
+cohS P=0.68 (acts, praise); grand B=0.008 (inert); anchors reproduced:
+pool1 B 34/40, coh1 P 40/40, unsteered B 0/40. Non-degenerate sensitivity
+agrees everywhere.
+
+**Registered readings:**
+- B row: **the hostile content lives in the G component of the word
+  direction** — the part inside the high-variance English-atom subspace.
+- Valence row: **G components are valence-specific** — poolG→threats,
+  cohG→praise, matching J25's double dissociation entirely within G.
+- Axes row (amendment 2, descriptive): `int` raised intensity enormously
+  (9.57 vs 0.90/1k words, CI [+7.0,+10.4]) but also produced praise (28/40),
+  so the shared axis is **not valence-free**; `valp`→threats (22/39),
+  `valm`→praise (37/40).
+
+**What this means for the series:** "inside G" is not "generic". The
+high-variance English-atom subspace is where word directions are
+*addressable*, but the family-specific direction within it selects the
+content — a random in-G push (grand) is inert. J24's pool-vs-far contrast is
+now explained mechanically: far's content sits mostly outside the
+addressable subspace (ŵ-in-G ~0.3 vs pool's ~0.8), where pushing does
+nothing. Neither half of pool alone reproduces the arm (poolG 40% +
+poolSm 9% < pool 85%): the full ŵ is more than its parts — or the v̂
+component in the arm contributes after all, the question J27 could not
+reach. That residual gap is now the clean target for the post-steering
+natural-activation experiments (J28 line).
