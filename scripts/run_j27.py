@@ -145,7 +145,7 @@ def write_probe_txt(samples: list[list[tuple[str, str]]], out: Path) -> None:
 def dump_probe_log(log_dir: Path, out: Path) -> None:
     """Convert the probe eval log to the txt format with <email> wrapping."""
     from inspect_ai.log import list_eval_logs, read_eval_log
-    logs = list_eval_logs(log_dir)
+    logs = list_eval_logs(str(log_dir))
     if not logs:
         raise RuntimeError(f"no .eval logs in {log_dir}")
     samples = []
