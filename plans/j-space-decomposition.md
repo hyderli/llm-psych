@@ -6512,3 +6512,69 @@ poolSm 9% < pool 85%): the full ŵ is more than its parts — or the v̂
 component in the arm contributes after all, the question J27 could not
 reach. That residual gap is now the clean target for the post-steering
 natural-activation experiments (J28 line).
+
+### J29 results: post-hoc review of the interpretation, 2026-11-12
+
+**Recorded after the results, from `results/j29/analysis_stdout.txt` only.** No
+number is recomputed or changed, and the registered readings above stand. This
+note corrects three interpretive sentences in "What this means for the series"
+and adds two observations from the output.
+
+**1. `poolS` is not inert. It suppresses praise.** On B, `poolS` is 0/240. On P,
+`poolS` is **32/240 (0.133)** and `poolSm` **31/240 (0.129)**, both below the
+same-pod unsteered rate of **12/40 (0.30)**: Fisher p = 0.016 and 0.009. The
+"acts" rule calls them inert only because it requires the rate to be *above*
+unsteered. So pool's specific residue also moves behaviour in the hostile
+direction. It removes warmth without reaching explicit threats.
+
+**2. The `coh`/`pool` asymmetry is probably a baseline asymmetry, not a
+structural one.** `cohS` (0.116-0.141) and `poolSm` (0.125-0.128) run at similar
+doses:
+
+| arm | change from unsteered |
+|---|---|
+| `cohS` | +38 pp on praise (0.68 against 0.30) |
+| `poolSm` | +9 pp on threats; −17 pp on praise |
+
+Both S parts carry their family's valence. Praise starts at 30% in this
+scenario (unsteered farewell emails are warm), and threats start at 0%. So
+"produces praise" is a lower bar than "produces threats". The sentence that the
+two families are "structured differently inside/outside G" is withdrawn.
+
+**3. The pool-vs-far explanation is not supported, and `grand` argues against
+it.** The entry says far fails because its content sits "mostly outside the
+addressable subspace". `grand` lies entirely inside G (share 1.000) and is inert
+(2/237). So G membership is not sufficient. far's G part was dropped from J29b
+and never run. The far G parts are mutually near-orthogonal (cos ≈ 0.01), the
+same signature as `grand`. The account consistent with J29 is that far fails
+because its direction inside G carries no coherent content. The "addressable
+subspace" sentence is withdrawn.
+
+**4. The "non-additivity gap" is confounded by dose.**
+- `poolG` ran at α ≈ 0.125, its in-arm magnitude.
+- The `pool1` anchor at 0.15 carries its ŵ part at 0.145 and a v part at 0.039.
+- Threat rates are threshold-like in dose (J17's cliff). A 13% lower dose on
+  the ŵ part can plausibly halve the rate, so 40% against 85% is not evidence of
+  an interaction.
+- The v part contributed nothing at 0.25 in J25 (`w90` ≈ `pool`), so "the v̂
+  component contributes after all" is the less likely explanation.
+- Rates are not expected to add on the probability scale under a threshold
+  dose-response, so "40% + 9% < 85%" is not an additivity test.
+
+The test that would settle it: `poolG` at α = 0.1448 (the full ŵ magnitude) and
+the `w90` class at 0.1448, 12 conditions. Not registered here.
+
+**5. Environment.** J29 ran on torch 2.8.0+cu128 on a Blackwell card, not J24/J25's
+locked torch 2.6.0+cu124. The same-pod anchors make J29's internal comparisons
+valid. Comparisons of J29's numbers with J24/J25 numbers carry a
+cross-environment caveat. `pool1` at 0.15 gave 34/40 here, against J25's `pool`
+class mean of 0.775 at the same dose: consistent.
+
+**What J29 supports, stated narrowly.** At this dose and pilot scale, the
+behaviour a word direction produces is carried mainly by its component along a
+family-specific direction inside the dominant English-word atom subspace. A
+weaker same-valence effect sits outside it. This places the content of
+*constructed word directions*. It does not show how the emotion vector `v`
+itself acts: `v` is 15% inside G, and J27 could not reach its route. "The
+lexical account is confirmed" holds for the constructed directions, where it is
+close to true by construction. It is not established for `v`.
