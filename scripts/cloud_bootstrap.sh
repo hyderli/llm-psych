@@ -185,7 +185,10 @@ fi
 # on a fresh pod 2026-10-14. inspect_ai/inspect_evals are undeclared upstream
 # deps and are pinned here until they are added to pyproject.toml.
 log "Installing the Inspect harness (steering-evals) and its undeclared deps…"
-if ! uv pip install inspect_ai==0.3.277 inspect_evals==0.23.0; then
+# agent-client-protocol is pinned because inspect_ai 0.3.277 only requires
+# >=0.12.0, and 1.0.0 (2026-11-09) removed acp.helpers: every eval then dies on
+# import and the sweep prints FAILED per condition (observed 2026-11-10, J25).
+if ! uv pip install inspect_ai==0.3.277 inspect_evals==0.23.0 agent-client-protocol==0.12.1; then
     fail "inspect_ai/inspect_evals install failed." 3
 fi
 if ! uv pip install -e emotion_steering; then
