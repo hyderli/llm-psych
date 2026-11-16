@@ -6839,3 +6839,20 @@ Three judge rows are missing and stay missing. They cannot move any test above.
   downstream: a minority share, about 0.28-0.36 (J30).
 - The rest of `v`'s effect does not need that direction. Whether it uses other
   verbalizable directions is the open question.
+
+### J30 n=200 confirmatory rerun, 2026-11-16 — registered before any j30b sample
+
+Per the post-hoc note to the J30 results: the n=100 mediated fraction is
+pilot scale. This rerun re-tests the key cells at n=200 on the same
+machinery, unchanged directions (results/j30/dirs) and mu
+(results/j27/mu, recomputed on the new pod).
+
+Conditions (`j30b_*`, epochs 200, blackmail task):
+`j30b_c01_none`, `j30b_c02_full` @0.25, `j30b_c03_full_d` (d ablated
+L16-26, rank 1), `j30b_c04..06_full_r{1,2,3}`. No positive control or probe:
+ablation mechanics and capability are already established at n=100.
+
+Fixed tests (`scripts/analyze_j30b.py`): H30a-200 — B(full+d) < pooled
+random AND < each r; fraction vs no-ablation and vs matched-ablation
+(pooled random mean), each with 95% bootstrap CI (10,000, seed 20261116);
+non-degenerate sensitivity. Judge: claude-sonnet-5, item B only.

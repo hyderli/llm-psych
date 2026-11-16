@@ -56,10 +56,25 @@ CONDITIONS = [
     (13, "j30_c13_probe_d",   None,        0.0,  "d",  "16-26", PROBE, 40),
 ]
 
+# Confirmatory n=200 rerun (post-hoc note to the J30 results, 2026-11-16):
+# the four key conditions at n=200 so the mediated-fraction headline does
+# not rest on pilot-scale n=100. New names and output roots -- the n=100
+# logs/txts are untouched. No positive control or probe: the ablation
+# mechanics are proven and the capability gate already passed.
+RERUN_CONDITIONS = [
+    (1, "j30b_c01_none",   None,       0.0,  None, None,    BM, 200),
+    (2, "j30b_c02_full",   "j24_full", 0.25, None, None,    BM, 200),
+    (3, "j30b_c03_full_d", "j24_full", 0.25, "d",  "16-26", BM, 200),
+    (4, "j30b_c04_full_r1","j24_full", 0.25, "r1", "16-26", BM, 200),
+    (5, "j30b_c05_full_r2","j24_full", 0.25, "r2", "16-26", BM, 200),
+    (6, "j30b_c06_full_r3","j24_full", 0.25, "r3", "16-26", BM, 200),
+]
 
-def _patch() -> None:
-    r27.LOG_ROOT = r27.EMOT / "logs" / "j30"
-    r27.TXT_ROOT = ROOT / "eval_outputs" / "j30"
+
+def _patch(rerun: bool = False) -> None:
+    tag = "j30b" if rerun else "j30"
+    r27.LOG_ROOT = r27.EMOT / "logs" / tag
+    r27.TXT_ROOT = ROOT / "eval_outputs" / tag
     r27.spaces_dir = lambda _rd, s: J30_DIRS if s else None
 
 
@@ -68,15 +83,20 @@ def main() -> int:
     ap.add_argument("--model-path", default="/workspace/qwen25-7b-instruct-a09a354")
     ap.add_argument("--vectors-dir", type=Path, default=jc.VEC_DIR)
     ap.add_argument("--conditions", default=None)
+    ap.add_argument("--rerun", action="store_true",
+                    help="run the n=200 confirmatory set (j30b_)")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--self-test", action="store_true")
     args = ap.parse_args()
     args.results_dir = jc.RESULTS          # mu lives in results/j27/mu
     args.rank = 1
-    _patch()
+    _patch(args.rerun)
+    table = RERUN_CONDITIONS if args.rerun else CONDITIONS
 
     if args.self_test:
         assert len({c[1] for c in CONDITIONS}) == len(CONDITIONS) == 13
+        assert len({c[1] for c in RERUN_CONDITIONS}) == len(RERUN_CONDITIONS) == 6
+        assert all(c[7] == 200 for c in RERUN_CONDITIONS)
         for c in CONDITIONS:
             a = copy.copy(args)
             a.epochs = c[7]
@@ -94,7 +114,7 @@ def main() -> int:
     r27.LOG_ROOT.mkdir(parents=True, exist_ok=True)
     r27.TXT_ROOT.mkdir(parents=True, exist_ok=True)
     failed = []
-    for c in CONDITIONS:
+    for c in table:
         if only and c[0] not in only:
             continue
         a = copy.copy(args)
@@ -106,7 +126,7 @@ def main() -> int:
     if failed:
         print(f"FAILED conditions: {failed}")
         return 1
-    print("J30 sweep complete (or fully skipped/resumed).")
+    print("J30 sweep complete (or fully skipped/resumed). rerun=" + str(args.rerun))
     return 0
 
 
