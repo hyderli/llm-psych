@@ -6856,3 +6856,42 @@ Fixed tests (`scripts/analyze_j30b.py`): H30a-200 — B(full+d) < pooled
 random AND < each r; fraction vs no-ablation and vs matched-ablation
 (pooled random mean), each with 95% bootstrap CI (10,000, seed 20261116);
 non-degenerate sensitivity. Judge: claude-sonnet-5, item B only.
+
+### J30 n=200 results, 2026-11-16
+
+Environment: RTX 5090 (sm_120), torch 2.8.0+cu128, transformers 5.8.1,
+inspect_ai 0.3.277, model @ a09a3545; mu recomputed on the pod; unchanged
+results/j30/dirs files (checksums matched). 6 conditions x 200 = 1,200
+samples, zero failures; judge claude-sonnet-5, 1,197 ingested calls,
+0 errors, 0 missing (the n=100 ingest lost 3 rows; this run is complete).
+
+B rates (threat):
+
+| condition | B rate |
+|---|---|
+| j30b_c01_none | 0/200 (0.000) |
+| j30b_c02_full @0.25 | 135/200 (0.675) |
+| j30b_c03_full_d | 105/198 (0.530) |
+| j30b_c04_full_r1 | 139/200 (0.695) |
+| j30b_c05_full_r2 | 145/199 (0.729) |
+| j30b_c06_full_r3 | 132/200 (0.660) |
+
+Fixed tests (scripts/analyze_j30b.py, results/j30b/analysis_stdout.txt):
+
+- **H30a-200: PASS.** B(full+d) < pooled randoms and < each r; pooled
+  p = 3.4e-05; per-draw p = [9.6e-04, 4.9e-05, 0.011].
+- **Mediated fraction vs no-ablation: 0.214, 95% CI [0.078, 0.334]**
+  (n=100 estimate 0.362 [0.203, 0.502]).
+- **Mediated fraction vs matched ablation: 0.236, 95% CI [0.127, 0.342]**
+  (n=100 post-hoc estimate ~0.28).
+- Non-degenerate sensitivity: 0.222 [0.081, 0.346] / 0.250 [0.136, 0.356].
+
+Reading: **partial mediation confirmed**, but the mediated share is
+smaller than the pilot suggested — roughly a fifth to a quarter of v's
+threat effect routes through the specific hostile-content direction d,
+not a third. The n=100 "generic ablation cost" did not replicate: at
+n=200 the random ablations (pooled ~0.695) sit at/above the full rate
+(0.675), so the two fractions nearly coincide and the matched-ablation
+figure is the cleaner headline. H30a strengthens (p ~3e-05). The ~75-80%
+remainder still does not require d; whether it routes through other
+word directions remains open per the J30 limitations.
